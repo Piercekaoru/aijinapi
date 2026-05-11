@@ -1,0 +1,23 @@
+# Secrets — NEVER commit
+.env
+backend/.env
+
+# Dependencies
+node_modules/
+backend/target/
+
+# Build output
+.next/
+outputs/
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

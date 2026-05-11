@@ -1,0 +1,814 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AIJinAPI 模型广场 - 模型文档与接入说明</title>
+  <style>
+    :root {
+      --bg: oklch(96% 0.018 82);
+      --surface: oklch(99% 0.008 80);
+      --fg: oklch(18% 0.018 70);
+      --muted: oklch(48% 0.018 65);
+      --border: oklch(89% 0.016 80);
+      --accent: oklch(58% 0.15 36);
+      --dark: #141413;
+      --dark-soft: #30302e;
+      --ivory: #faf9f5;
+      --sand: #e8e6dc;
+      --paper: #f5f4ed;
+      --ring: #d1cfc5;
+      --font-display: "Iowan Old Style", "Yu Mincho", "Hiragino Mincho ProN", Georgia, serif;
+      --font-body: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+      --font-mono: "JetBrains Mono", "SFMono-Regular", Menlo, ui-monospace, monospace;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 8% 4%, color-mix(in oklch, var(--accent) 12%, transparent) 0 18rem, transparent 31rem),
+        linear-gradient(180deg, var(--bg) 0%, #fbf8ef 44%, var(--bg) 100%);
+      color: var(--fg);
+      font-family: var(--font-body);
+      line-height: 1.55;
+    }
+    a { color: inherit; text-decoration: none; }
+    button { font: inherit; cursor: pointer; }
+    img { display: block; max-inline-size: 100%; }
+    .page { min-block-size: 100vh; overflow: hidden; }
+    .container { inline-size: min(1220px, calc(100% - 48px)); margin-inline: auto; }
+
+    .nav {
+      position: sticky;
+      inset-block-start: 0;
+      z-index: 40;
+      background: color-mix(in oklch, var(--bg) 88%, transparent);
+      backdrop-filter: blur(18px);
+      border-block-end: 1px solid color-mix(in oklch, var(--border) 82%, transparent);
+    }
+    .nav-inner {
+      min-block-size: 72px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+    .brand { display: flex; align-items: center; color: var(--fg); font: 600 25px/1 var(--font-display); letter-spacing: 0.04em; text-transform: uppercase; }
+    .nav-links { display: flex; gap: 24px; color: var(--muted); font-size: 14px; }
+    .nav-actions { display: flex; gap: 10px; align-items: center; }
+
+    .btn {
+      min-block-size: 44px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      border: 1px solid transparent;
+      border-radius: 12px;
+      padding: 0 18px;
+      font-weight: 850;
+      font-size: 14px;
+      white-space: nowrap;
+      text-decoration: none;
+      transition: transform 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+    }
+    .btn:hover { transform: translateY(-1px); text-decoration: none; }
+    .btn.primary { background: var(--accent); color: var(--ivory); box-shadow: 0 0 0 1px color-mix(in oklch, var(--accent) 80%, black); }
+    .btn.ghost { background: var(--sand); color: #4d4c48; box-shadow: 0 0 0 1px var(--ring); }
+    .btn.dark { background: var(--dark); color: var(--ivory); box-shadow: 0 0 0 1px var(--dark-soft); }
+
+    h1, h2, h3 {
+      margin: 0;
+      font-family: var(--font-display);
+      font-weight: 500;
+      line-height: 1.08;
+      letter-spacing: 0;
+      text-wrap: pretty;
+    }
+    .eyebrow {
+      margin: 0 0 14px;
+      color: var(--muted);
+      font: 700 12px/1.25 var(--font-body);
+      letter-spacing: 0.12px;
+      text-transform: uppercase;
+    }
+
+    .hero { padding: 58px 0 74px; }
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 0.94fr) minmax(420px, 0.86fr);
+      gap: 44px;
+      align-items: stretch;
+    }
+    .hero-copy { padding-block-start: 24px; }
+    .hero h1 { max-inline-size: 780px; font-size: clamp(56px, 6.2vw, 92px); }
+    .hero p.lead {
+      max-inline-size: 680px;
+      margin: 24px 0 0;
+      color: var(--muted);
+      font-size: 19px;
+      line-height: 1.72;
+    }
+    .hero-actions { display: flex; gap: 12px; margin-block-start: 32px; flex-wrap: wrap; }
+    .hero-meta {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-block-start: 34px;
+      max-inline-size: 720px;
+    }
+    .meta-card {
+      min-block-size: 108px;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 17px;
+      background: color-mix(in oklch, var(--surface) 94%, white);
+    }
+    .meta-card strong {
+      display: block;
+      font: 500 30px/1 var(--font-display);
+      margin-block-end: 8px;
+    }
+    .meta-card span { color: var(--muted); font-size: 13px; }
+
+    .hero-visual {
+      position: relative;
+      min-block-size: 660px;
+      border-radius: 32px;
+      padding: 14px;
+      background: var(--surface);
+      box-shadow: 0 0 0 1px var(--border), 0 22px 58px rgba(20,20,19,0.08);
+    }
+    .hero-frame {
+      position: relative;
+      block-size: 632px;
+      overflow: hidden;
+      border-radius: 24px;
+      background: var(--sand);
+    }
+    .hero-frame img {
+      inline-size: 100%;
+      block-size: 100%;
+      object-fit: cover;
+      object-position: 50% 14%;
+      filter: saturate(0.96) contrast(1.03);
+    }
+    .hero-label {
+      position: absolute;
+      inset-inline-start: 28px;
+      inset-block-start: 28px;
+      padding: 9px 13px;
+      border-radius: 999px;
+      background: var(--dark);
+      color: var(--ivory);
+      font: 12px/1 var(--font-mono);
+      box-shadow: 0 0 0 1px var(--dark-soft);
+    }
+    .base-card {
+      position: absolute;
+      inset-inline-end: 24px;
+      inset-block-end: 24px;
+      inline-size: min(410px, calc(100% - 48px));
+      padding: 18px;
+      border-radius: 18px;
+      background: color-mix(in oklch, var(--ivory) 93%, transparent);
+      backdrop-filter: blur(18px);
+      box-shadow: 0 0 0 1px color-mix(in oklch, var(--border) 78%, transparent);
+    }
+    .base-card span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-block-end: 8px;
+    }
+    .base-card code {
+      display: block;
+      overflow-x: auto;
+      color: var(--fg);
+      font: 13px/1.5 var(--font-mono);
+    }
+
+    section { padding: 74px 0; }
+    .section-head {
+      display: grid;
+      grid-template-columns: minmax(0, 0.78fr) minmax(280px, 0.42fr);
+      gap: 34px;
+      align-items: end;
+      margin-block-end: 28px;
+    }
+    .section-head h2 { font-size: clamp(38px, 4.5vw, 62px); }
+    .section-head p { margin: 0; color: var(--muted); font-size: 15px; }
+
+    .filters {
+      position: sticky;
+      inset-block-start: 73px;
+      z-index: 20;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 12px;
+      margin-block-end: 26px;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: color-mix(in oklch, var(--surface) 88%, transparent);
+      backdrop-filter: blur(18px);
+    }
+    .filter {
+      min-block-size: 40px;
+      border: 1px solid transparent;
+      border-radius: 12px;
+      padding: 0 16px;
+      background: var(--sand);
+      color: #4d4c48;
+      font-weight: 850;
+      font-size: 13px;
+      box-shadow: 0 0 0 1px var(--ring);
+      transition: transform 0.18s ease, background 0.18s ease, color 0.18s ease;
+    }
+    .filter:hover { transform: translateY(-1px); }
+    .filter.active {
+      background: var(--dark);
+      color: var(--ivory);
+      box-shadow: 0 0 0 1px var(--dark-soft);
+    }
+
+    .recommend {
+      display: grid;
+      grid-template-columns: minmax(0, 0.66fr) minmax(0, 1.34fr);
+      gap: 18px;
+      margin-block-end: 30px;
+    }
+    .poster {
+      min-block-size: 492px;
+      border-radius: 28px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background: var(--sand);
+    }
+    .poster img {
+      inline-size: 100%;
+      block-size: 100%;
+      object-fit: cover;
+      object-position: 50% 42%;
+    }
+    .rank-list { display: grid; gap: 12px; }
+    .rank-card {
+      display: grid;
+      grid-template-columns: 60px 1fr auto;
+      gap: 16px;
+      align-items: center;
+      padding: 18px;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: var(--surface);
+    }
+    .rank-no {
+      inline-size: 48px;
+      block-size: 48px;
+      display: grid;
+      place-items: center;
+      border-radius: 15px;
+      background: var(--sand);
+      box-shadow: 0 0 0 1px var(--ring);
+      font: 500 24px/1 var(--font-display);
+    }
+    .rank-card h3 { font-size: 26px; margin-block-end: 6px; }
+    .rank-card p { margin: 0; color: var(--muted); font-size: 14px; }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-block-size: 28px;
+      border-radius: 999px;
+      padding: 0 10px;
+      background: var(--sand);
+      color: #4d4c48;
+      font: 700 12px/1 var(--font-body);
+      box-shadow: 0 0 0 1px var(--ring);
+      white-space: nowrap;
+    }
+
+    .model-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+    .model-card {
+      position: relative;
+      min-block-size: 228px;
+      display: grid;
+      align-content: start;
+      padding: 26px;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background:
+        linear-gradient(115deg, rgba(250,249,245,0.98) 0%, rgba(250,249,245,0.94) 52%, rgba(250,249,245,0.58) 100%),
+        var(--surface);
+      overflow: hidden;
+      box-shadow: 0 18px 54px rgba(20,20,19,0.06);
+    }
+    .model-card::after {
+      content: "";
+      position: absolute;
+      inline-size: 38%;
+      block-size: 100%;
+      inset-inline-end: 0;
+      inset-block-end: 0;
+      background-image: var(--model-art);
+      background-size: cover;
+      background-position: center;
+      opacity: 0.28;
+      border-start-start-radius: 28px;
+      pointer-events: none;
+    }
+    .model-card.featured {
+      color: var(--ivory);
+      border-color: var(--dark-soft);
+      background:
+        linear-gradient(110deg, rgba(20,20,19,0.98) 0%, rgba(20,20,19,0.94) 58%, rgba(20,20,19,0.62) 100%),
+        var(--dark);
+    }
+    .model-card.featured::after {
+      opacity: 0.42;
+      filter: saturate(0.9) brightness(0.74);
+    }
+    .model-card:nth-child(1) { --model-art: url("/images/HG42ZYwa8AAGBEd.jpg"); }
+    .model-card:nth-child(2) { --model-art: url("/images/Gth0fxcawAARQmB.jpg"); }
+    .model-card:nth-child(3) { --model-art: url("/images/GpXqspCbYAI1hx_.jpg"); }
+    .model-card:nth-child(4) { --model-art: url("/images/Gt96vaQXQAIxNcp.jpg"); }
+    .model-card:nth-child(5) { --model-art: url("/images/GrHDjXQXYAACVsc.jpg"); }
+    .model-card:nth-child(6) { --model-art: url("/images/GxpsuzYawAQQ2lR.jpg"); }
+    .model-card:nth-child(7) { --model-art: url("/images/HHZ_hQzbIAEw83V.jpg"); }
+    .model-card:nth-child(8) { --model-art: url("/images/HAh3SWLacAAA6By.jpg"); }
+    .model-card:nth-child(9) { --model-art: url("/images/GswYqEeaIAA1-SM.jpg"); }
+    .model-card:nth-child(10) { --model-art: url("/images/GwvxlZqbIAAqlQB.jpg"); }
+    .model-card:nth-child(11) { --model-art: url("/images/IMG_4395.JPG"); }
+    .model-card:nth-child(12) { --model-art: url("/images/IMG_4396.JPG"); }
+    .model-card[hidden] { display: none; }
+    .model-top {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 14px;
+      margin-block-end: 24px;
+    }
+    .model-name { font: 700 13px/1.35 var(--font-mono); color: var(--fg); }
+    .model-family { color: var(--muted); font-size: 12px; margin-block-start: 4px; }
+    .model-card h3 {
+      position: relative;
+      z-index: 1;
+      max-inline-size: 68%;
+      font-size: clamp(34px, 3.4vw, 48px);
+      line-height: 1.04;
+    }
+    .model-card.featured h3,
+    .model-card.featured .model-tier,
+    .model-card.featured .model-id { color: var(--ivory); }
+    .model-desc {
+      position: relative;
+      z-index: 1;
+      max-inline-size: 68%;
+      margin: 14px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .model-card.featured .model-desc { color: #d8d5ca; }
+    .model-tier {
+      position: relative;
+      z-index: 1;
+      margin: 0 0 22px;
+      color: var(--muted);
+      font: 800 12px/1.25 var(--font-body);
+      text-transform: uppercase;
+    }
+    .model-id {
+      position: relative;
+      z-index: 1;
+      display: inline-flex;
+      width: fit-content;
+      max-width: 68%;
+      margin-block-start: 18px;
+      padding: 8px 11px;
+      border-radius: 9px;
+      color: var(--fg);
+      background: color-mix(in oklch, var(--surface) 86%, transparent);
+      box-shadow: 0 0 0 1px var(--border);
+      font: 700 12px/1.2 var(--font-mono);
+      overflow-wrap: anywhere;
+    }
+    .specs {
+      display: none;
+    }
+    .spec {
+      padding: 12px;
+      border-radius: 14px;
+      background: var(--paper);
+      box-shadow: 0 0 0 1px var(--border);
+    }
+    .spec span { display: block; color: var(--muted); font-size: 11px; margin-block-end: 5px; }
+    .spec strong { display: block; font: 700 13px/1.25 var(--font-mono); }
+    .cap-list {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-block-start: auto;
+      padding-block-start: 22px;
+    }
+    .cap {
+      border-radius: 999px;
+      padding: 6px 9px;
+      background: var(--sand);
+      color: #4d4c48;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .docs {
+      background: var(--dark);
+      color: var(--ivory);
+      border-block: 1px solid var(--dark-soft);
+    }
+    .docs .section-head p,
+    .docs .eyebrow { color: #b0aea5; }
+    .doc-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.28fr);
+      gap: 18px;
+    }
+    .doc-card {
+      border: 1px solid var(--dark-soft);
+      border-radius: 22px;
+      background: color-mix(in oklch, var(--dark-soft) 68%, black);
+      overflow: hidden;
+    }
+    .doc-copy { padding: 24px; }
+    .doc-copy h3 { font-size: 32px; margin-block-end: 14px; }
+    .doc-copy p { margin: 0 0 18px; color: #b0aea5; }
+    .endpoint {
+      display: grid;
+      gap: 12px;
+      margin-block-start: 22px;
+    }
+    .endpoint-row {
+      padding: 14px;
+      border: 1px solid var(--dark-soft);
+      border-radius: 14px;
+      background: #171716;
+    }
+    .endpoint-row span {
+      display: block;
+      color: #87867f;
+      font-size: 12px;
+      margin-block-end: 6px;
+    }
+    .endpoint-row code {
+      color: var(--ivory);
+      font: 13px/1.5 var(--font-mono);
+      overflow-wrap: anywhere;
+    }
+    .doc-art {
+      block-size: 240px;
+      border-block-start: 1px solid var(--dark-soft);
+      overflow: hidden;
+    }
+    .doc-art img {
+      inline-size: 100%;
+      block-size: 100%;
+      object-fit: cover;
+      object-position: 50% 18%;
+      opacity: 0.86;
+    }
+    .code-panel {
+      border: 1px solid var(--dark-soft);
+      border-radius: 22px;
+      background: #171716;
+      overflow: hidden;
+    }
+    .code-tabs {
+      display: flex;
+      gap: 6px;
+      padding: 12px;
+      border-block-end: 1px solid var(--dark-soft);
+    }
+    .code-tab {
+      min-block-size: 38px;
+      border: 1px solid transparent;
+      border-radius: 12px;
+      padding: 0 14px;
+      background: transparent;
+      color: #b0aea5;
+      font-weight: 850;
+      transition: transform 0.18s ease, background 0.18s ease, color 0.18s ease;
+    }
+    .code-tab:hover { transform: translateY(-1px); }
+    .code-tab.active { background: var(--sand); color: var(--dark); }
+    pre {
+      margin: 0;
+      padding: 24px;
+      overflow-x: auto;
+      color: #e8e6dc;
+      font: 14px/1.72 var(--font-mono);
+    }
+
+    .faq-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .faq {
+      padding: 22px;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: var(--surface);
+    }
+    .faq h3 { font-size: 25px; margin-block-end: 10px; }
+    .faq p { margin: 0; color: var(--muted); font-size: 14px; }
+
+    .footer {
+      padding: 42px 0;
+      border-block-start: 1px solid var(--border);
+      background: var(--paper);
+    }
+    .footer-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    @media (max-width: 1040px) {
+      .hero-grid,
+      .section-head,
+      .recommend,
+      .doc-grid { grid-template-columns: 1fr; }
+      .model-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .hero-visual { min-block-size: auto; }
+    }
+    @media (max-width: 760px) {
+      .container { inline-size: min(100% - 28px, 1220px); }
+      .nav-links { display: none; }
+      .hero { padding-block-start: 36px; }
+      .hero h1 { font-size: 44px; }
+      .hero-meta,
+      .model-grid,
+      .faq-grid { grid-template-columns: 1fr; }
+      .hero-frame { block-size: 520px; }
+      .rank-card { grid-template-columns: 52px 1fr; }
+      .rank-card .tag { grid-column: 2; justify-self: start; }
+      .footer-inner { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <nav class="nav" aria-label="主导航">
+      <div class="container nav-inner">
+        <a class="brand" href="#top" aria-label="AIJinAPI 模型广场首页">
+          AIJINAPI
+        </a>
+        <div class="nav-links">
+          <a href="#models">模型广场</a>
+          <a href="#recommend">推荐榜单</a>
+          <a href="#docs">接入文档</a>
+          <a href="#faq">FAQ</a>
+        </div>
+        <div class="nav-actions">
+          <a class="btn ghost" href="aijinapi-dashboard.html">控制台</a>
+          <a class="btn primary" href="#docs">开始接入</a>
+        </div>
+      </div>
+    </nav>
+
+    <main id="top">
+      <header class="hero">
+        <div class="container hero-grid">
+          <div class="hero-copy">
+            <p class="eyebrow">Model Plaza / Developer Docs</p>
+            <h1 data-od-id="headline">在一个广场里挑模型，在一套 API 里调用。</h1>
+            <p class="lead">AIJinAPI 将 Big Pickle、Kimi、GLM、MiMo、Qwen 与 DeepSeek 收束到 OpenAI-compatible 接口。Free 仅 Big Pickle，Plus 模型统一自动分配通道。</p>
+            <div class="hero-actions">
+              <a class="btn primary" href="#models">浏览模型</a>
+              <a class="btn ghost" href="#docs">查看 base_url</a>
+            </div>
+            <div class="hero-meta" aria-label="模型广场摘要">
+              <div class="meta-card"><strong>6</strong><span>模型家族覆盖</span></div>
+              <div class="meta-card"><strong>11</strong><span>当前可用模型</span></div>
+              <div class="meta-card"><strong>/v1</strong><span>兼容 OpenAI 调用格式</span></div>
+            </div>
+          </div>
+
+          <div class="hero-visual" data-od-id="hero">
+            <div class="hero-frame">
+              <img src="moyfxjoe-GwvxlZqbIAAqlQB.jpg" alt="AIJinAPI 模型广场二次元背景图" />
+            </div>
+            <div class="hero-label">AIJin Model Index</div>
+            <div class="base-card">
+              <span>统一入口</span>
+              <code>base_url = https://api.aijinapi.com/v1</code>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <section id="recommend" data-od-id="recommend">
+        <div class="container">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Recommended</p>
+              <h2>先从这四个模型开始试。</h2>
+            </div>
+            <p>推荐榜单按订阅权限和常见开发场景组织：Free 先试 Big Pickle，Plus 再打开完整模型池。</p>
+          </div>
+
+          <div class="recommend">
+            <div class="poster">
+              <img src="moycqy9a-IMG_4395.JPG" alt="AIJinAPI 推荐模型插图" />
+            </div>
+            <div class="rank-list">
+              <article class="rank-card"><div class="rank-no">01</div><div><h3>Qwen3.6 Plus</h3><p>通用开发默认推荐，适合中文业务问答、工具调用与代码辅助。</p></div><span class="tag">通用首选</span></article>
+              <article class="rank-card"><div class="rank-no">02</div><div><h3>DeepSeek V4 Pro</h3><p>偏推理和复杂任务，适合规划、分析和需要更稳回答的业务流程。</p></div><span class="tag">推理增强</span></article>
+              <article class="rank-card"><div class="rank-no">03</div><div><h3>Kimi K2.6</h3><p>适合长文本阅读、摘要、知识库问答和多轮上下文场景。</p></div><span class="tag">长文本</span></article>
+              <article class="rank-card"><div class="rank-no">04</div><div><h3>Big Pickle</h3><p>Free 用户可用的免费模型入口，适合先验证接入链路和轻量实验。</p></div><span class="tag">Free</span></article>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="models" data-od-id="models">
+        <div class="container">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Catalog</p>
+              <h2>模型卡片带上调用名、套餐权限和套餐范围。</h2>
+            </div>
+            <p>Free 每月 500 次但只允许 big-pickle；Plus 每月 13 美元、1500 次，所有 Plus 模型统一自动分配通道。</p>
+          </div>
+
+          <div class="filters" aria-label="模型分类筛选">
+            <button class="filter active" data-filter="all">全部</button>
+            <button class="filter" data-filter="chat">通用对话</button>
+            <button class="filter" data-filter="reasoning">推理</button>
+            <button class="filter" data-filter="long">长文本</button>
+            <button class="filter" data-filter="fast">低延迟</button>
+            <button class="filter" data-filter="creative">创作</button>
+          </div>
+
+          <div class="model-grid">
+            <article class="model-card" data-category="long chat"><p class="model-tier">Plus</p><h3>Kimi K2.6</h3><p class="model-desc">适合长上下文阅读、知识库摘要、文档问答和稳定中文理解的应用。</p><code class="model-id">kimi-k2.6</code></article>
+            <article class="model-card featured" data-category="long chat"><p class="model-tier">Plus</p><h3>Kimi K2.5</h3><p class="model-desc">偏稳定调用与常规中文多轮对话，适合已有 Kimi 链路迁移。</p><code class="model-id">kimi-k2.5</code></article>
+            <article class="model-card" data-category="chat reasoning"><p class="model-tier">Plus</p><h3>GLM-5.1</h3><p class="model-desc">中文业务问答、知识检索、工具调用和企业级 Agent 流程。</p><code class="model-id">glm-5.1</code></article>
+            <article class="model-card" data-category="chat"><p class="model-tier">Plus</p><h3>GLM-5</h3><p class="model-desc">通用中文对话模型，适合客服、内容整理和常规业务助手。</p><code class="model-id">glm-5</code></article>
+            <article class="model-card" data-category="creative fast"><p class="model-tier">Free</p><h3>Big Pickle</h3><p class="model-desc">Free 用户可用模型，适合轻量实验、验证接入和探索型生成场景。</p><code class="model-id">big-pickle</code></article>
+            <article class="model-card" data-category="reasoning creative"><p class="model-tier">Plus</p><h3>MiMo V2.5 Pro</h3><p class="model-desc">适合更复杂的创作、推理和多步骤任务，偏高质量输出。</p><code class="model-id">mimo-v2.5-pro</code></article>
+            <article class="model-card" data-category="creative chat"><p class="model-tier">Plus</p><h3>MiMo V2.5</h3><p class="model-desc">轻量助手、文本润色和不需要最高推理强度的创作流程。</p><code class="model-id">mimo-v2.5</code></article>
+            <article class="model-card" data-category="reasoning chat"><p class="model-tier">Plus</p><h3>Qwen3.6 Plus</h3><p class="model-desc">默认通用模型，覆盖问答、代码、工具调用和业务流程原型。</p><code class="model-id">qwen3.6-plus</code></article>
+            <article class="model-card" data-category="chat"><p class="model-tier">Plus</p><h3>Qwen3.5 Plus</h3><p class="model-desc">成本敏感的通用任务、代码辅助和中文应用开发。</p><code class="model-id">qwen3.5-plus</code></article>
+            <article class="model-card" data-category="reasoning"><p class="model-tier">Plus</p><h3>DeepSeek V4 Pro</h3><p class="model-desc">复杂分析、代码审阅、规划和需要更强推理链路的产品能力。</p><code class="model-id">deepseek-v4-pro</code></article>
+            <article class="model-card featured" data-category="fast chat"><p class="model-tier">Plus</p><h3>DeepSeek V4 Flash</h3><p class="model-desc">低延迟问答、批量处理和成本敏感的用户交互链路。</p><code class="model-id">deepseek-v4-flash</code></article>
+          </div>
+        </div>
+      </section>
+
+      <section class="docs" id="docs" data-od-id="docs">
+        <div class="container">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Base URL & Auth</p>
+              <h2>换掉 base_url，继续用熟悉的 SDK。</h2>
+            </div>
+            <p>鉴权方式保持 Bearer API Key。客户只调用统一 Base URL；Free/Plus 权限由后端自动处理。</p>
+          </div>
+
+          <div class="doc-grid">
+            <article class="doc-card">
+              <div class="doc-copy">
+                <h3>接入参数</h3>
+                <p>适合从 OpenAI SDK、兼容网关或自研调用层迁移。</p>
+                <div class="endpoint">
+                  <div class="endpoint-row"><span>base_url</span><code>https://api.aijinapi.com/v1</code></div>
+                  <div class="endpoint-row"><span>Authorization</span><code>Bearer &lt;AIJINAPI_KEY&gt;</code></div>
+                  <div class="endpoint-row"><span>Chat endpoint</span><code>POST /chat/completions</code></div>
+                </div>
+              </div>
+              <div class="doc-art">
+                <img src="moycqu2b-IMG_4394.JPG" alt="AIJinAPI 文档区背景图" />
+              </div>
+            </article>
+
+            <article class="code-panel">
+              <div class="code-tabs" role="tablist" aria-label="代码示例">
+                <button class="code-tab active" data-code="python">Python</button>
+                <button class="code-tab" data-code="js">JS</button>
+                <button class="code-tab" data-code="curl">curl</button>
+              </div>
+              <pre><code id="codeBlock"></code></pre>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="faq" data-od-id="faq">
+        <div class="container">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">FAQ</p>
+              <h2>接入前最常见的几个问题。</h2>
+            </div>
+            <p>这里保留产品承诺级别的信息，不写未确认的 SLA、折扣或性能数字。</p>
+          </div>
+
+          <div class="faq-grid">
+            <article class="faq"><h3>是否需要外卡或海外支付？</h3><p>不需要。AIJinAPI 面向国内开发者，支持支付宝/微信以人民币充值，到账后即可调用。</p></article>
+            <article class="faq"><h3>是否兼容 OpenAI SDK？</h3><p>兼容 OpenAI 风格的请求格式。通常只需要替换 base_url、API Key 和模型名。</p></article>
+            <article class="faq"><h3>Plus 价格和额度是什么？</h3><p>Plus 为 13 美元/月，包含 1500 次/月请求额度；Free 是 500 次/月，但只能调用 Big Pickle。</p></article>
+            <article class="faq"><h3>可以在同一个项目里切换模型吗？</h3><p>可以。把模型名作为请求参数传入，就能在同一套接口下切换 Kimi、GLM、Qwen、DeepSeek 等模型。</p></article>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="container footer-inner">
+        <div class="brand">AIJINAPI</div>
+        <div>模型广场与接入文档 · OpenAI-compatible relay for domestic developers</div>
+        <a class="btn dark" href="#top">返回顶部</a>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    const codeSamples = {
+      python: `from openai import OpenAI
+
+client = OpenAI(
+    api_key="YOUR_AIJINAPI_KEY",
+    base_url="https://api.aijinapi.com/v1"
+)
+
+response = client.chat.completions.create(
+    model="qwen3.6-plus",
+    messages=[
+        {"role": "user", "content": "用三句话解释 AIJinAPI 的接入方式"}
+    ]
+)
+
+print(response.choices[0].message.content)`,
+      js: `import OpenAI from "openai";
+
+const client = new OpenAI({
+  apiKey: process.env.AIJINAPI_KEY,
+  baseURL: "https://api.aijinapi.com/v1"
+});
+
+const response = await client.chat.completions.create({
+  model: "deepseek-v4-pro",
+  messages: [
+    { role: "user", content: "生成一个模型选型建议" }
+  ]
+});
+
+console.log(response.choices[0].message.content);`,
+      curl: `curl https://api.aijinapi.com/v1/chat/completions \\
+  -H "Authorization: Bearer YOUR_AIJINAPI_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "model": "kimi-k2.6",
+    "messages": [
+      { "role": "user", "content": "总结这份文档的重点" }
+    ]
+  }'`
+    };
+
+    const codeBlock = document.getElementById("codeBlock");
+    const codeTabs = Array.from(document.querySelectorAll(".code-tab"));
+    const filters = Array.from(document.querySelectorAll(".filter"));
+    const cards = Array.from(document.querySelectorAll(".model-card"));
+
+    function renderCode(kind) {
+      codeBlock.textContent = codeSamples[kind];
+      codeTabs.forEach((tab) => tab.classList.toggle("active", tab.dataset.code === kind));
+    }
+
+    function applyFilter(kind) {
+      filters.forEach((button) => button.classList.toggle("active", button.dataset.filter === kind));
+      cards.forEach((card) => {
+        const categories = card.dataset.category.split(" ");
+        card.hidden = kind !== "all" && !categories.includes(kind);
+      });
+    }
+
+    codeTabs.forEach((tab) => tab.addEventListener("click", () => renderCode(tab.dataset.code)));
+    filters.forEach((button) => button.addEventListener("click", () => applyFilter(button.dataset.filter)));
+    renderCode("python");
+  </script>
+</body>
+</html>

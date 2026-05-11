@@ -1,0 +1,599 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AIJinAPI - 面向国内开发者的 AI API 中转服务</title>
+  <style>
+    :root {
+      --bg: oklch(96% 0.018 82);
+      --surface: oklch(99% 0.008 80);
+      --fg: oklch(18% 0.018 70);
+      --muted: oklch(48% 0.018 65);
+      --border: oklch(89% 0.016 80);
+      --accent: oklch(58% 0.15 36);
+      --dark: #141413;
+      --dark-soft: #30302e;
+      --ivory: #faf9f5;
+      --sand: #e8e6dc;
+      --paper: #f5f4ed;
+      --ring: #d1cfc5;
+      --font-display: "Iowan Old Style", "Yu Mincho", "Hiragino Mincho ProN", Georgia, serif;
+      --font-body: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+      --font-mono: "JetBrains Mono", "SFMono-Regular", "Menlo", ui-monospace, monospace;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 86% 8%, color-mix(in oklch, var(--accent) 16%, transparent) 0 18rem, transparent 28rem),
+        linear-gradient(180deg, var(--bg) 0%, #faf8ef 42%, var(--bg) 100%);
+      color: var(--fg);
+      font-family: var(--font-body);
+      line-height: 1.6;
+    }
+    a { color: inherit; text-decoration: none; }
+    img { display: block; max-inline-size: 100%; }
+    .page { min-block-size: 100vh; overflow: hidden; }
+    .container { inline-size: min(1180px, calc(100% - 48px)); margin-inline: auto; }
+
+    .nav {
+      position: sticky;
+      inset-block-start: 0;
+      z-index: 20;
+      background: color-mix(in oklch, var(--bg) 88%, transparent);
+      backdrop-filter: blur(18px);
+      border-block-end: 1px solid color-mix(in oklch, var(--border) 80%, transparent);
+    }
+    .nav-inner {
+      min-block-size: 72px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+    .brand { display: flex; align-items: center; color: var(--fg); font: 600 25px/1 var(--font-display); letter-spacing: 0.04em; text-transform: uppercase; }
+    .nav-links { display: flex; gap: 26px; color: var(--muted); font-size: 14px; }
+    .nav-actions { display: flex; align-items: center; gap: 10px; }
+
+    .btn {
+      min-block-size: 44px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      border: 1px solid transparent;
+      border-radius: 12px;
+      padding: 0 18px;
+      font: 850 14px/1 var(--font-body);
+      cursor: pointer;
+      white-space: nowrap;
+      text-decoration: none;
+      transition: transform 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+    }
+    .btn:hover { transform: translateY(-1px); text-decoration: none; }
+    .btn.ghost { background: var(--sand); color: #4d4c48; box-shadow: 0 0 0 1px var(--ring); }
+    .btn.primary {
+      background: var(--accent);
+      color: var(--ivory);
+      box-shadow: 0 0 0 1px color-mix(in oklch, var(--accent) 80%, black);
+    }
+
+    .hero { padding: 64px 0 84px; }
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.02fr) minmax(420px, 0.88fr);
+      gap: 54px;
+      align-items: center;
+    }
+    .eyebrow {
+      margin: 0 0 18px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.3;
+      letter-spacing: 0.12px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    h1, h2, h3 {
+      font-family: var(--font-display);
+      font-weight: 500;
+      margin: 0;
+      letter-spacing: 0;
+      text-wrap: pretty;
+    }
+    h1 { max-inline-size: 760px; font-size: clamp(54px, 6.3vw, 94px); line-height: 1.02; }
+    .hero-copy {
+      max-inline-size: 660px;
+      margin: 26px 0 0;
+      color: var(--muted);
+      font-size: 20px;
+      line-height: 1.72;
+    }
+    .hero-actions { display: flex; align-items: center; gap: 12px; margin-block-start: 34px; }
+    .hero-note { margin-block-start: 20px; color: var(--muted); font-size: 14px; }
+    .hero-note b { color: var(--fg); font-weight: 600; }
+    .hero .eyebrow { color: var(--accent); }
+
+    .hero-visual {
+      position: relative;
+      min-block-size: 660px;
+      border-radius: 32px;
+      padding: 14px;
+      background: color-mix(in oklch, var(--surface) 80%, white);
+      box-shadow: 0 0 0 1px var(--border), 0 18px 54px rgba(20, 20, 19, 0.08);
+    }
+    .hero-visual::before {
+      content: "APIjin / relay issue 01";
+      position: absolute;
+      inset-block-start: 34px;
+      inset-inline-start: -28px;
+      z-index: 2;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: var(--dark);
+      color: var(--ivory);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0;
+      transform: rotate(-4deg);
+    }
+    .hero-photo {
+      position: relative;
+      block-size: 632px;
+      overflow: hidden;
+      border-radius: 24px;
+      background: var(--sand);
+    }
+    .hero-photo img {
+      inline-size: 100%;
+      block-size: 100%;
+      object-fit: cover;
+      object-position: 50% 28%;
+      filter: saturate(0.95) contrast(1.02);
+    }
+    .hero-card {
+      position: absolute;
+      inset-inline-end: 22px;
+      inset-block-end: 22px;
+      inline-size: min(330px, calc(100% - 44px));
+      padding: 18px;
+      border-radius: 18px;
+      background: color-mix(in oklch, var(--ivory) 92%, transparent);
+      backdrop-filter: blur(16px);
+      box-shadow: 0 0 0 1px color-mix(in oklch, var(--border) 80%, transparent);
+    }
+    .hero-card .line {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      padding-block: 8px;
+      border-block-end: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .hero-card .line:last-child { border-block-end: 0; }
+    .hero-card span:first-child { color: var(--muted); }
+    .hero-card span:last-child { font-family: var(--font-mono); font-size: 12px; color: var(--fg); }
+
+    section { padding: 86px 0; }
+    .section-head {
+      display: grid;
+      grid-template-columns: minmax(0, 0.8fr) minmax(280px, 0.42fr);
+      gap: 32px;
+      align-items: end;
+      margin-block-end: 34px;
+    }
+    .section-head h2 { font-size: clamp(38px, 4.5vw, 64px); line-height: 1.08; }
+    .section-head p { margin: 0; color: var(--muted); font-size: 16px; }
+
+    .pricing-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+    .plan-card {
+      position: relative;
+      min-block-size: 420px;
+      padding: 26px;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: var(--surface);
+      overflow: hidden;
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.55) inset;
+    }
+    .plan-card.featured { background: var(--dark); color: var(--ivory); border-color: var(--dark-soft); }
+    .plan-card.featured li,
+    .plan-card.featured .quota { color: #b0aea5; }
+    .plan-card.featured .price,
+    .plan-card.featured .plan-kicker { color: var(--ivory); }
+    .plan-kicker {
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+    .plan-card h3 { margin-block-start: 18px; font-size: 30px; line-height: 1.12; }
+    .price { margin-block-start: 22px; color: var(--fg); font: 500 50px/1 var(--font-display); }
+    .quota { margin-block-start: 8px; color: var(--muted); font-size: 14px; }
+    .feature-list {
+      display: grid;
+      gap: 12px;
+      margin: 28px 0 0;
+      padding: 0;
+      list-style: none;
+      color: var(--muted);
+      font-size: 15px;
+    }
+    .feature-list li { display: grid; grid-template-columns: 18px 1fr; gap: 10px; align-items: start; }
+    .feature-list li::before {
+      content: "";
+      inline-size: 7px;
+      block-size: 7px;
+      margin-block-start: 9px;
+      border-radius: 999px;
+      background: var(--ring);
+    }
+    .plan-art {
+      position: absolute;
+      inset-inline-end: -28px;
+      inset-block-end: -58px;
+      inline-size: 174px;
+      block-size: 230px;
+      border-radius: 28px;
+      overflow: hidden;
+      transform: rotate(7deg);
+      opacity: 0.34;
+      box-shadow: 0 0 0 1px color-mix(in oklch, var(--border) 80%, transparent);
+    }
+    .plan-art img { inline-size: 100%; block-size: 100%; object-fit: cover; object-position: 52% 16%; }
+
+    .models {
+      background: var(--dark);
+      color: var(--ivory);
+      border-block: 1px solid var(--dark-soft);
+    }
+    .models .section-head p,
+    .models .eyebrow { color: #b0aea5; }
+    .model-board {
+      display: grid;
+      grid-template-columns: 0.72fr 1.28fr;
+      gap: 24px;
+      align-items: stretch;
+    }
+    .model-image {
+      min-block-size: 520px;
+      border-radius: 28px;
+      overflow: hidden;
+      background: var(--dark-soft);
+      box-shadow: 0 0 0 1px var(--dark-soft);
+    }
+    .model-image img {
+      inline-size: 100%;
+      block-size: 100%;
+      object-fit: cover;
+      object-position: 50% 12%;
+      filter: saturate(0.92) contrast(1.05);
+    }
+    .model-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .model {
+      padding: 20px;
+      border: 1px solid var(--dark-soft);
+      border-radius: 14px;
+      background: color-mix(in oklch, var(--dark-soft) 76%, black);
+    }
+    .model strong {
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--ivory);
+    }
+    .model span { display: block; margin-block-start: 8px; color: #b0aea5; font-size: 13px; }
+
+    .start-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 0.82fr) minmax(420px, 1fr);
+      gap: 26px;
+      align-items: stretch;
+    }
+    .steps { display: grid; gap: 14px; }
+    .step {
+      display: grid;
+      grid-template-columns: 52px 1fr;
+      gap: 16px;
+      padding: 20px;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: var(--surface);
+    }
+    .step-num {
+      inline-size: 52px;
+      block-size: 52px;
+      display: grid;
+      place-items: center;
+      border-radius: 16px;
+      background: var(--sand);
+      color: var(--fg);
+      font: 500 24px/1 var(--font-display);
+      box-shadow: 0 0 0 1px var(--ring);
+    }
+    .step h3 { margin-block-start: 2px; font-size: 25px; }
+    .step p { margin: 7px 0 0; color: var(--muted); font-size: 15px; }
+
+    .code-card {
+      border-radius: 24px;
+      background: #171716;
+      color: #f5f4ed;
+      overflow: hidden;
+      box-shadow: 0 0 0 1px var(--dark-soft), 0 18px 50px rgba(20,20,19,0.12);
+    }
+    .code-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 18px;
+      border-block-end: 1px solid var(--dark-soft);
+      color: #b0aea5;
+      font: 12px/1 var(--font-mono);
+    }
+    .dots { display: flex; gap: 7px; }
+    .dots i {
+      inline-size: 10px;
+      block-size: 10px;
+      border-radius: 999px;
+      background: var(--accent);
+      opacity: 0.9;
+    }
+    .dots i:nth-child(2) { background: var(--sand); }
+    .dots i:nth-child(3) { background: #87867f; }
+    pre {
+      margin: 0;
+      padding: 24px;
+      overflow-x: auto;
+      font: 14px/1.72 var(--font-mono);
+      color: #e8e6dc;
+    }
+    .code-accent { color: color-mix(in oklch, var(--accent) 84%, white); }
+    .code-muted { color: #87867f; }
+
+    .footer {
+      padding: 44px 0;
+      background: var(--paper);
+      border-block-start: 1px solid var(--border);
+    }
+    .footer-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .footer-links { display: flex; gap: 18px; }
+    [data-od-id] { scroll-margin-block-start: 90px; }
+
+    @media (max-width: 980px) {
+      .nav-links { display: none; }
+      .hero-grid,
+      .section-head,
+      .model-board,
+      .start-layout { grid-template-columns: 1fr; }
+      .hero-visual { min-block-size: auto; }
+      .pricing-grid { grid-template-columns: 1fr; }
+      .model-image { min-block-size: 460px; }
+    }
+    @media (max-width: 680px) {
+      .container { inline-size: min(100% - 28px, 1180px); }
+      .hero { padding-block-start: 36px; }
+      h1 { font-size: 46px; }
+      .hero-actions,
+      .footer-inner { align-items: stretch; flex-direction: column; }
+      .btn { inline-size: 100%; }
+      .hero-photo { block-size: 520px; }
+      .model-grid { grid-template-columns: 1fr; }
+      section { padding: 58px 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <nav class="nav" aria-label="主导航">
+      <div class="container nav-inner">
+        <a class="brand" href="#top" aria-label="AIJinAPI 首页">
+          AIJINAPI
+        </a>
+        <div class="nav-links">
+          <a href="#pricing">价格套餐</a>
+          <a href="#models">支持模型</a>
+          <a href="#start">快速开始</a>
+          <a href="#footer">文档</a>
+        </div>
+        <div class="nav-actions">
+          <a class="btn ghost" href="#">登录</a>
+          <a class="btn primary" href="#">注册</a>
+        </div>
+      </div>
+    </nav>
+
+    <main id="top">
+      <header class="hero">
+        <div class="container hero-grid">
+          <div>
+            <p class="eyebrow">AI API Relay / OpenAI Compatible</p>
+            <h1 data-od-id="headline">面向国内开发者的 AI API 中转服务。</h1>
+            <p class="hero-copy">
+              AIJinAPI 支持人民币直接充值，支付宝/微信即充即用。无需外卡、无需魔法，兼容 OpenAI 请求格式，一行代码把应用切到可用模型池。
+            </p>
+            <div class="hero-actions">
+              <a class="btn primary" href="#">立即注册获取 Key</a>
+              <a class="btn ghost" href="#start">查看接入方式</a>
+            </div>
+            <p class="hero-note"><b>核心优势：</b>人民币充值、OpenAI 格式兼容、实时到账、开发者友好。</p>
+          </div>
+
+          <div class="hero-visual" data-od-id="hero">
+            <div class="hero-photo">
+              <img src="moycqu29-IMG_4393.JPG" alt="AIJinAPI 二次元风格主视觉插画" />
+            </div>
+            <div class="hero-card" aria-label="服务状态摘要">
+              <div class="line"><span>充值方式</span><span>Alipay / WeChat</span></div>
+              <div class="line"><span>接口格式</span><span>OpenAI-compatible</span></div>
+              <div class="line"><span>到账状态</span><span>Real-time</span></div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <section id="pricing" data-od-id="pricing">
+        <div class="container">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Pricing</p>
+              <h2>Free 先试 Big Pickle，Plus 打开完整模型池。</h2>
+            </div>
+            <p>Free 每月 500 次请求额度；Plus 每月 1500 次请求额度。客户仍使用同一个 OpenAI-compatible 接口。</p>
+          </div>
+
+          <div class="pricing-grid">
+            <article class="plan-card">
+              <span class="plan-kicker">Free</span>
+              <h3>免费试用</h3>
+              <div class="price">$0</div>
+              <div class="quota">500 次/月 · 仅 Big Pickle</div>
+              <ul class="feature-list">
+                <li>注册即送 500 次月度请求额度</li>
+                <li>兼容 OpenAI Chat Completions</li>
+                <li>仅可调用 big-pickle 免费模型</li>
+              </ul>
+              <div class="plan-art"><img src="moycqy9a-IMG_4395.JPG" alt="" /></div>
+            </article>
+
+            <article class="plan-card featured">
+              <span class="plan-kicker">Plus</span>
+              <h3>Plus 会员</h3>
+              <div class="price">$13</div>
+              <div class="quota">1500 次/月 · Plus 模型池</div>
+              <ul class="feature-list">
+                <li>开放 Kimi、GLM、Qwen、DeepSeek、MiMo</li>
+                <li>实时到账，余额清晰可查</li>
+                <li>Plus 请求由 AIJinAPI 自动分配模型通道</li>
+              </ul>
+              <div class="plan-art"><img src="moycqy9d-IMG_4396.JPG" alt="" /></div>
+            </article>
+
+            <article class="plan-card">
+              <span class="plan-kicker">Manual</span>
+              <h3>手动开通</h3>
+              <div class="price">Admin</div>
+              <div class="quota">v1 先后台开通 Plus</div>
+              <ul class="feature-list">
+                <li>注册默认 Free，每月 500 次</li>
+                <li>后台 CLI 可升级 Plus 30 天</li>
+                <li>后续再接 Stripe/支付宝/微信支付</li>
+              </ul>
+              <div class="plan-art"><img src="moycqu2b-IMG_4394.JPG" alt="" /></div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="models" id="models" data-od-id="models">
+        <div class="container">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Models</p>
+              <h2>主流国产模型，统一接入方式。</h2>
+            </div>
+            <p>Free 只开放 Big Pickle；Plus 开放国产主流模型，后端自动分配模型通道。</p>
+          </div>
+
+          <div class="model-board">
+            <div class="model-image">
+              <img src="moycqy9d-IMG_4396.JPG" alt="AIJinAPI 模型区插画" />
+            </div>
+            <div class="model-grid">
+              <div class="model"><strong>Big Pickle</strong><span>Free 可用，500 次/月</span></div>
+              <div class="model"><strong>Kimi K2.5 / K2.6</strong><span>Plus · 长文本、通用对话、应用助手</span></div>
+              <div class="model"><strong>GLM-5 / GLM-5.1</strong><span>Plus · 中文任务、工具调用、业务问答</span></div>
+              <div class="model"><strong>MiMo-V2.5 / V2.5-Pro</strong><span>Plus · 创作、对话和高阶推理场景</span></div>
+              <div class="model"><strong>Qwen3.5 Plus / Qwen3.6 Plus</strong><span>Plus · 开发者生态、代码与通用推理</span></div>
+              <div class="model"><strong>DeepSeek V4 Pro / V4 Flash</strong><span>Plus · 推理、低延迟调用、成本敏感任务</span></div>
+              <div class="model"><strong>套餐额度</strong><span>Free 500 次/月 · Plus 1500 次/月</span></div>
+              <div class="model"><strong>OpenAI Format</strong><span>复用 SDK，仅替换 base_url 与 API Key</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="start" data-od-id="quick-start">
+        <div class="container">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Quick Start</p>
+              <h2>三步拿到 Key，把请求切到 AIJinAPI。</h2>
+            </div>
+            <p>流程尽量短：注册账号拿到 Free Key；需要主流模型时后台开通 Plus。</p>
+          </div>
+
+          <div class="start-layout">
+            <div class="steps">
+              <article class="step">
+                <div class="step-num">1</div>
+                <div>
+                  <h3>注册</h3>
+                  <p>创建 AIJinAPI 账号，进入控制台准备管理项目 Key。</p>
+                </div>
+              </article>
+              <article class="step">
+                <div class="step-num">2</div>
+                <div>
+                  <h3>选择套餐</h3>
+                  <p>Free 仅 Big Pickle；Plus 每月 13 美元开放主流模型池。</p>
+                </div>
+              </article>
+              <article class="step">
+                <div class="step-num">3</div>
+                <div>
+                  <h3>获取 Key</h3>
+                  <p>复制 API Key，替换 base_url 后继续使用原有 OpenAI 格式代码。</p>
+                </div>
+              </article>
+            </div>
+
+            <div class="code-card">
+              <div class="code-head">
+                <div class="dots"><i></i><i></i><i></i></div>
+                <span>openai-compatible.ts</span>
+              </div>
+              <pre><code><span class="code-muted">import</span> OpenAI <span class="code-muted">from</span> <span class="code-accent">"openai"</span>;
+
+<span class="code-muted">const</span> client = <span class="code-muted">new</span> OpenAI({
+  apiKey: process.env.AIJINAPI_KEY,
+  baseURL: <span class="code-accent">"https://api.aijinapi.com/v1"</span>
+});
+
+<span class="code-muted">const</span> res = <span class="code-muted">await</span> client.chat.completions.create({
+  model: <span class="code-accent">"qwen3.6-plus"</span>,
+  messages: [{ role: <span class="code-accent">"user"</span>, content: <span class="code-accent">"生成一个接入说明"</span> }]
+});</code></pre>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer" id="footer" data-od-id="footer">
+      <div class="container footer-inner">
+        <div class="brand">AIJINAPI</div>
+        <div>面向国内开发者的 AI API 中转服务。</div>
+        <div class="footer-links">
+          <a href="#">服务状态</a>
+          <a href="#">开发文档</a>
+          <a href="#">联系我们</a>
+        </div>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

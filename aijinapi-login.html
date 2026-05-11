@@ -1,0 +1,794 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AIJinAPI 登录 / 注册</title>
+  <style>
+    :root {
+      --bg: oklch(96% 0.018 82);
+      --surface: oklch(99% 0.008 80);
+      --fg: oklch(18% 0.018 70);
+      --muted: oklch(48% 0.018 65);
+      --border: oklch(89% 0.016 80);
+      --accent: oklch(58% 0.15 36);
+      --dark: #141413;
+      --dark-soft: #30302e;
+      --ivory: #faf9f5;
+      --sand: #e8e6dc;
+      --paper: #f5f4ed;
+      --ring: #d1cfc5;
+      --danger: #b53333;
+      --success: #4f7c54;
+      --warning: #b46a35;
+      --font-display: "Iowan Old Style", "Yu Mincho", "Hiragino Mincho ProN", Georgia, serif;
+      --font-body: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+      --font-mono: "JetBrains Mono", "SFMono-Regular", Menlo, ui-monospace, monospace;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-block-size: 100vh;
+      color: var(--fg);
+      font-family: var(--font-body);
+      background:
+        linear-gradient(90deg, rgba(20,20,19,0.035) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(20,20,19,0.035) 1px, transparent 1px),
+        radial-gradient(circle at 22% 14%, color-mix(in oklch, var(--accent) 11%, transparent) 0 17rem, transparent 30rem),
+        var(--bg);
+      background-size: 56px 56px, 56px 56px, auto, auto;
+      line-height: 1.5;
+    }
+
+    a { color: inherit; text-decoration: none; }
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+    img { display: block; max-inline-size: 100%; }
+
+    .page {
+      min-block-size: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 30px;
+    }
+
+    .shell {
+      inline-size: min(1160px, 100%);
+      min-block-size: min(740px, calc(100vh - 60px));
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 430px;
+      gap: 28px;
+      align-items: stretch;
+    }
+
+    .cover {
+      position: relative;
+      min-block-size: 640px;
+      display: grid;
+      grid-template-columns: minmax(300px, 0.76fr) minmax(330px, 0.84fr);
+      gap: 22px;
+      padding: 24px;
+      border: 1px solid var(--border);
+      border-radius: 30px;
+      background: color-mix(in oklch, var(--surface) 92%, white);
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.64) inset, 0 24px 70px rgba(20,20,19,0.08);
+      overflow: hidden;
+    }
+
+    .cover-copy {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      padding: 8px 0 8px 6px;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      font-family: var(--font-display);
+      font-size: 26px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      line-height: 1;
+      color: var(--fg);
+      text-transform: uppercase;
+    }
+
+    .issue {
+      margin-block-start: 54px;
+      color: var(--muted);
+      font: 700 12px/1.2 var(--font-mono);
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }
+    h1 {
+      margin: 16px 0 0;
+      font: 500 clamp(48px, 5.2vw, 76px)/1.02 var(--font-display);
+      letter-spacing: 0;
+      text-wrap: pretty;
+    }
+    .lead {
+      max-inline-size: 440px;
+      margin: 22px 0 0;
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.72;
+    }
+
+    .selling {
+      display: grid;
+      gap: 10px;
+      margin-block-start: auto;
+      padding-block-start: 32px;
+    }
+    .selling-row {
+      display: grid;
+      grid-template-columns: 32px 1fr;
+      gap: 12px;
+      align-items: center;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: rgba(250,249,245,0.72);
+    }
+    .selling-row b {
+      display: block;
+      font-size: 14px;
+      line-height: 1.2;
+    }
+    .selling-row span {
+      display: block;
+      margin-block-start: 3px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .num {
+      inline-size: 32px;
+      block-size: 32px;
+      display: grid;
+      place-items: center;
+      border-radius: 11px;
+      background: var(--sand);
+      color: var(--fg);
+      box-shadow: 0 0 0 1px var(--ring);
+      font: 600 13px/1 var(--font-mono);
+    }
+
+    .art-stack {
+      position: relative;
+      min-block-size: 100%;
+      display: grid;
+      align-items: end;
+    }
+    .photo-card {
+      position: relative;
+      align-self: stretch;
+      min-block-size: 100%;
+      border-radius: 24px;
+      overflow: hidden;
+      background: var(--sand);
+      box-shadow: 0 0 0 1px var(--border);
+    }
+    .photo-card img {
+      inline-size: 100%;
+      block-size: 100%;
+      object-fit: cover;
+      object-position: 50% 22%;
+      filter: saturate(0.96) contrast(1.02);
+    }
+    .photo-card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(20,20,19,0.03), rgba(20,20,19,0.34));
+    }
+    .model-note {
+      position: absolute;
+      inset-inline: 18px;
+      inset-block-end: 18px;
+      display: grid;
+      gap: 9px;
+      padding: 15px;
+      border-radius: 18px;
+      background: rgba(250,249,245,0.9);
+      backdrop-filter: blur(16px);
+      box-shadow: 0 0 0 1px rgba(232,230,220,0.86);
+      z-index: 2;
+    }
+    .model-note p {
+      margin: 0;
+      color: var(--fg);
+      font: 600 13px/1.35 var(--font-body);
+    }
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+    }
+    .chip {
+      min-block-size: 27px;
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 0 9px;
+      background: var(--paper);
+      color: var(--muted);
+      box-shadow: 0 0 0 1px var(--border);
+      font: 700 11px/1 var(--font-body);
+      white-space: nowrap;
+    }
+
+    .auth {
+      align-self: center;
+      padding: 30px;
+      border: 1px solid var(--border);
+      border-radius: 26px;
+      background: color-mix(in oklch, var(--surface) 96%, white);
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.72) inset, 0 20px 58px rgba(20,20,19,0.08);
+    }
+    .auth-head { margin-block-end: 22px; }
+    .auth-head h2 {
+      margin: 0;
+      font: 500 36px/1.1 var(--font-display);
+      letter-spacing: 0;
+    }
+    .auth-head p {
+      margin: 9px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .tabs {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      padding-block-end: 10px;
+      margin-block-end: 22px;
+      border-block-end: 1px solid var(--border);
+    }
+    .tab-line {
+      position: absolute;
+      inset-block-end: -1px;
+      inset-inline-start: 0;
+      inline-size: 50%;
+      block-size: 2px;
+      background: var(--accent);
+      transition: transform 220ms ease;
+    }
+    .tabs[data-active="register"] .tab-line { transform: translateX(100%); }
+    .tab {
+      min-block-size: 40px;
+      border: 1px solid transparent;
+      border-radius: 12px;
+      background: transparent;
+      color: var(--muted);
+      font-weight: 850;
+      transition: transform 0.18s ease, background 0.18s ease, color 0.18s ease;
+    }
+    .tab:hover { transform: translateY(-1px); }
+    .tab.active { color: var(--fg); background: var(--sand); box-shadow: 0 0 0 1px var(--ring); }
+
+    .panel { display: none; }
+    .panel.active { display: block; }
+    .field { margin-block-end: 14px; }
+    label {
+      display: block;
+      margin-block-end: 7px;
+      color: var(--fg);
+      font-size: 13px;
+      font-weight: 760;
+    }
+    .input-wrap { position: relative; }
+    input[type="email"],
+    input[type="password"],
+    input[type="text"] {
+      inline-size: 100%;
+      min-block-size: 47px;
+      border: 1px solid var(--border);
+      border-radius: 13px;
+      padding: 0 13px;
+      background: #fff;
+      color: var(--fg);
+      outline: none;
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.72) inset;
+      transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+    }
+    input::placeholder { color: #96938b; }
+    .has-toggle input { padding-inline-end: 48px; }
+    input:focus {
+      border-color: #3898ec;
+      box-shadow: 0 0 0 3px rgba(56,152,236,0.14);
+    }
+    .field.error input {
+      border-color: var(--danger);
+      background: color-mix(in oklch, white 94%, var(--danger));
+      box-shadow: 0 0 0 3px rgba(181,51,51,0.10);
+    }
+    .error-text {
+      min-block-size: 17px;
+      margin: 5px 0 0;
+      color: var(--danger);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    .toggle-password {
+      position: absolute;
+      inset-inline-end: 7px;
+      inset-block-start: 50%;
+      transform: translateY(-50%);
+      inline-size: 36px;
+      block-size: 36px;
+      display: grid;
+      place-items: center;
+      border: 1px solid transparent;
+      border-radius: 10px;
+      background: var(--sand);
+      color: var(--fg);
+      box-shadow: 0 0 0 1px var(--ring);
+    }
+    .toggle-password svg { inline-size: 18px; block-size: 18px; }
+
+    .options {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin: 3px 0 18px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .check {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 680;
+      cursor: pointer;
+      user-select: none;
+    }
+    .check input {
+      appearance: none;
+      inline-size: 18px;
+      block-size: 18px;
+      margin: 0;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--ring);
+      border-radius: 6px;
+      background: #fff;
+    }
+    .check input:checked {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+    .check input:checked::after {
+      content: "";
+      inline-size: 8px;
+      block-size: 4px;
+      border-inline-start: 2px solid var(--ivory);
+      border-block-end: 2px solid var(--ivory);
+      transform: rotate(-45deg) translateY(-1px);
+    }
+    .link {
+      color: color-mix(in oklch, var(--accent) 86%, black);
+      font-weight: 800;
+    }
+
+    .submit {
+      inline-size: 100%;
+      min-block-size: 49px;
+      display: inline-flex;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+      border: 1px solid transparent;
+      border-radius: 14px;
+      background: var(--accent);
+      color: var(--ivory);
+      box-shadow: 0 0 0 1px color-mix(in oklch, var(--accent) 82%, black);
+      font-weight: 850;
+      transition: transform 0.18s ease, background 0.18s ease;
+    }
+    .submit:hover { transform: translateY(-1px); background: color-mix(in oklch, var(--accent) 90%, black); }
+    .submit[disabled] { cursor: wait; opacity: 0.82; }
+    .spinner {
+      display: none;
+      inline-size: 16px;
+      block-size: 16px;
+      border: 2px solid rgba(250,249,245,0.34);
+      border-block-start-color: var(--ivory);
+      border-radius: 999px;
+      animation: spin 760ms linear infinite;
+    }
+    .submit.loading .spinner { display: block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .strength {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 9px;
+      align-items: center;
+      margin-block-start: 8px;
+    }
+    .strength-track {
+      block-size: 7px;
+      border-radius: 999px;
+      background: var(--sand);
+      overflow: hidden;
+      box-shadow: 0 0 0 1px var(--ring);
+    }
+    .strength-fill {
+      inline-size: 0;
+      block-size: 100%;
+      border-radius: inherit;
+      background: var(--danger);
+      transition: inline-size 180ms ease, background 180ms ease;
+    }
+    .strength-label {
+      min-inline-size: 24px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      text-align: end;
+    }
+    .strength[data-level="weak"] .strength-fill { inline-size: 33%; background: var(--danger); }
+    .strength[data-level="medium"] .strength-fill { inline-size: 66%; background: var(--warning); }
+    .strength[data-level="strong"] .strength-fill { inline-size: 100%; background: var(--success); }
+
+    .footnote {
+      margin: 16px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      text-align: center;
+    }
+    .toast {
+      position: fixed;
+      inset-inline: 0;
+      inset-block-end: 22px;
+      z-index: 60;
+      display: grid;
+      place-items: center;
+      pointer-events: none;
+      opacity: 0;
+      transform: translateY(12px);
+      transition: opacity 180ms ease, transform 180ms ease;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast span {
+      padding: 11px 15px;
+      border-radius: 999px;
+      background: var(--dark);
+      color: var(--ivory);
+      box-shadow: 0 0 0 1px var(--dark-soft), 0 12px 34px rgba(20,20,19,0.18);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    @media (max-width: 1060px) {
+      .shell {
+        grid-template-columns: 1fr;
+        max-inline-size: 760px;
+      }
+      .cover {
+        min-block-size: 560px;
+        grid-template-columns: 1fr 0.86fr;
+      }
+      .auth { inline-size: 100%; }
+    }
+    @media (max-width: 760px) {
+      .page { padding: 0; place-items: stretch; }
+      .shell { min-block-size: 100vh; gap: 0; }
+      .cover {
+        min-block-size: 460px;
+        grid-template-columns: 1fr;
+        border-radius: 0;
+        border-inline: 0;
+        border-block-start: 0;
+        padding: 22px;
+      }
+      .art-stack {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        opacity: 0.34;
+      }
+      .photo-card { border-radius: 0; box-shadow: none; }
+      .photo-card::after { background: linear-gradient(90deg, rgba(245,244,237,0.96), rgba(245,244,237,0.68)); }
+      .model-note { display: none; }
+      .cover-copy { min-block-size: 410px; }
+      h1 { font-size: 43px; }
+      .selling-row { background: rgba(250,249,245,0.86); }
+      .auth {
+        border-radius: 0;
+        border-inline: 0;
+        border-block-end: 0;
+        padding: 26px 22px 34px;
+      }
+    }
+    @media (max-width: 460px) {
+      .options { align-items: flex-start; flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="shell">
+      <aside class="cover" aria-label="AIJinAPI 产品介绍">
+        <div class="cover-copy">
+          <a class="brand" href="index.html" aria-label="AIJinAPI 首页">
+            AIJINAPI
+          </a>
+          <div class="issue">API relay login / issue 02</div>
+          <h1>登录你的模型控制台。</h1>
+          <p class="lead">无需外卡、无需魔法。人民币充值后，用 OpenAI-compatible 接口接入 Kimi、GLM、Qwen、DeepSeek 等模型。</p>
+          <div class="selling">
+            <div class="selling-row"><span class="num">01</span><div><b>支付宝 / 微信充值</b><span>余额实时到账，适合国内开发者日常调试。</span></div></div>
+            <div class="selling-row"><span class="num">02</span><div><b>一行 base_url 切换</b><span>保留现有 OpenAI SDK 调用方式。</span></div></div>
+            <div class="selling-row"><span class="num">03</span><div><b>统一模型广场</b><span>按场景选择通用、推理、长文本与低延迟模型。</span></div></div>
+          </div>
+        </div>
+
+        <div class="art-stack" aria-hidden="true">
+          <div class="photo-card">
+            <img src="moycqy9a-IMG_4395.JPG" alt="" />
+          </div>
+          <div class="model-note">
+            <p>Supported models</p>
+            <div class="chips">
+              <span class="chip">Kimi K2.6</span>
+              <span class="chip">GLM-5.1</span>
+              <span class="chip">Qwen3.6 Plus</span>
+              <span class="chip">DeepSeek V4 Pro</span>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <section class="auth" aria-label="登录注册表单">
+        <div class="auth-head">
+          <h2 id="formTitle">欢迎回来</h2>
+          <p id="formSubtitle">登录后管理余额、API Key、调用记录和文档。</p>
+        </div>
+
+        <div class="tabs" data-active="login" role="tablist" aria-label="登录注册切换">
+          <span class="tab-line" aria-hidden="true"></span>
+          <button class="tab active" type="button" role="tab" aria-selected="true" data-tab="login">登录</button>
+          <button class="tab" type="button" role="tab" aria-selected="false" data-tab="register">注册</button>
+        </div>
+
+        <form class="panel active" id="loginPanel" novalidate>
+          <div class="field">
+            <label for="loginEmail">邮箱</label>
+            <div class="input-wrap">
+              <input id="loginEmail" name="email" type="email" autocomplete="email" placeholder="name@example.com" />
+            </div>
+            <p class="error-text" aria-live="polite"></p>
+          </div>
+
+          <div class="field">
+            <label for="loginPassword">密码</label>
+            <div class="input-wrap has-toggle">
+              <input id="loginPassword" name="password" type="password" autocomplete="current-password" placeholder="输入密码" />
+              <button class="toggle-password" type="button" aria-label="显示密码" data-target="loginPassword">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+            <p class="error-text" aria-live="polite"></p>
+          </div>
+
+          <div class="options">
+            <label class="check"><input id="remember" type="checkbox" />记住我</label>
+            <a class="link" href="#">忘记密码？</a>
+          </div>
+
+          <button class="submit" type="submit">
+            <span class="spinner" aria-hidden="true"></span>
+            <span>登录</span>
+          </button>
+        </form>
+
+        <form class="panel" id="registerPanel" novalidate>
+          <div class="field">
+            <label for="registerName">用户名</label>
+            <div class="input-wrap">
+              <input id="registerName" name="username" type="text" autocomplete="username" placeholder="例如：aijin_dev" />
+            </div>
+            <p class="error-text" aria-live="polite"></p>
+          </div>
+
+          <div class="field">
+            <label for="registerEmail">邮箱</label>
+            <div class="input-wrap">
+              <input id="registerEmail" name="email" type="email" autocomplete="email" placeholder="name@example.com" />
+            </div>
+            <p class="error-text" aria-live="polite"></p>
+          </div>
+
+          <div class="field">
+            <label for="registerPassword">密码</label>
+            <div class="input-wrap has-toggle">
+              <input id="registerPassword" name="password" type="password" autocomplete="new-password" placeholder="至少 8 位，建议含数字和字母" />
+              <button class="toggle-password" type="button" aria-label="显示密码" data-target="registerPassword">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+            <div class="strength" id="strength" data-level="">
+              <div class="strength-track"><div class="strength-fill"></div></div>
+              <span class="strength-label">-</span>
+            </div>
+            <p class="error-text" aria-live="polite"></p>
+          </div>
+
+          <div class="field">
+            <label for="confirmPassword">确认密码</label>
+            <div class="input-wrap has-toggle">
+              <input id="confirmPassword" name="confirm" type="password" autocomplete="new-password" placeholder="再次输入密码" />
+              <button class="toggle-password" type="button" aria-label="显示密码" data-target="confirmPassword">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+            <p class="error-text" aria-live="polite"></p>
+          </div>
+
+          <div class="options">
+            <label class="check"><input id="terms" type="checkbox" />我已阅读并同意服务条款</label>
+          </div>
+
+          <button class="submit" type="submit">
+            <span class="spinner" aria-hidden="true"></span>
+            <span>注册</span>
+          </button>
+        </form>
+
+        <p class="footnote">注册即获 Free 套餐，每月 500 次请求额度，可调用 Big Pickle 模型。</p>
+      </section>
+    </div>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"><span>已提交</span></div>
+
+  <script>
+    const tabs = Array.from(document.querySelectorAll(".tab"));
+    const tabsWrap = document.querySelector(".tabs");
+    const panels = {
+      login: document.getElementById("loginPanel"),
+      register: document.getElementById("registerPanel")
+    };
+    const formTitle = document.getElementById("formTitle");
+    const formSubtitle = document.getElementById("formSubtitle");
+    const toast = document.getElementById("toast");
+    const registerPassword = document.getElementById("registerPassword");
+    const confirmPassword = document.getElementById("confirmPassword");
+    const strength = document.getElementById("strength");
+    const strengthLabel = strength.querySelector(".strength-label");
+
+    const panelCopy = {
+      login: ["欢迎回来", "登录后管理余额、API Key、调用记录和文档。"],
+      register: ["创建账号", "注册后即可充值余额，获取 AIJinAPI Key。"]
+    };
+
+    function setTab(name) {
+      tabsWrap.dataset.active = name;
+      tabs.forEach((tab) => {
+        const active = tab.dataset.tab === name;
+        tab.classList.toggle("active", active);
+        tab.setAttribute("aria-selected", String(active));
+      });
+      Object.entries(panels).forEach(([key, panel]) => panel.classList.toggle("active", key === name));
+      formTitle.textContent = panelCopy[name][0];
+      formSubtitle.textContent = panelCopy[name][1];
+    }
+
+    function fieldFor(input) {
+      return input.closest(".field");
+    }
+
+    function setError(input, message) {
+      const field = fieldFor(input);
+      field.classList.toggle("error", Boolean(message));
+      field.querySelector(".error-text").textContent = message || "";
+    }
+
+    function requireValue(input, label) {
+      const valid = input.value.trim().length > 0;
+      setError(input, valid ? "" : `请输入${label}`);
+      return valid;
+    }
+
+    function showToast(message) {
+      toast.querySelector("span").textContent = message;
+      toast.classList.add("show");
+      window.clearTimeout(showToast.timer);
+      showToast.timer = window.setTimeout(() => toast.classList.remove("show"), 1700);
+    }
+
+    function withLoading(button, message) {
+      button.disabled = true;
+      button.classList.add("loading");
+      window.setTimeout(() => {
+        button.disabled = false;
+        button.classList.remove("loading");
+        showToast(message);
+      }, 850);
+    }
+
+    function passwordLevel(value) {
+      let score = 0;
+      if (value.length >= 8) score += 1;
+      if (/[A-Z]/.test(value) && /[a-z]/.test(value)) score += 1;
+      if (/\d/.test(value)) score += 1;
+      if (/[^A-Za-z0-9]/.test(value)) score += 1;
+      if (!value) return "";
+      if (score <= 1) return "weak";
+      if (score <= 3) return "medium";
+      return "strong";
+    }
+
+    function updateStrength() {
+      const level = passwordLevel(registerPassword.value);
+      strength.dataset.level = level;
+      strengthLabel.textContent = { weak: "弱", medium: "中", strong: "强", "": "-" }[level];
+    }
+
+    function validatePasswordMatch(showEmpty) {
+      if (!confirmPassword.value.trim()) {
+        if (showEmpty) setError(confirmPassword, "请再次输入密码");
+        return false;
+      }
+      const valid = registerPassword.value === confirmPassword.value;
+      setError(confirmPassword, valid ? "" : "两次输入的密码不一致");
+      return valid;
+    }
+
+    tabs.forEach((tab) => tab.addEventListener("click", () => setTab(tab.dataset.tab)));
+
+    document.querySelectorAll(".toggle-password").forEach((button) => {
+      button.addEventListener("click", () => {
+        const input = document.getElementById(button.dataset.target);
+        const visible = input.type === "text";
+        input.type = visible ? "password" : "text";
+        button.setAttribute("aria-label", visible ? "显示密码" : "隐藏密码");
+      });
+    });
+
+    document.querySelectorAll("input").forEach((input) => {
+      input.addEventListener("input", () => {
+        if (fieldFor(input)) setError(input, "");
+      });
+    });
+
+    registerPassword.addEventListener("input", () => {
+      updateStrength();
+      if (confirmPassword.value) validatePasswordMatch(false);
+    });
+    confirmPassword.addEventListener("input", () => validatePasswordMatch(false));
+
+    panels.login.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const valid = [
+        requireValue(document.getElementById("loginEmail"), "邮箱"),
+        requireValue(document.getElementById("loginPassword"), "密码")
+      ].every(Boolean);
+      if (valid) withLoading(event.submitter, "登录请求已发送");
+    });
+
+    panels.register.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const valid = [
+        requireValue(document.getElementById("registerName"), "用户名"),
+        requireValue(document.getElementById("registerEmail"), "邮箱"),
+        requireValue(registerPassword, "密码"),
+        validatePasswordMatch(true)
+      ].every(Boolean);
+      const terms = document.getElementById("terms");
+      if (!terms.checked) showToast("请先同意服务条款");
+      if (valid && terms.checked) withLoading(event.submitter, "注册请求已发送");
+    });
+
+    updateStrength();
+  </script>
+</body>
+</html>
