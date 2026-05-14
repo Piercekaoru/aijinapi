@@ -8,8 +8,8 @@ use crate::{
         normalize_email, user_for_api_key, validate_register_input, verify_password,
     },
     db::{
-        api_key_summaries, create_customer_key_for_user, create_session, recent_usage_for_user,
-        record_usage, subscription_summary, touch_key,
+        api_key_summaries, create_customer_key_for_user, create_default_customer_key_if_missing,
+        create_session, recent_usage_for_user, record_usage, subscription_summary, touch_key,
     },
     errors::ApiError,
     models::{
@@ -83,14 +83,17 @@ async fn register(
     })?;
 
     let session_token = create_session(&state.db, user.id).await?;
-    let api_key =
-        create_customer_key_for_user(&state.db, user.id, "default", FREE_MONTHLY_REQUEST_LIMIT)
-            .await?;
+    let api_key = create_default_customer_key_if_missing(
+        &state.db,
+        user.id,
+        user.effective_monthly_request_limit(),
+    )
+    .await?;
 
     Ok(web::Json(AuthResponse {
         session_token,
         user: user.into(),
-        api_key: Some(api_key),
+        api_key,
     }))
 }
 
@@ -124,13 +127,18 @@ async fn login(
     if !verify_password(&body.password, &user.password_hash) {
         return Err(ApiError::InvalidCredentials);
     }
-
     let session_token = create_session(&state.db, user.id).await?;
+    let api_key = create_default_customer_key_if_missing(
+        &state.db,
+        user.id,
+        user.effective_monthly_request_limit(),
+    )
+    .await?;
 
     Ok(web::Json(AuthResponse {
         session_token,
         user: user.into(),
-        api_key: None,
+        api_key,
     }))
 }
 

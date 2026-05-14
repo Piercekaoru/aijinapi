@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { SiteFooter } from "../components/SiteFooter";
 import { SiteHeader } from "../components/SiteHeader";
+import { useLocale } from "@/lib/i18n/context";
 
 const models = [
   {
@@ -96,6 +97,8 @@ const models = [
 ];
 
 export default function DocsPage() {
+  const { t } = useLocale();
+
   return (
     <main className="docs-page">
       <section className="docs-shell">
@@ -104,29 +107,29 @@ export default function DocsPage() {
         <section className="intro">
           <div>
             <p>Developer Docs</p>
-            <h1>开发文档</h1>
+            <h1>{t("docs.title")}</h1>
           </div>
-          <span>客户只接入统一 OpenAI-compatible 接口；Free/Plus 权限由 AIJinAPI 自动处理。</span>
+          <span>{t("docs.subtitle")}</span>
         </section>
 
         <div className="docs-grid">
           <section className="panel" id="base-url">
             <p>Base URL</p>
-            <h2>接口地址</h2>
+            <h2>{t("docs.baseURL")}</h2>
             <pre>http://localhost:3000/api/backend</pre>
-            <span>本地 Next.js 会把该路径代理到 Rust 后端。生产部署时同样只需要暴露前端端口。</span>
+            <span>{t("docs.baseURLDesc")}</span>
           </section>
 
           <section className="panel" id="auth">
             <p>Auth</p>
-            <h2>认证方式</h2>
+            <h2>{t("docs.auth")}</h2>
             <pre>{`Authorization: Bearer aijin_xxxxxxxxxxxxx`}</pre>
-            <span>客户 Key 在注册或控制台生成，数据库只保存哈希；额度按账号套餐统一计算。</span>
+            <span>{t("docs.authDesc")}</span>
           </section>
 
           <section className="panel wide" id="chat">
             <p>Chat</p>
-            <h2>聊天补全</h2>
+            <h2>{t("docs.chat")}</h2>
             <pre>{`curl http://localhost:3000/api/backend/v1/chat/completions \\
   -H "Authorization: Bearer aijin_xxxxxxxxxxxxx" \\
   -H "Content-Type: application/json" \\
@@ -140,8 +143,8 @@ export default function DocsPage() {
 
           <section className="panel wide" id="models">
             <p>Models</p>
-            <h2>支持模型</h2>
-            <span>Free 仅 big-pickle；Plus 为 $13/月、1500 次/月，Plus 模型统一自动分配通道。</span>
+            <h2>{t("docs.models")}</h2>
+            <span>{t("docs.modelsDesc")}</span>
             <div className="model-card-grid">
               {models.map((model) => (
                 <article className={`model-card ${model.tone === "dark" ? "dark" : ""}`} key={model.id}>
@@ -382,6 +385,7 @@ export default function DocsPage() {
         @media (max-width: 760px) {
           .docs-page {
             padding: 0 22px 48px;
+            overflow-x: hidden;
           }
 
           .intro,
@@ -396,7 +400,17 @@ export default function DocsPage() {
           }
 
           h1 {
-            font-size: clamp(54px, 18vw, 76px);
+            font-size: clamp(40px, 13vw, 58px);
+            line-height: 1.04;
+          }
+
+          .panel {
+            padding: 18px;
+          }
+
+          pre {
+            max-width: 100%;
+            overflow-x: auto;
           }
 
           .model-card-grid {
@@ -404,16 +418,37 @@ export default function DocsPage() {
           }
 
           .model-copy {
-            max-width: 78%;
+            max-width: 100%;
           }
 
           :global(.model-art) {
-            width: 42%;
-            height: 200px;
+            width: 46%;
+            height: 180px;
+            opacity: 0.18;
           }
 
           nav {
             flex-wrap: wrap;
+          }
+        }
+
+        @media (max-width: 460px) {
+          .docs-page {
+            padding: 0 14px 42px;
+          }
+
+          .model-card {
+            min-height: auto;
+            padding: 18px;
+          }
+
+          .model-copy {
+            min-height: 170px;
+          }
+
+          .model-id {
+            max-width: 100%;
+            overflow-wrap: anywhere;
           }
         }
       `}</style>

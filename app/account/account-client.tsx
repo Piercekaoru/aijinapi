@@ -1,10 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { SiteFooter } from "../components/SiteFooter";
 import { SiteHeader } from "../components/SiteHeader";
+import { useLocale } from "@/lib/i18n/context";
 
 const defaultBackendUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/+$/, "") ?? "/api/backend";
@@ -53,9 +54,10 @@ type DashboardResponse = {
 };
 
 export function AccountClient() {
+  const { t } = useLocale();
   const [sessionToken, setSessionToken] = useState("");
   const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
-  const [status, setStatus] = useState("正在读取账号...");
+  const [status, setStatus] = useState(t("account.loading"));
   const [loading, setLoading] = useState(true);
 
   const summary = useMemo(() => {
@@ -79,7 +81,7 @@ export function AccountClient() {
 
   const loadAccount = useCallback(async (token: string) => {
     setLoading(true);
-    setStatus("正在读取账号...");
+    setStatus(t("account.loading"));
 
     try {
       const response = await fetch(`${defaultBackendUrl}/dashboard`, {
@@ -98,7 +100,7 @@ export function AccountClient() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     const token = window.localStorage.getItem("aijinapi_session_token") ?? "";
@@ -127,15 +129,15 @@ export function AccountClient() {
             </span>
           </div>
           <Button type="button" onClick={() => sessionToken && loadAccount(sessionToken)} disabled={loading || !sessionToken}>
-            {loading ? "刷新中..." : "刷新"}
+            {loading ? t("account.loading") : t("account.refresh")}
           </Button>
         </section>
 
         {!sessionToken ? (
           <section className="empty-state">
-            <h2>需要登录</h2>
-            <p>登录后可以查看当前 API Key、月度额度、剩余额度和最近调用。</p>
-            <Link className={buttonVariants({ variant: "default" })} href="/login">去登录</Link>
+            <h2>{t("account.needLogin")}</h2>
+            <p>{t("account.needLoginDesc")}</p>
+            <Link className={buttonVariants({ variant: "default" })} href="/login">{t("account.goLogin")}</Link>
           </section>
         ) : (
           <>
@@ -143,30 +145,30 @@ export function AccountClient() {
               <article className="quota-card primary">
                 <p>{summary.planLabel}</p>
                 <strong>{summary.remaining.toLocaleString()}</strong>
-                <span>本月仍可调用请求数</span>
+                <span>{t("account.remaining")}</span>
               </article>
               <article className="quota-card">
-                <p>已用额度</p>
+                <p>{t("account.usedQuota")}</p>
                 <strong>{summary.used.toLocaleString()}</strong>
-                <span>本月已记录请求</span>
+                <span>{t("account.usedDesc")}</span>
               </article>
               <article className="quota-card">
-                <p>月度总额</p>
+                <p>{t("account.monthlyTotal")}</p>
                 <strong>{summary.monthlyLimit.toLocaleString()}</strong>
-                <span>账号套餐额度</span>
+                <span>{t("account.monthlyDesc")}</span>
               </article>
               <article className="quota-card">
-                <p>模型范围</p>
+                <p>{t("account.modelRange")}</p>
                 <strong>{summary.allowedModels.length}</strong>
-                <span>{summary.plan === "plus" ? "Plus 模型池" : "仅 Big Pickle"}</span>
+                <span>{summary.plan === "plus" ? t("account.modelRangeDesc") : t("account.modelRangeFree")}</span>
               </article>
             </section>
 
             <section className="usage-panel">
               <div className="panel-head">
                 <div>
-                  <p>Monthly Usage</p>
-                  <h2>本月额度</h2>
+                  <p>{t("account.monthlyUsage")}</p>
+                  <h2>{t("account.thisMonth")}</h2>
                 </div>
                 <code>{Math.round(summary.usagePercent)}%</code>
               </div>
@@ -174,15 +176,15 @@ export function AccountClient() {
                 <span style={{ width: `${summary.usagePercent}%` }} />
               </div>
               <div className="meter-labels">
-                <span>已用 {summary.used.toLocaleString()}</span>
-                <span>剩余 {summary.remaining.toLocaleString()}</span>
+                <span>{t("account.used")} {summary.used.toLocaleString()}</span>
+                <span>{t("account.remainingLabel")} {summary.remaining.toLocaleString()}</span>
               </div>
               <div className="plan-note">
                 <strong>{summary.plan === "plus" ? "$13 / 月" : "$0 / 月"}</strong>
                 <span>
                   {summary.plan === "plus"
-                    ? `Plus 到期：${summary.plusExpiresAt ? new Date(summary.plusExpiresAt).toLocaleString() : "未设置"}`
-                    : "Free 用户每月 500 次，仅可调用 big-pickle。"}
+                    ? `Plus 到期：${summary.plusExpiresAt ? new Date(summary.plusExpiresAt).toLocaleString() : t("account.notSet")}`
+                    : t("account.freeNote")}
                 </span>
               </div>
             </section>
@@ -192,7 +194,7 @@ export function AccountClient() {
                 <div className="panel-head">
                   <div>
                     <p>Keys</p>
-                    <h2>客户调用密钥</h2>
+                    <h2>{t("account.apiKeys")}</h2>
                   </div>
                   <Link className={buttonVariants({ variant: "secondary" })} href="/dashboard">管理 Key</Link>
                 </div>
@@ -222,7 +224,7 @@ export function AccountClient() {
                 <div className="panel-head">
                   <div>
                     <p>Recent</p>
-                    <h2>最近调用</h2>
+                    <h2>{t("account.recentUsage")}</h2>
                   </div>
                   <Link className={buttonVariants({ variant: "outline" })} href="/playground">去调试</Link>
                 </div>
@@ -240,7 +242,7 @@ export function AccountClient() {
                     </article>
                   ))}
                   {!loading && dashboard?.recent_usage.length === 0 && (
-                    <p className="muted">暂无调用记录。</p>
+                    <p className="muted">{t("account.noUsage")}</p>
                   )}
                 </div>
               </section>
@@ -508,6 +510,7 @@ export function AccountClient() {
         @media (max-width: 920px) {
           .account-page {
             padding: 0 22px 32px;
+            overflow-x: hidden;
           }
 
           .account-hero,
@@ -519,11 +522,55 @@ export function AccountClient() {
           .quota-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
           }
+
+          h1 {
+            font-size: clamp(36px, 12vw, 58px);
+            line-height: 1.02;
+          }
         }
 
         @media (max-width: 620px) {
+          .account-page {
+            padding: 0 14px 28px;
+          }
+
+          .account-hero,
+          .panel-head,
+          .key-row,
+          .usage-row,
+          .meter-labels,
+          .plan-note {
+            display: grid;
+            grid-template-columns: 1fr;
+            justify-items: start;
+          }
+
+          .account-hero :global(button),
+          .panel-head :global(a) {
+            width: 100%;
+          }
+
           .quota-grid {
             grid-template-columns: 1fr;
+          }
+
+          .quota-card,
+          .usage-panel,
+          .panel,
+          .empty-state {
+            border-radius: 12px;
+            padding: 18px;
+          }
+
+          .key-row > div:last-child,
+          .usage-row > div:last-child {
+            justify-items: start;
+          }
+
+          .key-row strong,
+          .usage-row strong {
+            white-space: normal;
+            overflow-wrap: anywhere;
           }
         }
       `}</style>

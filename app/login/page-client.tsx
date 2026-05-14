@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { SiteFooter } from "../components/SiteFooter";
 import { SiteHeader } from "../components/SiteHeader";
+import { useLocale } from "@/lib/i18n/context";
 
 type LoginPageClientProps = {
   style: string;
@@ -31,8 +32,19 @@ type ErrorResponse = {
   };
 };
 
+class AuthRequestError extends Error {
+  code?: string;
+
+  constructor(message: string, code?: string) {
+    super(message);
+    this.name = "AuthRequestError";
+    this.code = code;
+  }
+}
+
 export function LoginPageClient({ style, html }: LoginPageClientProps) {
   const rootRef = useRef<HTMLDivElement>(null);
+  const { t } = useLocale();
 
   useEffect(() => {
     const root = rootRef.current;
@@ -58,12 +70,12 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
 
     const copy = {
       login: {
-        title: "欢迎回来",
-        subtitle: "登录后管理余额、API Key、调用记录和文档。",
+        title: t("auth.welcome"),
+        subtitle: t("auth.welcomeSub"),
       },
       register: {
-        title: "创建账号",
-        subtitle: "注册后即可充值余额，获取 AIJinAPI Key。",
+        title: t("auth.register"),
+        subtitle: t("auth.registerSub"),
       },
     };
 
@@ -96,18 +108,18 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
     function requireValue(input: HTMLInputElement | null, label: string) {
       if (!input) return false;
       const ok = input.value.trim().length > 0;
-      setError(input, ok ? "" : `请输入${label}`);
+      setError(input, ok ? "" : `${label} 不能为空`);
       return ok;
     }
 
-    function showToast(message: string) {
+    function showToast(message: string, duration = 2400) {
       const toastMessage = toast?.querySelector<HTMLElement>("span");
       if (!toast || !toastMessage) return;
 
       toastMessage.textContent = message;
       toast.classList.add("show");
       if (toastTimer) window.clearTimeout(toastTimer);
-      toastTimer = window.setTimeout(() => toast.classList.remove("show"), 2400);
+      toastTimer = window.setTimeout(() => toast.classList.remove("show"), duration);
     }
 
     function setButtonBusy(button: HTMLButtonElement | null, busy: boolean) {
@@ -126,16 +138,26 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
 
     async function parseError(response: Response) {
       const text = await response.text();
-      if (!text) return `请求失败：${response.status}`;
+      if (!text) {
+        return {
+          message: `${t("auth.requestFailed")}：${response.status}`,
+        };
+      }
       try {
         const json = JSON.parse(text) as ErrorResponse;
-        return json.error?.message || json.error?.code || text;
+        return {
+          message: json.error?.message || json.error?.code || text,
+          code: json.error?.code,
+        };
       } catch {
-        return text;
+        return { message: text };
       }
     }
 
-    async function postAuth(path: "/auth/login" | "/auth/register", payload: object) {
+    async function postJson<T>(
+      path: "/auth/login" | "/auth/register",
+      payload: object,
+    ) {
       const response = await fetch(`${backendUrl}${path}`, {
         method: "POST",
         headers: {
@@ -146,10 +168,11 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
       });
 
       if (!response.ok) {
-        throw new Error(await parseError(response));
+        const parsed = await parseError(response);
+        throw new AuthRequestError(parsed.message, parsed.code);
       }
 
-      return (await response.json()) as AuthResponse;
+      return (await response.json()) as T;
     }
 
     function passwordLevel(value: string) {
@@ -169,9 +192,9 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
 
       const level = passwordLevel(registerPassword.value);
       const labelMap: Record<string, string> = {
-        weak: "弱",
-        medium: "中",
-        strong: "强",
+        weak: t("auth.passwordWeak"),
+        medium: t("auth.passwordMedium"),
+        strong: t("auth.passwordStrong"),
         "": "-",
       };
       strength.dataset.level = level;
@@ -181,11 +204,11 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
     function validatePasswordMatch(live = false) {
       if (!registerPassword || !confirmPassword) return false;
       if (!confirmPassword.value.trim()) {
-        if (!live) setError(confirmPassword, "请再次输入密码");
+        if (!live) setError(confirmPassword, t("auth.confirmAgain"));
         return false;
       }
       const ok = registerPassword.value === confirmPassword.value;
-      setError(confirmPassword, ok ? "" : "两次输入的密码不一致");
+      setError(confirmPassword, ok ? "" : t("auth.passwordMismatch"));
       return ok;
     }
 
@@ -211,7 +234,7 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
 
           const next = input.type === "password" ? "text" : "password";
           input.type = next;
-          button.setAttribute("aria-label", next === "password" ? "显示密码" : "隐藏密码");
+          button.setAttribute("aria-label", next === "password" ? t("auth.showPassword") : t("auth.hidePassword"));
         },
         { signal },
       );
@@ -249,17 +272,17 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
 
         setButtonBusy(submitter, true);
         try {
-          const payload = await postAuth("/auth/login", {
+          const payload = await postJson<AuthResponse>("/auth/login", {
             email: email.value.trim(),
             password: password.value,
           });
           persistSession(payload);
-          showToast("登录成功，正在进入控制台");
+          showToast(t("auth.loginSuccess"));
           window.setTimeout(() => {
             window.location.href = "/dashboard";
           }, 350);
         } catch (error) {
-          showToast(error instanceof Error ? error.message : "登录失败");
+          showToast(error instanceof Error ? error.message : t("auth.loginFailed"));
         } finally {
           setButtonBusy(submitter, false);
         }
@@ -282,23 +305,23 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
         ].every(Boolean);
         const submitter = (event as SubmitEvent).submitter as HTMLButtonElement | null;
 
-        if (!terms?.checked) showToast("请先同意服务条款");
+        if (!terms?.checked) showToast(t("auth.termsToast"));
         if (!valid || !terms?.checked || !name || !email || !registerPassword) return;
 
         setButtonBusy(submitter, true);
         try {
-          const payload = await postAuth("/auth/register", {
+          const payload = await postJson<AuthResponse>("/auth/register", {
             name: name.value.trim(),
             email: email.value.trim(),
             password: registerPassword.value,
           });
           persistSession(payload);
-          showToast("注册成功，API Key 已生成");
+          showToast(t("auth.registerSuccess"));
           window.setTimeout(() => {
             window.location.href = "/dashboard";
           }, 350);
         } catch (error) {
-          showToast(error instanceof Error ? error.message : "注册失败");
+          showToast(error instanceof Error ? error.message : t("auth.registerFailed"));
         } finally {
           setButtonBusy(submitter, false);
         }
@@ -307,12 +330,14 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
     );
 
     updateStrength();
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("mode") === "register") setTab("register");
 
     return () => {
       controller.abort();
       if (toastTimer) window.clearTimeout(toastTimer);
     };
-  }, []);
+  }, [t]);
 
   return (
     <div>

@@ -11,6 +11,7 @@ COPY lib ./lib
 COPY public ./public
 COPY components.json next.config.ts tsconfig.json tailwind.config.ts postcss.config.mjs eslint.config.mjs next-env.d.ts ./
 COPY aijinapi-landing.html aijinapi-login.html aijinapi-models.html ./
+COPY aijinapi-landing-ja.html aijinapi-login-ja.html aijinapi-models-ja.html ./
 RUN pnpm build
 
 FROM rust:1.95-bookworm AS backend-builder

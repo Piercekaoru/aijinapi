@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { SiteFooter } from "../components/SiteFooter";
 import { SiteHeader } from "../components/SiteHeader";
+import { useLocale } from "@/lib/i18n/context";
 
 const defaultBackendUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/+$/, "") ?? "/api/backend";
@@ -13,13 +14,14 @@ type ModelListResponse = {
 };
 
 export function PlaygroundClient() {
+  const { t } = useLocale();
   const [backendUrl, setBackendUrl] = useState(defaultBackendUrl);
   const [apiKey, setApiKey] = useState("");
   const [model, setModel] = useState("big-pickle");
   const [message, setMessage] = useState("用三句话介绍 AIJinAPI 的接入方式。");
   const [stream, setStream] = useState(false);
   const [models, setModels] = useState<string[]>([]);
-  const [status, setStatus] = useState("等待请求");
+  const [status, setStatus] = useState(t("playground.waiting"));
   const [response, setResponse] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -34,7 +36,7 @@ export function PlaygroundClient() {
 
   async function loadModels() {
     setLoading(true);
-    setStatus("正在读取模型列表...");
+    setStatus(t("playground.loadingModels"));
     setResponse("");
 
     try {
@@ -53,8 +55,8 @@ export function PlaygroundClient() {
             .filter((id): id is string => Boolean(id)),
         );
       }
-    } catch (error) {
-      setStatus("请求失败");
+} catch (error) {
+      setStatus(t("playground.requestFailed"));
       setResponse(error instanceof Error ? error.message : String(error));
     } finally {
       setLoading(false);
@@ -64,7 +66,7 @@ export function PlaygroundClient() {
   async function submitChat(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
-    setStatus(stream ? "正在读取流式响应..." : "正在请求聊天接口...");
+    setStatus(stream ? t("playground.loadingChatStream") : t("playground.loadingChat"));
     setResponse("");
 
     try {
@@ -83,32 +85,27 @@ export function PlaygroundClient() {
 
       setStatus(`${res.status} ${res.statusText}`);
 
-      if (stream && res.body) {
-        await readStream(res);
+      if (stream) {
+        const reader = res.body?.getReader();
+        if (!reader) throw new Error("No response body");
+        const decoder = new TextDecoder();
+        let buffer = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          setResponse(prettySse(buffer));
+        }
       } else {
         const text = await res.text();
+        setStatus(`${res.status} ${res.statusText}`);
         setResponse(prettyJson(text));
       }
     } catch (error) {
-      setStatus("请求失败");
+      setStatus(t("playground.requestFailed"));
       setResponse(error instanceof Error ? error.message : String(error));
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function readStream(res: Response) {
-    const reader = res.body?.getReader();
-    if (!reader) return;
-
-    const decoder = new TextDecoder();
-    let output = "";
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      output += decoder.decode(value, { stream: true });
-      setResponse(output);
     }
   }
 
@@ -120,14 +117,14 @@ export function PlaygroundClient() {
         <section className="playground-head">
           <div>
             <p>Backend Integration</p>
-            <h1>API 中转调试台</h1>
+            <h1>{t("playground.title")}</h1>
           </div>
         </section>
 
         <div className="playground-grid">
           <form className="panel" onSubmit={submitChat}>
             <label>
-              后端地址
+{t("playground.backendURL")}
               <input
                 value={backendUrl}
                 onChange={(event) => setBackendUrl(event.target.value)}
@@ -136,7 +133,7 @@ export function PlaygroundClient() {
             </label>
 
             <label>
-              客户 API Key
+              {t("playground.apiKey")}
               <input
                 value={apiKey}
                 onChange={(event) => setApiKey(event.target.value)}
@@ -147,7 +144,7 @@ export function PlaygroundClient() {
 
             <div className="row">
               <label>
-                模型
+{t("playground.model")}
                 <input
                   list="models"
                   value={model}
@@ -171,7 +168,7 @@ export function PlaygroundClient() {
             </div>
 
             <label>
-              测试消息
+              {t("playground.message")}
               <textarea
                 value={message}
                 onChange={(event) => setMessage(event.target.value)}
@@ -181,20 +178,20 @@ export function PlaygroundClient() {
 
             <div className="actions">
               <Button variant="secondary" type="button" onClick={loadModels} disabled={loading || !apiKey}>
-                读取模型
+{t("playground.loadModels")}
               </Button>
               <Button type="submit" disabled={loading || !apiKey || !model || !message}>
-                发送请求
+{t("playground.send")}
               </Button>
             </div>
           </form>
 
           <section className="panel response-panel">
             <div className="response-head">
-              <span>响应</span>
+              <span>{t("playground.response")}</span>
               <code>{status}</code>
             </div>
-            <pre>{response || "配置后端地址和客户 key，然后读取模型或发送请求。"}</pre>
+            <pre>{response || t("playground.placeholder")}</pre>
           </section>
         </div>
       </section>
@@ -341,6 +338,7 @@ export function PlaygroundClient() {
         @media (max-width: 920px) {
           .playground-page {
             padding: 0 22px 28px;
+            overflow-x: hidden;
           }
 
           .playground-head,
@@ -356,6 +354,47 @@ export function PlaygroundClient() {
           .playground-grid {
             grid-template-columns: 1fr;
           }
+
+          h1 {
+            font-size: clamp(34px, 12vw, 50px);
+          }
+
+          .response-panel {
+            min-height: 420px;
+          }
+        }
+
+        @media (max-width: 560px) {
+          .playground-page {
+            padding: 0 14px 24px;
+          }
+
+          .panel {
+            border-radius: 12px;
+            padding: 18px;
+          }
+
+          .row,
+          .actions,
+          .response-head {
+            display: grid;
+            grid-template-columns: 1fr;
+          }
+
+          .actions :global(button) {
+            width: 100%;
+          }
+
+          .response-head {
+            align-items: start;
+          }
+
+          pre {
+            max-width: 100%;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+          }
         }
       `}</style>
     </main>
@@ -366,6 +405,10 @@ function authHeaders(apiKey: string) {
   return {
     Authorization: `Bearer ${apiKey}`,
   };
+}
+
+function prettySse(text: string) {
+  return text.replace(/\n\n/g, "\n").trim();
 }
 
 function prettyJson(text: string) {

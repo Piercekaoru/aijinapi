@@ -23,6 +23,8 @@ fn test_config(server: &MockServer) -> Config {
         zen_go_chat_completions_url: format!("{}/go/chat/completions", server.uri()),
         zen_models_url: format!("{}/zen/models", server.uri()),
         zen_go_models_url: format!("{}/go/models", server.uri()),
+        upstream_max_attempts: 1,
+        upstream_retry_base_ms: 0,
         cors_allowed_origins: vec!["http://localhost:3002".to_string()],
     }
 }

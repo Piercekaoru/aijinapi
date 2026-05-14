@@ -1,6 +1,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { siteRoutes } from "./site-routes";
+import type { Locale } from "./i18n/types";
 
 type RouteKind = "landing" | "login" | "models";
 
@@ -11,10 +12,18 @@ export type StaticHtmlPage = {
 };
 
 const htmlFiles: Record<RouteKind, string> = {
-  landing: "aijinapi-landing.html",
-  login: "aijinapi-login.html",
-  models: "aijinapi-models.html",
+  landing: "aijinapi-landing",
+  login: "aijinapi-login",
+  models: "aijinapi-models",
 };
+
+function localeFilename(kind: RouteKind, locale: Locale): string {
+  const base = htmlFiles[kind];
+  if (locale === "ja") {
+    return `${base}-ja.html`;
+  }
+  return `${base}.html`;
+}
 
 const assetReplacements: Record<string, string> = {
   "moycqu29-IMG_4393.JPG": "/images/IMG_4393.JPG",
@@ -68,8 +77,9 @@ function rewriteLinks(html: string, kind: RouteKind) {
   return next;
 }
 
-export function getStaticHtmlPage(kind: RouteKind): StaticHtmlPage {
-  const raw = readFileSync(join(process.cwd(), htmlFiles[kind]), "utf8");
+export function getStaticHtmlPage(kind: RouteKind, locale: Locale = "zh"): StaticHtmlPage {
+  const filename = localeFilename(kind, locale);
+  const raw = readFileSync(join(process.cwd(), filename), "utf8");
   const title = raw.match(/<title>(.*?)<\/title>/s)?.[1] ?? "AIJinAPI";
   const style = raw.match(/<style>(.*?)<\/style>/s)?.[1] ?? "";
   const body = raw.match(/<body>(.*?)<\/body>/s)?.[1] ?? "";

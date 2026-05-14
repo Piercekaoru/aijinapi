@@ -1,15 +1,18 @@
 "use client";
 
 import Link from "next/link";
+import { Menu, X } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
-  publicNavItems,
-  siteRoutes,
+  publicNavItemsFor,
+  siteRoutesFor,
   type SiteRouteKey,
-  workspaceNavItems,
+  workspaceNavItemsFor,
 } from "@/lib/site-routes";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useLocale } from "@/lib/i18n/context";
 
 const defaultBackendUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/+$/, "") ?? "/api/backend";
@@ -28,9 +31,14 @@ type SiteHeaderProps = {
 };
 
 export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }: SiteHeaderProps) {
+  const { locale, t } = useLocale();
   const [token, setToken] = useState("");
   const [user, setUser] = useState<PublicUser | null>(null);
-  const navItems = variant === "workspace" ? workspaceNavItems : publicNavItems;
+  const [menuOpen, setMenuOpen] = useState(false);
+  const siteRoutes = siteRoutesFor(locale);
+  const navItems = variant === "workspace" ? workspaceNavItemsFor(locale) : publicNavItemsFor(locale);
+  const localePrefix = locale === "zh" ? "" : `/${locale}`;
+  const pathname = usePathname();
 
   const initial = useMemo(() => {
     const source = user?.name || user?.email || "A";
@@ -66,7 +74,7 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
         window.localStorage.setItem("aijinapi_user", JSON.stringify(freshUser));
         setUser(freshUser);
       } catch {
-        // Keep the local account hint when the backend is temporarily unavailable.
+        // Keep cached user when backend is temporarily unavailable
       }
     }
 
@@ -75,83 +83,157 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
     return () => controller.abort();
   }, []);
 
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
+
   function logout() {
     clearSession();
     window.location.href = logoutRedirect;
   }
 
+  function localePath(target: "zh" | "ja"): string {
+    const p = pathname || "/";
+    if (p.startsWith("/ja/") || p === "/ja") {
+      return target === "zh" ? p.replace(/^\/ja/, "/zh") : p;
+    }
+    if (p.startsWith("/zh/") || p === "/zh") {
+      return target === "ja" ? p.replace(/^\/zh/, "/ja") : p;
+    }
+    return target === "ja" ? `/ja${p}` : p;
+  }
+
+  function renderLangSwitch(className?: string) {
+    return (
+      <div className={cn("lang-switch", className)}>
+        <Link
+          className={locale === "zh" ? "active" : ""}
+          href={localePath("zh")}
+          aria-label="切换到中文"
+        >
+          中
+        </Link>
+        <span className="lang-sep">/</span>
+        <Link
+          className={locale === "ja" ? "active" : ""}
+          href={localePath("ja")}
+          aria-label="日本語に切替"
+        >
+          日
+        </Link>
+      </div>
+    );
+  }
+
+  function renderAccountActions() {
+    return token ? (
+      <>
+        <Link className={cn("account-chip", active === "account" && "active")} href={siteRoutes.account.href}>
+          <span className="account-avatar">{initial}</span>
+          <span className="account-copy">
+            <strong>{user?.name || t("nav.account")}</strong>
+            <small>{user?.email || t("nav.dashboard")}</small>
+          </span>
+        </Link>
+        {variant === "public" && (
+          <Link className={buttonVariants({ variant: "default" })} href={siteRoutes.dashboard.href}>
+            {siteRoutes.dashboard.label}
+          </Link>
+        )}
+        <Button variant="secondary" type="button" onClick={logout}>
+          {t("nav.logout")}
+        </Button>
+      </>
+    ) : (
+      <>
+        <Link className={buttonVariants({ variant: "secondary" })} href={siteRoutes.login.href}>
+          {siteRoutes.login.label}
+        </Link>
+        <Link className={buttonVariants({ variant: "default" })} href={siteRoutes.register.href}>
+          {siteRoutes.register.label}
+        </Link>
+      </>
+    );
+  }
+
   return (
     <header className="site-header">
-      <div className="site-header-left">
-        <Link className="site-brand" href="/">
+      <div className="site-header-brand">
+        <Link className="site-brand" href={localePrefix + "/"}>
           AIJINAPI
         </Link>
       </div>
 
-      <nav aria-label="站点导航">
-        {navItems.map((item) => (
-          <Link
-            className={active === item.key ? "active" : ""}
-            href={item.href}
-            key={item.key}
-          >
-            {item.label}
-          </Link>
-        ))}
-      </nav>
+      <div className="site-header-mobile-controls">
+        {renderLangSwitch("mobile-lang-switch")}
+        <button
+          className="mobile-menu-button"
+          type="button"
+          aria-label={menuOpen ? "关闭菜单" : "打开菜单"}
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((open) => !open)}
+        >
+          {menuOpen ? <X size={18} aria-hidden="true" /> : <Menu size={18} aria-hidden="true" />}
+        </button>
+      </div>
+
+      <div className="site-header-center">
+        <nav aria-label={locale === "ja" ? "サイトナビゲーション" : "站点导航"}>
+          {navItems.map((item) => (
+            <Link
+              className={active === item.key ? "active" : ""}
+              href={item.href}
+              key={item.key}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+
+        <div className="lang-split" aria-hidden="true" />
+
+        {renderLangSwitch()}
+      </div>
 
       <div className="site-header-right">
-        {token ? (
-          <>
-            <Link className={cn("account-chip", active === "account" && "active")} href="/account">
-              <span className="account-avatar">{initial}</span>
-              <span className="account-copy">
-                <strong>{user?.name || "账号"}</strong>
-                <small>{user?.email || "查看额度"}</small>
-              </span>
+        {renderAccountActions()}
+      </div>
+
+      <div className={cn("site-mobile-menu", menuOpen && "open")}>
+        <nav aria-label={locale === "ja" ? "モバイルナビゲーション" : "移动端导航"}>
+          {navItems.map((item) => (
+            <Link
+              className={active === item.key ? "active" : ""}
+              href={item.href}
+              key={item.key}
+            >
+              {item.label}
             </Link>
-            {variant === "public" && (
-              <Link className={buttonVariants({ variant: "default" })} href={siteRoutes.dashboard.href}>
-                控制台
-              </Link>
-            )}
-            <Button variant="secondary" type="button" onClick={logout}>
-              退出
-            </Button>
-          </>
-        ) : (
-          <>
-            <Link className={buttonVariants({ variant: "secondary" })} href={siteRoutes.login.href}>
-              {siteRoutes.login.label}
-            </Link>
-            <Link className={buttonVariants({ variant: "default" })} href={siteRoutes.register.href}>
-              {siteRoutes.register.label}
-            </Link>
-          </>
-        )}
+          ))}
+        </nav>
+        <div className="mobile-actions">{renderAccountActions()}</div>
       </div>
 
       <style jsx>{`
         .site-header {
           position: relative;
           min-height: 88px;
-          display: flex;
+          display: grid;
+          grid-template-columns: auto 1fr auto;
           align-items: center;
-          justify-content: space-between;
           gap: 24px;
           border-bottom: 1px solid #e8e6dc;
+          padding: 0 4px;
         }
 
-        .site-header-left,
-        .site-header-right {
-          flex: 1;
+        .site-header-brand {
           display: flex;
           align-items: center;
         }
 
-        .site-header-right {
-          justify-content: flex-end;
-          gap: 10px;
+        .site-header-mobile-controls,
+        .site-mobile-menu {
+          display: none;
         }
 
         :global(.site-brand) {
@@ -166,7 +248,7 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
           white-space: nowrap;
           text-decoration: none;
           text-transform: uppercase;
-          transition: color 0.18s ease, opacity 0.18s ease;
+          transition: color 0.18s ease;
         }
 
         :global(.site-brand:visited),
@@ -180,13 +262,17 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
           text-decoration: none;
         }
 
+        .site-header-center {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0;
+        }
+
         nav {
-          position: absolute;
-          left: 50%;
-          transform: translateX(-50%);
           display: inline-flex;
           align-items: center;
-          gap: 30px;
+          gap: 28px;
         }
 
         nav :global(a) {
@@ -209,6 +295,62 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
           text-decoration: none;
         }
 
+        .lang-split {
+          width: 1px;
+          height: 20px;
+          margin: 0 18px;
+          background: #dfdacf;
+        }
+
+        .lang-switch {
+          display: inline-flex;
+          align-items: center;
+          gap: 2px;
+        }
+
+        .lang-switch :global(a) {
+          color: #b5b2a9;
+          font-size: 12px;
+          font-weight: 700;
+          text-decoration: none;
+          padding: 2px 4px;
+          border-radius: 4px;
+          transition: all 0.18s ease;
+        }
+
+        .lang-switch :global(a:hover) {
+          color: #5e5d59;
+          background: #eeeadd;
+        }
+
+        .lang-switch :global(a.active) {
+          color: #141413;
+        }
+
+        .lang-sep {
+          color: #d8d5ca;
+          font-size: 12px;
+          user-select: none;
+        }
+
+        .site-header-right {
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 10px;
+        }
+
+        .mobile-menu-button {
+          width: 40px;
+          height: 40px;
+          display: inline-grid;
+          place-items: center;
+          border: 1px solid #d8d5ca;
+          border-radius: 10px;
+          color: #141413;
+          background: #faf9f5;
+        }
+
         :global(.account-chip) {
           min-height: 46px;
           display: inline-flex;
@@ -225,38 +367,38 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
 
         :global(.account-chip:hover),
         :global(.account-chip.active) {
-          background: #faf9f5;
-          text-decoration: none;
+          background: #f5f4ed;
+          box-shadow: 0 0 0 1px #c96442;
         }
 
         .account-avatar {
+          width: 36px;
+          height: 36px;
           display: grid;
-          width: 34px;
-          height: 34px;
-          flex: 0 0 auto;
           place-items: center;
-          border-radius: 10px;
-          color: #faf9f5;
-          background: #c96442;
-          font-weight: 850;
+          border-radius: 11px;
+          background: #e8e6dc;
+          font-size: 15px;
+          font-weight: 700;
+          color: #4d4c48;
+          flex-shrink: 0;
         }
 
         .account-copy {
-          min-width: 0;
           display: grid;
-          gap: 2px;
-        }
-
-        .account-copy strong,
-        .account-copy small {
+          gap: 1px;
           overflow: hidden;
           text-overflow: ellipsis;
-          white-space: nowrap;
         }
 
         .account-copy strong {
-          font-size: 13px;
+          color: #141413;
+          font-size: 14px;
+          font-weight: 700;
           line-height: 1;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
 
         .account-copy small {
@@ -267,24 +409,100 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
 
         @media (max-width: 980px) {
           .site-header {
-            position: static;
-            display: grid;
-            grid-template-columns: 1fr;
-            justify-items: start;
-            gap: 16px;
-            padding: 20px 0;
+            min-height: 72px;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 12px;
+            padding: 14px 0;
           }
 
-          nav {
-            position: static;
-            transform: none;
-            flex-wrap: wrap;
-            gap: 14px 20px;
+          .site-header-brand {
+            min-width: 0;
           }
 
+          .site-header-center,
           .site-header-right {
-            justify-content: flex-start;
-            flex-wrap: wrap;
+            display: none;
+          }
+
+          .site-header-mobile-controls {
+            display: inline-flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 8px;
+          }
+
+          .site-mobile-menu {
+            grid-column: 1 / -1;
+            display: none;
+            border: 1px solid #d8d5ca;
+            border-radius: 14px;
+            padding: 12px;
+            background: rgba(250, 249, 245, 0.96);
+            box-shadow: 0 16px 40px rgba(20, 20, 19, 0.08);
+          }
+
+          .site-mobile-menu.open {
+            display: grid;
+            gap: 12px;
+          }
+
+          .site-mobile-menu nav {
+            display: grid;
+            gap: 4px;
+            width: 100%;
+          }
+
+          .site-mobile-menu nav :global(a) {
+            min-height: 42px;
+            display: flex;
+            align-items: center;
+            border-radius: 10px;
+            padding: 0 10px;
+            font-size: 15px;
+          }
+
+          .site-mobile-menu nav :global(a:hover),
+          .site-mobile-menu nav :global(a.active) {
+            background: #eeeadd;
+          }
+
+          .mobile-actions {
+            display: grid;
+            gap: 8px;
+            border-top: 1px solid #e8e6dc;
+            padding-top: 12px;
+          }
+
+          .mobile-actions :global(a:not(.account-chip)),
+          .mobile-actions :global(button) {
+            width: 100%;
+          }
+
+          .mobile-actions :global(.account-chip) {
+            width: 100%;
+            max-width: none;
+          }
+        }
+
+        @media (max-width: 520px) {
+          :global(.site-brand) {
+            font-size: 22px;
+          }
+
+          .mobile-lang-switch {
+            display: inline-flex;
+          }
+
+          .site-mobile-menu .account-copy {
+            display: grid;
+          }
+
+          .site-header-right .account-copy {
+            display: none;
+          }
+
+          .site-header-right :global(.account-chip) {
+            padding: 5px 6px;
           }
         }
       `}</style>
@@ -292,19 +510,16 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
   );
 }
 
-function clearSession() {
-  window.localStorage.removeItem("aijinapi_session_token");
-  window.localStorage.removeItem("aijinapi_user");
-  window.localStorage.removeItem("aijinapi_latest_customer_key");
-}
-
-function readStoredUser() {
-  const raw = window.localStorage.getItem("aijinapi_user");
-  if (!raw) return null;
-
+function readStoredUser(): PublicUser | null {
   try {
-    return JSON.parse(raw) as PublicUser;
+    const raw = window.localStorage.getItem("aijinapi_user");
+    return raw ? (JSON.parse(raw) as PublicUser) : null;
   } catch {
     return null;
   }
+}
+
+function clearSession() {
+  window.localStorage.removeItem("aijinapi_session_token");
+  window.localStorage.removeItem("aijinapi_user");
 }

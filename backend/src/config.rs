@@ -12,6 +12,8 @@ pub struct Config {
     pub zen_go_chat_completions_url: String,
     pub zen_models_url: String,
     pub zen_go_models_url: String,
+    pub upstream_max_attempts: usize,
+    pub upstream_retry_base_ms: u64,
     pub cors_allowed_origins: Vec<String>,
 }
 
@@ -46,6 +48,14 @@ impl Config {
                 .unwrap_or_else(|_| "https://opencode.ai/zen/v1/models".to_string()),
             zen_go_models_url: env::var("ZEN_GO_MODELS_URL")
                 .unwrap_or_else(|_| "https://opencode.ai/zen/go/v1/models".to_string()),
+            upstream_max_attempts: env::var("UPSTREAM_MAX_ATTEMPTS")
+                .unwrap_or_else(|_| "4".to_string())
+                .parse::<usize>()?
+                .clamp(1, 8),
+            upstream_retry_base_ms: env::var("UPSTREAM_RETRY_BASE_MS")
+                .unwrap_or_else(|_| "300".to_string())
+                .parse::<u64>()?
+                .min(5_000),
             cors_allowed_origins: env::var("CORS_ALLOWED_ORIGINS")
                 .unwrap_or_else(|_| {
                     "http://localhost:3000,http://localhost:3001,http://localhost:3002".to_string()

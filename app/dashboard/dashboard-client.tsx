@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { SiteFooter } from "../components/SiteFooter";
 import { SiteHeader } from "../components/SiteHeader";
+import { useLocale } from "@/lib/i18n/context";
 
 const defaultBackendUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/+$/, "") ?? "/api/backend";
@@ -60,11 +61,12 @@ type IssuedApiKey = {
 };
 
 export function DashboardClient() {
+  const { t } = useLocale();
   const [backendUrl, setBackendUrl] = useState(defaultBackendUrl);
   const [sessionToken, setSessionToken] = useState("");
   const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
   const [latestKey, setLatestKey] = useState("");
-  const [status, setStatus] = useState("正在读取控制台...");
+  const [status, setStatus] = useState(t("dashboard.loading"));
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
 
@@ -76,7 +78,7 @@ export function DashboardClient() {
   const loadDashboard = useCallback(async (token = sessionToken, apiBase = normalizedBackendUrl) => {
     if (!token) return;
     setLoading(true);
-    setStatus("正在读取控制台...");
+    setStatus(t("dashboard.loading"));
 
     try {
       const response = await fetch(`${apiBase}/dashboard`, {
@@ -86,13 +88,13 @@ export function DashboardClient() {
       });
       if (!response.ok) throw new Error(await errorText(response));
       setDashboard((await response.json()) as DashboardResponse);
-      setStatus("已连接后端");
+      setStatus(t("dashboard.connected"));
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "控制台读取失败");
+      setStatus(error instanceof Error ? error.message : t("dashboard.failed"));
     } finally {
       setLoading(false);
     }
-  }, [normalizedBackendUrl, sessionToken]);
+  }, [normalizedBackendUrl, sessionToken, t]);
 
   useEffect(() => {
     const token = window.localStorage.getItem("aijinapi_session_token") ?? "";
@@ -101,16 +103,16 @@ export function DashboardClient() {
     setLatestKey(storedKey);
     if (!token) {
       setLoading(false);
-      setStatus("请先登录或注册");
+      setStatus(t("dashboard.needLogin"));
       return;
     }
     void loadDashboard(token, normalizedBackendUrl);
-  }, [loadDashboard, normalizedBackendUrl]);
+  }, [loadDashboard, normalizedBackendUrl, t]);
 
   async function createKey() {
     if (!sessionToken) return;
     setCreating(true);
-    setStatus("正在生成新 API Key...");
+    setStatus(t("dashboard.creating"));
 
     try {
       const response = await fetch(`${normalizedBackendUrl}/dashboard/api-keys`, {
@@ -127,10 +129,10 @@ export function DashboardClient() {
       const issued = (await response.json()) as IssuedApiKey;
       window.localStorage.setItem("aijinapi_latest_customer_key", issued.key);
       setLatestKey(issued.key);
-      setStatus("新 API Key 已生成，请现在保存");
+      setStatus(t("dashboard.generated"));
       await loadDashboard();
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "生成失败");
+      setStatus(error instanceof Error ? error.message : t("dashboard.failed"));
     } finally {
       setCreating(false);
     }
@@ -138,7 +140,7 @@ export function DashboardClient() {
 
   async function copy(text: string) {
     await navigator.clipboard.writeText(text);
-    setStatus("已复制到剪贴板");
+    setStatus(t("dashboard.keyCopied"));
   }
 
   return (
@@ -149,7 +151,7 @@ export function DashboardClient() {
         <section className="hero-band">
           <div>
             <p>Console</p>
-            <h1>{dashboard ? `${dashboard.user.name} 的控制台` : "AIJinAPI 控制台"}</h1>
+            <h1>{dashboard ? `${dashboard.user.name} 的控制台` : t("dashboard.title")}</h1>
             <span>
               {dashboard
                 ? `${dashboard.user.email} · ${dashboard.subscription.plan === "plus" ? "Plus" : "Free"} · ${dashboard.subscription.requests_this_month}/${dashboard.subscription.monthly_request_limit}`
@@ -157,7 +159,7 @@ export function DashboardClient() {
             </span>
           </div>
           <label>
-            后端地址
+{t("dashboard.backendURL")}
             <input
               value={backendUrl}
               onChange={(event) => setBackendUrl(event.target.value)}
@@ -169,9 +171,9 @@ export function DashboardClient() {
 
         {!sessionToken ? (
           <section className="empty-state">
-            <h2>需要登录</h2>
-            <p>登录或注册后会生成客户 API Key，并在这里查看额度和调用记录。</p>
-            <Link className={buttonVariants({ variant: "default" })} href="/login">去登录</Link>
+            <h2>{t("dashboard.needLogin")}</h2>
+            <p>{t("dashboard.needLoginDesc")}</p>
+            <Link className={buttonVariants({ variant: "default" })} href="/login">{t("dashboard.goLogin")}</Link>
           </section>
         ) : (
           <div className="dashboard-grid">
@@ -179,20 +181,20 @@ export function DashboardClient() {
               <div className="panel-head">
                 <div>
                   <p>API Key</p>
-                  <h2>客户调用密钥</h2>
-                  <span className="panel-subtitle">多个 Key 共享账号套餐额度，不再按单个 Key 独立计费。</span>
+<h2>{t("dashboard.apiKeys")}</h2>
+            <span className="panel-subtitle">{t("dashboard.apiKeysSub")}</span>
                 </div>
                 <Button type="button" onClick={createKey} disabled={creating}>
-                  {creating ? "生成中..." : "生成新 Key"}
+                  {creating ? t("dashboard.creating") : t("dashboard.createKey")}
                 </Button>
               </div>
 
               {latestKey && (
                 <div className="issued-key">
-                  <span>最近生成的 Key 仅在本机临时显示</span>
+                  <span>{t("dashboard.keyWarning")}</span>
                   <code>{latestKey}</code>
                   <Button variant="secondary" type="button" onClick={() => copy(latestKey)}>
-                    复制
+                    {t("dashboard.copy")}
                   </Button>
                 </div>
               )}
@@ -203,16 +205,16 @@ export function DashboardClient() {
                   <article className="key-row" key={key.id}>
                     <div>
                       <strong>{key.name}</strong>
-                      <span>{key.key_prefix ? `${key.key_prefix}...` : "旧 Key 未保存前缀"}</span>
+                      <span>{key.key_prefix ? `${key.key_prefix}...` : t("dashboard.oldKeyPrefix")}</span>
                     </div>
                     <div>
                       <span>{key.requests_this_month} 次</span>
-                      <small>{key.enabled ? "启用" : "停用"}</small>
+                      <small>{key.enabled ? t("dashboard.enabled") : t("dashboard.disabled")}</small>
                     </div>
                   </article>
                 ))}
                 {!loading && dashboard?.api_keys.length === 0 && (
-                  <p className="muted">还没有 API Key，点击右上角生成一个。</p>
+                  <p className="muted">{t("dashboard.noKeys")}</p>
                 )}
               </div>
             </section>
@@ -221,10 +223,10 @@ export function DashboardClient() {
               <div className="panel-head">
                 <div>
                   <p>Usage</p>
-                  <h2>最近调用</h2>
+                  <h2>{t("dashboard.recentUsage")}</h2>
                 </div>
                 <Button variant="secondary" type="button" onClick={() => loadDashboard()} disabled={loading}>
-                  刷新
+                  {t("dashboard.refresh")}
                 </Button>
               </div>
 
@@ -242,7 +244,7 @@ export function DashboardClient() {
                   </article>
                 ))}
                 {!loading && dashboard?.recent_usage.length === 0 && (
-                  <p className="muted">暂无调用记录。</p>
+                  <p className="muted">{t("dashboard.noUsage")}</p>
                 )}
               </div>
             </section>
@@ -420,12 +422,61 @@ export function DashboardClient() {
         @media (max-width: 780px) {
           .dashboard-page {
             padding: 0 22px 22px;
+            overflow-x: hidden;
           }
 
           .hero-band,
           .dashboard-grid {
             display: grid;
             grid-template-columns: 1fr;
+          }
+
+          .hero-band {
+            gap: 18px;
+            align-items: start;
+          }
+
+          h1 {
+            font-size: clamp(30px, 10vw, 42px);
+            line-height: 1.05;
+          }
+
+          label {
+            min-width: 0;
+          }
+
+          .panel-head,
+          .key-row,
+          .usage-row {
+            display: grid;
+            grid-template-columns: 1fr;
+            justify-items: start;
+          }
+
+          .panel-head :global(button),
+          .issued-key :global(button) {
+            width: 100%;
+          }
+
+          .key-row div:last-child,
+          .usage-row div:last-child {
+            justify-items: start;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .dashboard-page {
+            padding: 0 14px 20px;
+          }
+
+          .panel,
+          .empty-state {
+            padding: 18px;
+          }
+
+          .issued-key code {
+            max-width: 100%;
+            overflow-x: auto;
           }
         }
       `}</style>

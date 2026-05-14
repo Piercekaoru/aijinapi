@@ -97,6 +97,31 @@ pub async fn create_customer_key_for_user(
     })
 }
 
+pub async fn create_default_customer_key_if_missing(
+    pool: &PgPool,
+    user_id: i64,
+    monthly_limit: i32,
+) -> Result<Option<IssuedApiKey>, sqlx::Error> {
+    let existing_count: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)
+        FROM api_keys
+        WHERE user_id = $1
+        "#,
+    )
+    .bind(user_id)
+    .fetch_one(pool)
+    .await?;
+
+    if existing_count > 0 {
+        return Ok(None);
+    }
+
+    create_customer_key_for_user(pool, user_id, "default", monthly_limit)
+        .await
+        .map(Some)
+}
+
 pub async fn api_key_summaries(
     pool: &PgPool,
     user_id: i64,

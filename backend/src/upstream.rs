@@ -3,8 +3,10 @@ use std::time::Instant;
 use actix_web::{HttpResponse, http::header};
 use bytes::Bytes;
 use futures_util::StreamExt;
-use reqwest::{Client, StatusCode};
+use reqwest::{Client, RequestBuilder, StatusCode};
 use serde_json::Value;
+use tokio::time::{Duration, sleep};
+use tracing::warn;
 
 use crate::{config::Config, errors::ApiError};
 
@@ -81,11 +83,11 @@ pub async fn forward_models(
         UpstreamRoute::Zen => &config.opencode_zen_api_key,
         UpstreamRoute::Go => &config.opencode_go_api_key,
     };
-    let upstream = client
-        .get(model_url(config, route))
-        .bearer_auth(api_key)
-        .send()
-        .await?;
+    let url = model_url(config, route);
+    let upstream = send_with_retries(config, "models", route, url, || {
+        client.get(url).bearer_auth(api_key)
+    })
+    .await?;
 
     response_from_upstream(upstream, started, false).await
 }
@@ -99,14 +101,61 @@ pub async fn forward_chat(
     let is_stream = request_is_stream(&body);
     let started = Instant::now();
     let (url, api_key) = upstream_parts(config, route);
-    let upstream = client
-        .post(url)
-        .bearer_auth(api_key)
-        .json(&body)
-        .send()
-        .await?;
+    let upstream = send_with_retries(config, "chat", route, url, || {
+        client.post(url).bearer_auth(api_key).json(&body)
+    })
+    .await?;
 
     response_from_upstream(upstream, started, is_stream).await
+}
+
+async fn send_with_retries(
+    config: &Config,
+    operation: &'static str,
+    route: UpstreamRoute,
+    url: &str,
+    mut build: impl FnMut() -> RequestBuilder,
+) -> Result<reqwest::Response, ApiError> {
+    let attempts = config.upstream_max_attempts.max(1);
+
+    for attempt in 1..=attempts {
+        match build().send().await {
+            Ok(response) => return Ok(response),
+            Err(err) if attempt < attempts => {
+                let delay_ms = retry_delay_ms(config.upstream_retry_base_ms, attempt);
+                warn!(
+                    operation,
+                    route = ?route,
+                    url,
+                    attempt,
+                    attempts,
+                    delay_ms,
+                    error = %err,
+                    "upstream request failed; retrying"
+                );
+                sleep(Duration::from_millis(delay_ms)).await;
+            }
+            Err(err) => {
+                warn!(
+                    operation,
+                    route = ?route,
+                    url,
+                    attempt,
+                    attempts,
+                    error = %err,
+                    "upstream request failed; no attempts remaining"
+                );
+                return Err(ApiError::UpstreamRequest(err));
+            }
+        }
+    }
+
+    unreachable!("attempts is always at least one")
+}
+
+fn retry_delay_ms(base_ms: u64, attempt: usize) -> u64 {
+    let multiplier = 1_u64 << attempt.saturating_sub(1).min(4);
+    base_ms.saturating_mul(multiplier).min(5_000)
 }
 
 fn upstream_parts(config: &Config, route: UpstreamRoute) -> (&str, &str) {

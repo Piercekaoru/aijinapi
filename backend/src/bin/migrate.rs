@@ -10,7 +10,9 @@ async fn main() -> anyhow::Result<()> {
         .connect(&config.database_url)
         .await?;
 
-    sqlx::migrate!("./migrations").run(&db).await?;
+    let mut migrator = sqlx::migrate!("./migrations");
+    migrator.set_ignore_missing(true);
+    migrator.run(&db).await?;
     println!("migrations applied");
     Ok(())
 }
