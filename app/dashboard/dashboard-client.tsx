@@ -150,7 +150,7 @@ export function DashboardClient() {
 
         <section className="hero-band">
           <div>
-            <p>Console</p>
+            <p>{t("dashboard.label")}</p>
             <h1>{dashboard ? `${dashboard.user.name} 的控制台` : t("dashboard.title")}</h1>
             <span>
               {dashboard
@@ -159,12 +159,12 @@ export function DashboardClient() {
             </span>
           </div>
           <label>
-{t("dashboard.backendURL")}
+{t("dashboard.apiBaseURL")}
             <input
               value={backendUrl}
               onChange={(event) => setBackendUrl(event.target.value)}
-              placeholder="http://127.0.0.1:8080"
-              aria-label="后端地址"
+              placeholder="https://api.aijinapi.com"
+              aria-label={t("dashboard.apiBaseURL")}
             />
           </label>
         </section>
@@ -180,7 +180,7 @@ export function DashboardClient() {
             <section className="panel key-panel">
               <div className="panel-head">
                 <div>
-                  <p>API Key</p>
+                  <p>{t("dashboard.keyLabel")}</p>
 <h2>{t("dashboard.apiKeys")}</h2>
             <span className="panel-subtitle">{t("dashboard.apiKeysSub")}</span>
                 </div>
@@ -200,7 +200,7 @@ export function DashboardClient() {
               )}
 
               <div className="key-list">
-                {loading && <p className="muted">读取中...</p>}
+                {loading && <p className="muted">{t("dashboard.loadingKeys")}</p>}
                 {dashboard?.api_keys.map((key) => (
                   <article className="key-row" key={key.id}>
                     <div>
@@ -352,6 +352,7 @@ export function DashboardClient() {
           grid-template-columns: minmax(0, 1.1fr) minmax(340px, 0.9fr);
           gap: 18px;
           margin-top: 22px;
+          min-width: 0;
         }
 
         .panel,
@@ -406,10 +407,19 @@ export function DashboardClient() {
           border-radius: 8px;
           padding: 14px;
           background: rgba(255, 248, 238, 0.86);
+          overflow: hidden;
+        }
+
+        .issued-key code {
+          overflow-wrap: anywhere;
+          word-break: break-all;
+          font-family: "SFMono-Regular", Consolas, monospace;
+          font-size: 13px;
         }
 
         code {
           overflow-wrap: anywhere;
+          word-break: break-all;
           font-family: "SFMono-Regular", Consolas, monospace;
         }
 
@@ -421,7 +431,7 @@ export function DashboardClient() {
 
         @media (max-width: 780px) {
           .dashboard-page {
-            padding: 0 22px 22px;
+            padding: 0 14px 22px;
             overflow-x: hidden;
           }
 
@@ -429,6 +439,7 @@ export function DashboardClient() {
           .dashboard-grid {
             display: grid;
             grid-template-columns: 1fr;
+            min-width: 0;
           }
 
           .hero-band {
@@ -443,6 +454,13 @@ export function DashboardClient() {
 
           label {
             min-width: 0;
+          }
+
+          .panel,
+          .empty-state {
+            padding: 18px;
+            min-width: 0;
+            overflow-wrap: anywhere;
           }
 
           .panel-head,
@@ -471,12 +489,21 @@ export function DashboardClient() {
 
           .panel,
           .empty-state {
-            padding: 18px;
+            padding: 16px;
           }
 
           .issued-key code {
             max-width: 100%;
             overflow-x: auto;
+            word-break: break-all;
+          }
+
+          .key-row strong,
+          .key-row span,
+          .usage-row strong,
+          .usage-row span {
+            overflow-wrap: anywhere;
+            word-break: break-word;
           }
         }
       `}</style>
@@ -486,7 +513,7 @@ export function DashboardClient() {
 
 async function errorText(response: Response) {
   const text = await response.text();
-  if (!text) return `请求失败：${response.status}`;
+  if (!text) return `${response.status} ${response.statusText}`;
   try {
     const json = JSON.parse(text) as { error?: { message?: string; code?: string } };
     return json.error?.message || json.error?.code || text;

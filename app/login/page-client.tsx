@@ -356,6 +356,7 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
         @media (max-width: 760px) {
           .static-page-chrome {
             width: min(100% - 28px, 1220px);
+            overflow: hidden;
           }
         }
       `}</style>

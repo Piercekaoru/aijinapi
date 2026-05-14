@@ -116,7 +116,7 @@ export function PlaygroundClient() {
 
         <section className="playground-head">
           <div>
-            <p>Backend Integration</p>
+            <p>{t("playground.label")}</p>
             <h1>{t("playground.title")}</h1>
           </div>
         </section>
@@ -124,11 +124,11 @@ export function PlaygroundClient() {
         <div className="playground-grid">
           <form className="panel" onSubmit={submitChat}>
             <label>
-{t("playground.backendURL")}
+{t("playground.apiBaseURL")}
               <input
                 value={backendUrl}
                 onChange={(event) => setBackendUrl(event.target.value)}
-                placeholder="/api/backend"
+                placeholder="https://api.aijinapi.com"
               />
             </label>
 
@@ -137,7 +137,7 @@ export function PlaygroundClient() {
               <input
                 value={apiKey}
                 onChange={(event) => setApiKey(event.target.value)}
-                placeholder="aijin_xxx"
+                placeholder="ak_xxxxxxxxxxxxxxxx"
                 type="password"
               />
             </label>
@@ -238,6 +238,7 @@ export function PlaygroundClient() {
           display: grid;
           grid-template-columns: 420px minmax(0, 1fr);
           gap: 18px;
+          min-width: 0;
         }
 
         .panel {
@@ -303,6 +304,7 @@ export function PlaygroundClient() {
           grid-template-rows: auto 1fr;
           background: #141413;
           color: #faf9f5;
+          overflow: hidden;
         }
 
         .response-head {
@@ -330,6 +332,8 @@ export function PlaygroundClient() {
           padding-top: 16px;
           overflow: auto;
           white-space: pre-wrap;
+          overflow-wrap: anywhere;
+          word-break: break-word;
           color: #e8e6dc;
           font-size: 13px;
           line-height: 1.6;
@@ -337,7 +341,7 @@ export function PlaygroundClient() {
 
         @media (max-width: 920px) {
           .playground-page {
-            padding: 0 22px 28px;
+            padding: 0 14px 28px;
             overflow-x: hidden;
           }
 
@@ -345,6 +349,7 @@ export function PlaygroundClient() {
           .playground-grid {
             grid-template-columns: 1fr;
             display: grid;
+            min-width: 0;
           }
 
           .playground-head {
@@ -362,6 +367,10 @@ export function PlaygroundClient() {
           .response-panel {
             min-height: 420px;
           }
+
+          .panel {
+            min-width: 0;
+          }
         }
 
         @media (max-width: 560px) {
@@ -371,7 +380,8 @@ export function PlaygroundClient() {
 
           .panel {
             border-radius: 12px;
-            padding: 18px;
+            padding: 16px;
+            min-width: 0;
           }
 
           .row,
@@ -394,6 +404,8 @@ export function PlaygroundClient() {
             overflow-x: auto;
             white-space: pre-wrap;
             overflow-wrap: anywhere;
+            word-break: break-word;
+            font-size: 12px;
           }
         }
       `}</style>

@@ -148,6 +148,7 @@ export default function TermsPage() {
       <style jsx>{`
         .terms-page {
           min-height: 100vh;
+          overflow-x: hidden;
           color: #141413;
           background:
             radial-gradient(circle at 18% 12%, rgba(201, 100, 66, 0.08), transparent 28rem),

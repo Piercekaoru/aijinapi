@@ -106,7 +106,7 @@ export default function DocsPage() {
 
         <section className="intro">
           <div>
-            <p>Developer Docs</p>
+            <p>{t("docs.label")}</p>
             <h1>{t("docs.title")}</h1>
           </div>
           <span>{t("docs.subtitle")}</span>
@@ -114,24 +114,24 @@ export default function DocsPage() {
 
         <div className="docs-grid">
           <section className="panel" id="base-url">
-            <p>Base URL</p>
+            <p>{t("route.docsBaseUrl")}</p>
             <h2>{t("docs.baseURL")}</h2>
-            <pre>http://localhost:3000/api/backend</pre>
+            <pre>https://api.aijinapi.com/v1</pre>
             <span>{t("docs.baseURLDesc")}</span>
           </section>
 
           <section className="panel" id="auth">
-            <p>Auth</p>
+            <p>{t("docs.authLabel")}</p>
             <h2>{t("docs.auth")}</h2>
-            <pre>{`Authorization: Bearer aijin_xxxxxxxxxxxxx`}</pre>
+            <pre>{`Authorization: Bearer aijin_xxxxxxxxxxxxxxxx`}</pre>
             <span>{t("docs.authDesc")}</span>
           </section>
 
           <section className="panel wide" id="chat">
-            <p>Chat</p>
+            <p>{t("route.docsChat")}</p>
             <h2>{t("docs.chat")}</h2>
-            <pre>{`curl http://localhost:3000/api/backend/v1/chat/completions \\
-  -H "Authorization: Bearer aijin_xxxxxxxxxxxxx" \\
+            <pre>{`curl https://api.aijinapi.com/v1/chat/completions \\
+  -H "Authorization: Bearer aijin_xxxxxxxxxxxxxxxx" \\
   -H "Content-Type: application/json" \\
   -d '{
     "model": "qwen3.6-plus",
@@ -142,7 +142,7 @@ export default function DocsPage() {
           </section>
 
           <section className="panel wide" id="models">
-            <p>Models</p>
+            <p>{t("docs.models")}</p>
             <h2>{t("docs.models")}</h2>
             <span>{t("docs.modelsDesc")}</span>
             <div className="model-card-grid">
@@ -167,6 +167,7 @@ export default function DocsPage() {
         .docs-page {
           min-height: 100vh;
           padding: 0 38px 72px;
+          overflow-x: hidden;
           color: #141413;
           background:
             radial-gradient(circle at 18% 12%, rgba(201, 100, 66, 0.1), transparent 28rem),
@@ -178,6 +179,7 @@ export default function DocsPage() {
         .docs-shell {
           width: min(1160px, 100%);
           margin: 0 auto;
+          min-width: 0;
         }
         .intro {
           display: grid;
@@ -266,6 +268,9 @@ export default function DocsPage() {
           color: #fff8e8;
           font-size: 13px;
           line-height: 1.7;
+          white-space: pre-wrap;
+          overflow-wrap: anywhere;
+          word-break: break-word;
         }
 
         code {
@@ -384,8 +389,12 @@ export default function DocsPage() {
 
         @media (max-width: 760px) {
           .docs-page {
-            padding: 0 22px 48px;
+            padding: 0 14px 48px;
             overflow-x: hidden;
+          }
+
+          .docs-shell {
+            min-width: 0;
           }
 
           .intro,
@@ -405,12 +414,18 @@ export default function DocsPage() {
           }
 
           .panel {
-            padding: 18px;
+            padding: 16px;
+            min-width: 0;
+            overflow-wrap: anywhere;
           }
 
           pre {
             max-width: 100%;
-            overflow-x: auto;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            font-size: 12px;
+            padding: 14px;
           }
 
           .model-card-grid {
@@ -422,9 +437,7 @@ export default function DocsPage() {
           }
 
           :global(.model-art) {
-            width: 46%;
-            height: 180px;
-            opacity: 0.18;
+            display: none;
           }
 
           nav {
@@ -443,7 +456,7 @@ export default function DocsPage() {
           }
 
           .model-copy {
-            min-height: 170px;
+            min-height: auto;
           }
 
           .model-id {

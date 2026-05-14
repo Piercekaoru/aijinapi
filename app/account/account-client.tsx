@@ -94,9 +94,9 @@ export function AccountClient() {
       const payload = (await response.json()) as DashboardResponse;
       setDashboard(payload);
       window.localStorage.setItem("aijinapi_user", JSON.stringify(payload.user));
-      setStatus("账号信息已更新");
+      setStatus(t("account.updated"));
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "账号读取失败");
+      setStatus(error instanceof Error ? error.message : t("account.loadFailed"));
     } finally {
       setLoading(false);
     }
@@ -108,7 +108,7 @@ export function AccountClient() {
 
     if (!token) {
       setLoading(false);
-      setStatus("请先登录或注册");
+      setStatus(t("account.needLogin"));
       return;
     }
 
@@ -122,8 +122,8 @@ export function AccountClient() {
 
         <section className="account-hero">
           <div>
-            <p>Account</p>
-            <h1>{dashboard ? `${dashboard.user.name} 的账号` : "账号与额度"}</h1>
+            <p>{t("account.label")}</p>
+            <h1>{dashboard ? `${dashboard.user.name} ${t("account.nameTitle")}` : t("account.title")}</h1>
             <span>
               {dashboard ? `${dashboard.user.email} · ${summary.planLabel} 会员` : status}
             </span>
@@ -183,7 +183,7 @@ export function AccountClient() {
                 <strong>{summary.plan === "plus" ? "$13 / 月" : "$0 / 月"}</strong>
                 <span>
                   {summary.plan === "plus"
-                    ? `Plus 到期：${summary.plusExpiresAt ? new Date(summary.plusExpiresAt).toLocaleString() : t("account.notSet")}`
+                    ? `${t("account.plusExpires")}：${summary.plusExpiresAt ? new Date(summary.plusExpiresAt).toLocaleString() : t("account.notSet")}`
                     : t("account.freeNote")}
                 </span>
               </div>
@@ -193,29 +193,29 @@ export function AccountClient() {
               <section className="panel">
                 <div className="panel-head">
                   <div>
-                    <p>Keys</p>
+                    <p>{t("account.keysLabel")}</p>
                     <h2>{t("account.apiKeys")}</h2>
                   </div>
                   <Link className={buttonVariants({ variant: "secondary" })} href="/dashboard">管理 Key</Link>
                 </div>
                 <p className="panel-note">
-                  额度按账号套餐统一计算，多个 Key 共享每月 {summary.monthlyLimit.toLocaleString()} 次。
+                  {t("dashboard.apiKeysSub")}
                 </p>
                 <div className="key-list">
                   {dashboard?.api_keys.map((key) => (
                     <article className="key-row" key={key.id}>
                       <div>
                         <strong>{key.name}</strong>
-                        <span>{key.key_prefix ? `${key.key_prefix}...` : "未保存前缀"}</span>
+                        <span>{key.key_prefix ? `${key.key_prefix}...` : t("dashboard.oldKeyPrefix")}</span>
                       </div>
                       <div>
-                        <code>{key.requests_this_month} 次</code>
-                        <small>{key.enabled ? "启用" : "停用"}</small>
+                        <code>{key.requests_this_month} {t("account.used")}</code>
+                        <small>{key.enabled ? t("dashboard.enabled") : t("dashboard.disabled")}</small>
                       </div>
                     </article>
                   ))}
                   {!loading && dashboard?.api_keys.length === 0 && (
-                    <p className="muted">还没有 API Key，请到控制台生成。</p>
+                    <p className="muted">{t("account.noKeys")}</p>
                   )}
                 </div>
               </section>
@@ -258,6 +258,7 @@ export function AccountClient() {
         .account-page {
           min-height: 100vh;
           padding: 0 36px 42px;
+          overflow-x: hidden;
           color: #141413;
           background:
             radial-gradient(circle at 18% 12%, rgba(201, 100, 66, 0.11), transparent 30rem),
@@ -337,6 +338,7 @@ export function AccountClient() {
           border-radius: 18px;
           background: rgba(250, 249, 245, 0.92);
           box-shadow: 0 18px 54px rgba(20, 20, 19, 0.08);
+          overflow: hidden;
         }
 
         .quota-card {
@@ -436,6 +438,7 @@ export function AccountClient() {
           grid-template-columns: minmax(0, 1fr) minmax(0, 0.88fr);
           gap: 18px;
           margin-top: 18px;
+          min-width: 0;
         }
 
         .panel.dark {
@@ -509,7 +512,7 @@ export function AccountClient() {
 
         @media (max-width: 920px) {
           .account-page {
-            padding: 0 22px 32px;
+            padding: 0 14px 32px;
             overflow-x: hidden;
           }
 
@@ -517,6 +520,7 @@ export function AccountClient() {
           .account-grid {
             grid-template-columns: 1fr;
             display: grid;
+            min-width: 0;
           }
 
           .quota-grid {
@@ -560,6 +564,7 @@ export function AccountClient() {
           .empty-state {
             border-radius: 12px;
             padding: 18px;
+            overflow-wrap: anywhere;
           }
 
           .key-row > div:last-child,
@@ -582,8 +587,8 @@ async function errorText(response: Response) {
   const text = await response.text();
   try {
     const json = JSON.parse(text) as { error?: { message?: string } };
-    return json.error?.message ?? text;
+    return json.error?.message ?? `${response.status} ${response.statusText}`;
   } catch {
-    return text;
+    return `${response.status} ${response.statusText}`;
   }
 }

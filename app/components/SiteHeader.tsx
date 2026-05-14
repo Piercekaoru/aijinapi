@@ -224,6 +224,7 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
           gap: 24px;
           border-bottom: 1px solid #e8e6dc;
           padding: 0 4px;
+          overflow-x: hidden;
         }
 
         .site-header-brand {
@@ -405,6 +406,9 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
           color: #6a6861;
           font-size: 11px;
           line-height: 1;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
 
         @media (max-width: 980px) {
@@ -413,10 +417,12 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
             grid-template-columns: minmax(0, 1fr) auto;
             gap: 12px;
             padding: 14px 0;
+            overflow-x: hidden;
           }
 
           .site-header-brand {
             min-width: 0;
+            overflow: hidden;
           }
 
           .site-header-center,
@@ -429,6 +435,7 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
             align-items: center;
             justify-content: flex-end;
             gap: 8px;
+            flex-shrink: 0;
           }
 
           .site-mobile-menu {
@@ -439,6 +446,7 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
             padding: 12px;
             background: rgba(250, 249, 245, 0.96);
             box-shadow: 0 16px 40px rgba(20, 20, 19, 0.08);
+            overflow: hidden;
           }
 
           .site-mobile-menu.open {
@@ -481,6 +489,10 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
           .mobile-actions :global(.account-chip) {
             width: 100%;
             max-width: none;
+          }
+
+          .mobile-actions .account-copy {
+            overflow: hidden;
           }
         }
 
