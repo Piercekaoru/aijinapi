@@ -12,7 +12,7 @@ export function SiteFooter() {
       <div className="site-footer-inner">
         <div className="site-footer-brand">
           <Link className="site-footer-logo" href={localePrefix + "/"}>
-            AIJINAPI
+            OpenAchieve
           </Link>
           <p>{t("footer.brand")}</p>
         </div>

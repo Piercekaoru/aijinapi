@@ -1,4 +1,4 @@
-use aijinapi_backend::config::Config;
+use openachieve_backend::config::Config;
 use sqlx::postgres::PgPoolOptions;
 
 #[tokio::main]

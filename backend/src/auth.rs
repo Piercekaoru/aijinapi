@@ -9,9 +9,11 @@ use uuid::Uuid;
 
 use crate::{
     errors::ApiError,
-    keys::hash_key,
+    keys::{CUSTOMER_KEY_PREFIX, hash_key},
     models::{ApiKey, User},
 };
+
+pub const SESSION_TOKEN_PREFIX: &str = "openachieve_session_";
 
 pub fn extract_bearer(req: &HttpRequest) -> Result<&str, ApiError> {
     let header = req
@@ -28,6 +30,10 @@ pub fn extract_bearer(req: &HttpRequest) -> Result<&str, ApiError> {
 }
 
 pub async fn authenticate(pool: &PgPool, bearer_key: &str) -> Result<ApiKey, ApiError> {
+    if !bearer_key.starts_with(CUSTOMER_KEY_PREFIX) {
+        return Err(ApiError::InvalidApiKey);
+    }
+
     let key_hash = hash_key(bearer_key);
     let api_key = sqlx::query_as::<_, ApiKey>(
         r#"
@@ -50,6 +56,10 @@ pub async fn authenticate(pool: &PgPool, bearer_key: &str) -> Result<ApiKey, Api
 }
 
 pub async fn authenticate_session(pool: &PgPool, bearer_token: &str) -> Result<User, ApiError> {
+    if !bearer_token.starts_with(SESSION_TOKEN_PREFIX) {
+        return Err(ApiError::InvalidSession);
+    }
+
     let token_hash = hash_key(bearer_token);
     let user = sqlx::query_as::<_, User>(
         r#"
@@ -148,7 +158,11 @@ pub fn generate_session_token() -> String {
         .take(40)
         .map(char::from)
         .collect();
-    format!("aijins_{}_{}", Uuid::new_v4().simple(), suffix)
+    format!(
+        "{SESSION_TOKEN_PREFIX}{}_{}",
+        Uuid::new_v4().simple(),
+        suffix
+    )
 }
 
 pub fn key_prefix(key: &str) -> String {
@@ -186,10 +200,10 @@ mod tests {
     #[test]
     fn extracts_bearer_token() {
         let req = TestRequest::default()
-            .insert_header(("authorization", "Bearer aijin_abc"))
+            .insert_header(("authorization", "Bearer openachieve_abc"))
             .to_http_request();
 
-        assert_eq!(extract_bearer(&req).unwrap(), "aijin_abc");
+        assert_eq!(extract_bearer(&req).unwrap(), "openachieve_abc");
     }
 
     #[test]

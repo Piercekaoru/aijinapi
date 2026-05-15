@@ -46,7 +46,7 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
   }, [user]);
 
   useEffect(() => {
-    const storedToken = window.localStorage.getItem("aijinapi_session_token") ?? "";
+    const storedToken = window.localStorage.getItem("openachieve_session_token") ?? "";
     setToken(storedToken);
     setUser(readStoredUser());
 
@@ -71,7 +71,7 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
         }
 
         const freshUser = (await response.json()) as PublicUser;
-        window.localStorage.setItem("aijinapi_user", JSON.stringify(freshUser));
+        window.localStorage.setItem("openachieve_user", JSON.stringify(freshUser));
         setUser(freshUser);
       } catch {
         // Keep cached user when backend is temporarily unavailable
@@ -160,7 +160,7 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
     <header className="site-header">
       <div className="site-header-brand">
         <Link className="site-brand" href={localePrefix + "/"}>
-          AIJINAPI
+          OpenAchieve
         </Link>
       </div>
 
@@ -524,7 +524,7 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
 
 function readStoredUser(): PublicUser | null {
   try {
-    const raw = window.localStorage.getItem("aijinapi_user");
+    const raw = window.localStorage.getItem("openachieve_user");
     return raw ? (JSON.parse(raw) as PublicUser) : null;
   } catch {
     return null;
@@ -532,6 +532,6 @@ function readStoredUser(): PublicUser | null {
 }
 
 function clearSession() {
-  window.localStorage.removeItem("aijinapi_session_token");
-  window.localStorage.removeItem("aijinapi_user");
+  window.localStorage.removeItem("openachieve_session_token");
+  window.localStorage.removeItem("openachieve_user");
 }

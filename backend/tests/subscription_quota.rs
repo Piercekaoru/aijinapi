@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use aijinapi_backend::{
+use openachieve_backend::{
     auth::{ensure_monthly_quota, hash_password},
     config::Config,
     db::{create_customer_key_for_user, subscription_summary},
@@ -14,6 +14,7 @@ use aijinapi_backend::{
     plans::{FREE_MONTHLY_REQUEST_LIMIT, PLUS_MONTHLY_REQUEST_LIMIT},
     routes,
     state::AppState,
+    upstream::UpstreamKeyRing,
 };
 
 #[sqlx::test(migrations = "./migrations")]
@@ -38,20 +39,24 @@ async fn register_user_defaults_to_free_quota(pool: PgPool) {
     let response = test::call_service(&app, req).await;
     assert_eq!(response.status(), StatusCode::OK);
     let body: Value = test::read_body_json(response).await;
-    assert!(body["session_token"].as_str().unwrap().starts_with("aijins_"));
+    assert!(
+        body["session_token"]
+            .as_str()
+            .unwrap()
+            .starts_with("openachieve_session_")
+    );
     assert_eq!(body["user"]["email"], email.as_str());
     assert_eq!(
         body["api_key"]["monthly_request_limit"],
         FREE_MONTHLY_REQUEST_LIMIT
     );
 
-    let stored_limit: i32 = sqlx::query_scalar(
-        "SELECT monthly_request_limit FROM users WHERE email = $1",
-    )
-    .bind(&email)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let stored_limit: i32 =
+        sqlx::query_scalar("SELECT monthly_request_limit FROM users WHERE email = $1")
+            .bind(&email)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(stored_limit, FREE_MONTHLY_REQUEST_LIMIT);
 
     let session_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sessions")
@@ -104,7 +109,7 @@ async fn registered_user_can_login_and_gets_default_key(pool: PgPool) {
         body["session_token"]
             .as_str()
             .unwrap()
-            .starts_with("aijins_")
+            .starts_with("openachieve_session_")
     );
     assert_eq!(
         body["api_key"]["monthly_request_limit"],
@@ -238,24 +243,29 @@ async fn expired_plus_user_falls_back_to_free_quota(pool: PgPool) {
 }
 
 fn app_state(pool: PgPool) -> AppState {
+    let config = Config {
+        database_url: "postgres://postgres:postgres@localhost/openachieve_test".to_string(),
+        opencode_zen_api_keys: vec!["real-zen-key".to_string()],
+        opencode_go_api_keys: vec!["real-go-key".to_string()],
+        server_host: "127.0.0.1".parse().unwrap(),
+        server_port: 8080,
+        default_monthly_request_limit: FREE_MONTHLY_REQUEST_LIMIT,
+        zen_chat_completions_url: "http://127.0.0.1/zen/chat/completions".to_string(),
+        zen_go_chat_completions_url: "http://127.0.0.1/go/chat/completions".to_string(),
+        zen_models_url: "http://127.0.0.1/zen/models".to_string(),
+        zen_go_models_url: "http://127.0.0.1/go/models".to_string(),
+        upstream_max_attempts: 1,
+        upstream_retry_base_ms: 0,
+        upstream_key_cooldown_ms: 60_000,
+        cors_allowed_origins: vec!["http://localhost:3000".to_string()],
+    };
+    let upstream_keys = UpstreamKeyRing::from_config(&config);
+
     AppState {
-        config: Config {
-            database_url: "postgres://postgres:postgres@localhost/aijinapi_test".to_string(),
-            opencode_zen_api_key: "real-zen-key".to_string(),
-            opencode_go_api_key: "real-go-key".to_string(),
-            server_host: "127.0.0.1".parse().unwrap(),
-            server_port: 8080,
-            default_monthly_request_limit: FREE_MONTHLY_REQUEST_LIMIT,
-            zen_chat_completions_url: "http://127.0.0.1/zen/chat/completions".to_string(),
-            zen_go_chat_completions_url: "http://127.0.0.1/go/chat/completions".to_string(),
-            zen_models_url: "http://127.0.0.1/zen/models".to_string(),
-            zen_go_models_url: "http://127.0.0.1/go/models".to_string(),
-            upstream_max_attempts: 1,
-            upstream_retry_base_ms: 0,
-            cors_allowed_origins: vec!["http://localhost:3000".to_string()],
-        },
+        config,
         db: pool,
         http: Client::new(),
+        upstream_keys,
     }
 }
 

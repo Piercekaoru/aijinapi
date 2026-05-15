@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AIJinAPI 登录 / 注册</title>
+  <title>OpenAchieve ログイン / 登録</title>
   <style>
     :root {
       --bg: oklch(96% 0.018 82);
@@ -530,10 +530,10 @@
 <body>
   <main class="page">
     <div class="shell">
-      <aside class="cover" aria-label="AIJinAPI 产品介绍">
+      <aside class="cover" aria-label="OpenAchieve 产品介绍">
         <div class="cover-copy">
-          <a class="brand" href="index.html" aria-label="AIJinAPI 首页">
-            AIJINAPI
+          <a class="brand" href="index.html" aria-label="OpenAchieve 首页">
+            OpenAchieve
           </a>
           <div class="issue">API relay login / issue 02</div>
           <h1>登录你的模型控制台。</h1>
@@ -563,14 +563,14 @@
 
       <section class="auth" aria-label="登录注册表单">
         <div class="auth-head">
-          <h2 id="formTitle">欢迎回来</h2>
-          <p id="formSubtitle">登录后管理余额、API Key、调用记录和文档。</p>
+          <h2 id="formTitle">おかえりなさい</h2>
+          <p id="formSubtitle">ログイン後、残高・API Key・呼出履歴・ドキュメントを管理できます。</p>
         </div>
 
         <div class="tabs" data-active="login" role="tablist" aria-label="登录注册切换">
           <span class="tab-line" aria-hidden="true"></span>
-          <button class="tab active" type="button" role="tab" aria-selected="true" data-tab="login">登录</button>
-          <button class="tab" type="button" role="tab" aria-selected="false" data-tab="register">注册</button>
+          <button class="tab active" type="button" role="tab" aria-selected="true" data-tab="login">ログイン</button>
+          <button class="tab" type="button" role="tab" aria-selected="false" data-tab="register">登録</button>
         </div>
 
         <form class="panel active" id="loginPanel" novalidate>
@@ -585,7 +585,7 @@
           <div class="field">
             <label for="loginPassword">密码</label>
             <div class="input-wrap has-toggle">
-              <input id="loginPassword" name="password" type="password" autocomplete="current-password" placeholder="输入密码" />
+              <input id="loginPassword" name="password" type="password" autocomplete="current-password" placeholder="パスワードを入力" />
               <button class="toggle-password" type="button" aria-label="显示密码" data-target="loginPassword">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="3"/></svg>
               </button>
@@ -594,13 +594,13 @@
           </div>
 
           <div class="options">
-            <label class="check"><input id="remember" type="checkbox" />记住我</label>
-            <a class="link" href="#">忘记密码？</a>
+            <label class="check"><input id="remember" type="checkbox" />ログイン状態を保持</label>
+            <a class="link" href="#">パスワードをお忘れですか？</a>
           </div>
 
           <button class="submit" type="submit">
             <span class="spinner" aria-hidden="true"></span>
-            <span>登录</span>
+            <span>ログイン</span>
           </button>
         </form>
 
@@ -608,7 +608,7 @@
           <div class="field">
             <label for="registerName">用户名</label>
             <div class="input-wrap">
-              <input id="registerName" name="username" type="text" autocomplete="username" placeholder="例如：aijin_dev" />
+              <input id="registerName" name="username" type="text" autocomplete="username" placeholder="例：openachieve_dev" />
             </div>
             <p class="error-text" aria-live="polite"></p>
           </div>
@@ -624,7 +624,7 @@
           <div class="field">
             <label for="registerPassword">密码</label>
             <div class="input-wrap has-toggle">
-              <input id="registerPassword" name="password" type="password" autocomplete="new-password" placeholder="至少 8 位，建议含数字和字母" />
+              <input id="registerPassword" name="password" type="password" autocomplete="new-password" placeholder="8文字以上、数字と英字を含めることを推奨" />
               <button class="toggle-password" type="button" aria-label="显示密码" data-target="registerPassword">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="3"/></svg>
               </button>
@@ -639,7 +639,7 @@
           <div class="field">
             <label for="confirmPassword">确认密码</label>
             <div class="input-wrap has-toggle">
-              <input id="confirmPassword" name="confirm" type="password" autocomplete="new-password" placeholder="再次输入密码" />
+              <input id="confirmPassword" name="confirm" type="password" autocomplete="new-password" placeholder="パスワードを再入力" />
               <button class="toggle-password" type="button" aria-label="显示密码" data-target="confirmPassword">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="3"/></svg>
               </button>
@@ -648,16 +648,16 @@
           </div>
 
           <div class="options">
-            <label class="check"><input id="terms" type="checkbox" />我已阅读并同意<a href="/terms" target="_blank">服务条款</a></label>
+            <label class="check"><input id="terms" type="checkbox" />以下を読み、同意します：<a href="/terms" target="_blank">利用規約</a></label>
           </div>
 
           <button class="submit" type="submit">
             <span class="spinner" aria-hidden="true"></span>
-            <span>注册</span>
+            <span>登録</span>
           </button>
         </form>
 
-        <p class="footnote">注册即获 Free 套餐，每月 500 次请求额度，可调用 Big Pickle 模型。</p>
+        <p class="footnote">登録で Free プラン（月 500 リクエスト、Big Pickle モデル利用可）が付与されます。</p>
       </section>
     </div>
   </main>
@@ -681,7 +681,7 @@
 
     const panelCopy = {
       login: ["欢迎回来", "登录后管理余额、API Key、调用记录和文档。"],
-      register: ["创建账号", "注册后即可充值余额，获取 AIJinAPI Key。"]
+      register: ["创建账号", "注册后即可充值余额，获取 OpenAchieve Key。"]
     };
 
     function setTab(name) {

@@ -13,14 +13,14 @@ const codeSamples = {
   python: `from openai import OpenAI
 
 client = OpenAI(
-    api_key="YOUR_AIJINAPI_KEY",
-    base_url="https://api.aijinapi.com/v1"
+    api_key="YOUR_OPENACHIEVE_KEY",
+    base_url="https://openachieve.asia/v1"
 )
 
 response = client.chat.completions.create(
     model="qwen3.6-plus",
     messages=[
-        {"role": "user", "content": "用三句话解释 AIJinAPI 的接入方式"}
+        {"role": "user", "content": "用三句话解释 OpenAchieve 的接入方式"}
     ]
 )
 
@@ -28,8 +28,8 @@ print(response.choices[0].message.content)`,
   js: `import OpenAI from "openai";
 
 const client = new OpenAI({
-  apiKey: process.env.AIJINAPI_KEY,
-  baseURL: "https://api.aijinapi.com/v1"
+  apiKey: process.env.OPENACHIEVE_KEY,
+  baseURL: "https://openachieve.asia/v1"
 });
 
 const response = await client.chat.completions.create({
@@ -40,8 +40,8 @@ const response = await client.chat.completions.create({
 });
 
 console.log(response.choices[0].message.content);`,
-  curl: `curl https://api.aijinapi.com/v1/chat/completions \\
-  -H "Authorization: Bearer YOUR_AIJINAPI_KEY" \\
+  curl: `curl https://openachieve.asia/v1/chat/completions \\
+  -H "Authorization: Bearer YOUR_OPENACHIEVE_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
     "model": "kimi-k2.6",

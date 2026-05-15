@@ -18,7 +18,7 @@ export function PlaygroundClient() {
   const [backendUrl, setBackendUrl] = useState(defaultBackendUrl);
   const [apiKey, setApiKey] = useState("");
   const [model, setModel] = useState("big-pickle");
-  const [message, setMessage] = useState("用三句话介绍 AIJinAPI 的接入方式。");
+  const [message, setMessage] = useState("用三句话介绍 OpenAchieve 的接入方式。");
   const [stream, setStream] = useState(false);
   const [models, setModels] = useState<string[]>([]);
   const [status, setStatus] = useState(t("playground.waiting"));
@@ -26,7 +26,7 @@ export function PlaygroundClient() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    setApiKey(window.localStorage.getItem("aijinapi_latest_customer_key") ?? "");
+    setApiKey(window.localStorage.getItem("openachieve_latest_customer_key") ?? "");
   }, []);
 
   const normalizedBackendUrl = useMemo(
@@ -128,7 +128,7 @@ export function PlaygroundClient() {
               <input
                 value={backendUrl}
                 onChange={(event) => setBackendUrl(event.target.value)}
-                placeholder="https://api.aijinapi.com"
+                placeholder="https://openachieve.asia"
               />
             </label>
 

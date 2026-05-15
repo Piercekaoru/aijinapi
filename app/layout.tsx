@@ -7,7 +7,7 @@ import { LocaleClientLayout } from "@/components/LocaleClientLayout";
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 export const metadata: Metadata = {
-  title: "AIJinAPI",
+  title: "OpenAchieve",
   description: "面向国内开发者的 AI API 中转服务",
 };
 

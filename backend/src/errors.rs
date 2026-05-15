@@ -71,7 +71,7 @@ impl ResponseError for ApiError {
             error: ErrorDetail {
                 code: self.code(),
                 message: self.to_string(),
-                kind: "aijinapi_error",
+                kind: "openachieve_error",
             },
         };
 

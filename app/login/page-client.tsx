@@ -129,10 +129,10 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
     }
 
     function persistSession(payload: AuthResponse) {
-      window.localStorage.setItem("aijinapi_session_token", payload.session_token);
-      window.localStorage.setItem("aijinapi_user", JSON.stringify(payload.user));
+      window.localStorage.setItem("openachieve_session_token", payload.session_token);
+      window.localStorage.setItem("openachieve_user", JSON.stringify(payload.user));
       if (payload.api_key?.key) {
-        window.localStorage.setItem("aijinapi_latest_customer_key", payload.api_key.key);
+        window.localStorage.setItem("openachieve_latest_customer_key", payload.api_key.key);
       }
     }
 

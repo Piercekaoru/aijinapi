@@ -1,24 +1,24 @@
-# AGENTS.md — AIJinAPI
+# AGENTS.md — OpenAchieve
 
 An AI API relay service for Chinese developers. Next.js 15 frontend + Rust (actix-web) backend + PostgreSQL.
 
 ## Project identity
 
-- **Product**: "AIJinAPI" (AI 金 API) — OpenAI-compatible API proxy targeting the Chinese market
-- **Package name**: `aijinapi-next` (pnpm workspace root)
-- **Backend crate**: `aijinapi-backend`
+- **Product**: "OpenAchieve" (OpenAchieve) — OpenAI-compatible API proxy targeting the Chinese market
+- **Package name**: `openachieve-next` (pnpm workspace root)
+- **Backend crate**: `openachieve-backend`
 - **Upstream providers**: OpenCode Zen (free tier) and OpenCode Go (plus tier) at `opencode.ai`
 
 ## Architecture
 
 ```
 Browser → Next.js (:3000) ──rewrites──→ Rust backend (:8080) ──→ OpenCode upstream
-                                      └── Postgres (aijinapi)
+                                      └── Postgres (openachieve)
 ```
 
-- Next.js `rewrites()` proxies `/api/backend/:path*` → `http://127.0.0.1:8080/:path*`
+- Next.js `rewrites()` proxies `/api/backend/:path*` and public `/v1/:path*` → `http://127.0.0.1:8080/:path*`
 - Next.js output mode is `standalone` (docker-ready)
-- Frontend pages are a mix of React components and static HTML pages loaded via `lib/html-page.ts` (the `.html` files at the root like `aijinapi-landing.html`)
+- Frontend pages are a mix of React components and static HTML pages loaded via `lib/html-page.ts` (the `.html` files at the root like `openachieve-landing.html`)
 - Tailwind CSS **v4** with `@import "tailwindcss"` (not v3 `@tailwind` directives)
 - shadcn/ui uses `base-nova` style with `neutral` baseColor
 
@@ -38,7 +38,7 @@ pnpm build                  # production build
 pnpm lint                   # ESLint (ignores backend/ via eslint.config.mjs)
 
 # Backend (run from backend/)
-cp .env.example .env        # edit DATABASE_URL + OPENCODE_GO_API_KEY
+cp .env.example .env        # edit DATABASE_URL + OPENCODE_GO_API_KEY(S)
 cargo run --bin migrate     # run DB migrations (MUST run before backend starts)
 cargo run --bin create_key -- --name "customer name"  # create API key (shown once!)
 cargo run                   # start backend on 127.0.0.1:8080
@@ -49,7 +49,10 @@ cargo test --lib            # unit tests only
 cargo test --test integration  # integration tests (backend/tests/)
 
 # Docker (full stack)
-docker compose up --build
+docker compose --env-file .env.docker up --build
+
+# Production deploy from server project directory
+./deploy.sh
 ```
 
 **Critical order**: `migrate` → optional `create_key`/`set_plan` → `cargo run` (or Docker entrypoint handles this)
@@ -59,7 +62,7 @@ docker compose up --build
 ### Binaries
 | Binary | Purpose |
 |---|---|
-| `aijinapi-backend` | Main HTTP server (actix-web, port 8080) |
+| `openachieve-backend` | Main HTTP server (actix-web, port 8080) |
 | `migrate` | Runs all SQL migrations in `backend/migrations/` |
 | `create_key` | Creates an API key for an email (SHA-256 hashed, plaintext shown once) |
 | `set_plan` | Sets user plan (free/plus) and monthly quota |
@@ -78,7 +81,7 @@ docker compose up --build
 
 ### Auth system
 - **User sessions**: 30-day expiry, SHA-256 hashed bearer tokens (stored in `sessions` table)
-- **API keys**: prefix `ak-` (24 random chars), SHA-256 hashed, plaintext returned only on creation (stored in `api_keys` table)
+- **API keys**: prefix `openachieve_` (random suffix), SHA-256 hashed, plaintext returned only on creation (stored in `api_keys` table)
 - User passwords: argon2 hashed
 
 ### Model routing
@@ -86,12 +89,13 @@ docker compose up --build
 - **Plus tier** (plan="plus", status="active", not expired): all 10 models, routed to **Go** upstream
   - glm-5.1, glm-5, kimi-k2.5, kimi-k2.6, deepseek-v4-pro, deepseek-v4-flash,
   - mimo-v2.5, mimo-v2.5-pro, qwen3.6-plus, qwen3.5-plus
-- Monthly limits: free=500, plus=1500 (configurable via `DEFAULT_MONTHLY_REQUEST_LIMIT`)
+- Monthly limits: free=500, plus=1500 (`DEFAULT_MONTHLY_REQUEST_LIMIT` is the legacy/default key-creation fallback)
 
 ### Config from env vars
 All via `Config::from_env()` — see `backend/src/config.rs`. Key ones:
 - `DATABASE_URL` (required)
-- `OPENCODE_GO_API_KEY` (required; `OPENCODE_ZEN_API_KEY` falls back to this if unset)
+- `OPENCODE_GO_API_KEYS` or `OPENCODE_GO_API_KEY` (required; plural comma-separated form enables upstream key rotation)
+- `OPENCODE_ZEN_API_KEYS` or `OPENCODE_ZEN_API_KEY` (optional; Zen falls back to Go key list if unset)
 - `SERVER_HOST`, `SERVER_PORT` (default 127.0.0.1:8080)
 - `CORS_ALLOWED_ORIGINS` (comma-separated, defaults localhost:3000-3002)
 - Upstream URLs default to `https://opencode.ai/zen/...` and `https://opencode.ai/zen/go/...`
@@ -101,9 +105,9 @@ All via `Config::from_env()` — see `backend/src/config.rs`. Key ones:
 ### Page structure
 | Route | Page file | Static HTML? |
 |---|---|---|
-| `/` | `app/page.tsx` | Yes (aijinapi-landing.html) |
-| `/login` | `app/login/page.tsx` | Yes (aijinapi-login.html) |
-| `/models` | `app/models/page.tsx` | Yes (aijinapi-models.html) |
+| `/` | `app/page.tsx` | Yes (openachieve-landing.html) |
+| `/login` | `app/login/page.tsx` | Yes (openachieve-login.html) |
+| `/models` | `app/models/page.tsx` | Yes (openachieve-models.html) |
 | `/dashboard` | `app/dashboard/page.tsx` | No (full React) |
 | `/account` | `app/account/page.tsx` | No (full React) |
 | `/playground` | `app/playground/page.tsx` | No (full React) |
@@ -125,9 +129,9 @@ Static HTML pages use `getStaticHtmlPage()` from `lib/html-page.ts` to parse the
 
 ## Environment & secrets
 
-- **Root `.env`**: contains `OPENCODE_GO_API_KEY` (real key — DO NOT commit)
+- **Root `.env` / `.env.docker`**: contains Docker production env, including real upstream keys — DO NOT commit
 - **`backend/.env`**: contains DB URL, API keys, upstream URLs (also DO NOT commit)
-- Docker: secrets passed via `docker-compose.yml` environment block referencing `$OPENCODE_GO_API_KEY` from host
+- Docker: secrets passed through `docker compose --env-file .env.docker`
 
 ## Testing
 

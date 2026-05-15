@@ -35,7 +35,7 @@ const server = http.createServer((req, res) => {
           "cache-control": "no-cache",
         });
         res.write(
-          'data: {"id":"mock-stream","object":"chat.completion.chunk","choices":[{"delta":{"content":"AIJinAPI "},"index":0}]}\n\n',
+          'data: {"id":"mock-stream","object":"chat.completion.chunk","choices":[{"delta":{"content":"OpenAchieve "},"index":0}]}\n\n',
         );
         res.write(
           'data: {"id":"mock-stream","object":"chat.completion.chunk","choices":[{"delta":{"content":"联调成功"},"index":0}]}\n\n',
@@ -55,7 +55,7 @@ const server = http.createServer((req, res) => {
               index: 0,
               message: {
                 role: "assistant",
-                content: "AIJinAPI 后端联调成功。",
+                content: "OpenAchieve 后端联调成功。",
               },
               finish_reason: "stop",
             },

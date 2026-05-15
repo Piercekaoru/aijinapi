@@ -1,6 +1,6 @@
 use actix_cors::Cors;
 use actix_web::{App, HttpServer, http::header, middleware::Logger, web};
-use aijinapi_backend::{config::Config, routes, state::AppState};
+use openachieve_backend::{config::Config, routes, state::AppState, upstream::UpstreamKeyRing};
 use reqwest::Client;
 use sqlx::postgres::PgPoolOptions;
 use tracing::info;
@@ -11,7 +11,7 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "aijinapi_backend=info,actix_web=info".into()),
+                .unwrap_or_else(|_| "openachieve_backend=info,actix_web=info".into()),
         )
         .init();
 
@@ -22,8 +22,9 @@ async fn main() -> anyhow::Result<()> {
         .await?;
     let http = Client::builder().build()?;
     let bind_addr = (config.server_host, config.server_port);
+    let upstream_keys = UpstreamKeyRing::from_config(&config);
 
-    info!(host = %bind_addr.0, port = bind_addr.1, "starting aijinapi backend");
+    info!(host = %bind_addr.0, port = bind_addr.1, "starting openachieve backend");
 
     HttpServer::new(move || {
         let cors = config
@@ -41,6 +42,7 @@ async fn main() -> anyhow::Result<()> {
                 config: config.clone(),
                 db: db.clone(),
                 http: http.clone(),
+                upstream_keys: upstream_keys.clone(),
             }))
             .configure(routes::configure)
     })

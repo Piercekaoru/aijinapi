@@ -1,39 +1,45 @@
 services:
   app:
     build: .
+    restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "${APP_PORT:-3000}:3000"
     environment:
-      DATABASE_URL: postgres://postgres:postgres@db:5432/aijinapi
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      OPENCODE_ZEN_API_KEYS: ${OPENCODE_ZEN_API_KEYS:-}
+      OPENCODE_GO_API_KEYS: ${OPENCODE_GO_API_KEYS:-}
       OPENCODE_ZEN_API_KEY: ${OPENCODE_ZEN_API_KEY:-}
-      OPENCODE_GO_API_KEY: ${OPENCODE_GO_API_KEY}
-      SERVER_HOST: 127.0.0.1
-      SERVER_PORT: 8080
-      DEFAULT_MONTHLY_REQUEST_LIMIT: 500
-      ZEN_CHAT_COMPLETIONS_URL: https://opencode.ai/zen/v1/chat/completions
-      ZEN_GO_CHAT_COMPLETIONS_URL: https://opencode.ai/zen/go/v1/chat/completions
-      ZEN_MODELS_URL: https://opencode.ai/zen/v1/models
-      ZEN_GO_MODELS_URL: https://opencode.ai/zen/go/v1/models
+      OPENCODE_GO_API_KEY: ${OPENCODE_GO_API_KEY:-}
+      SERVER_HOST: ${SERVER_HOST:-127.0.0.1}
+      SERVER_PORT: ${SERVER_PORT:-8080}
+      DEFAULT_MONTHLY_REQUEST_LIMIT: ${DEFAULT_MONTHLY_REQUEST_LIMIT:-500}
+      ZEN_CHAT_COMPLETIONS_URL: ${ZEN_CHAT_COMPLETIONS_URL:-https://opencode.ai/zen/v1/chat/completions}
+      ZEN_GO_CHAT_COMPLETIONS_URL: ${ZEN_GO_CHAT_COMPLETIONS_URL:-https://opencode.ai/zen/go/v1/chat/completions}
+      ZEN_MODELS_URL: ${ZEN_MODELS_URL:-https://opencode.ai/zen/v1/models}
+      ZEN_GO_MODELS_URL: ${ZEN_GO_MODELS_URL:-https://opencode.ai/zen/go/v1/models}
       UPSTREAM_MAX_ATTEMPTS: ${UPSTREAM_MAX_ATTEMPTS:-4}
       UPSTREAM_RETRY_BASE_MS: ${UPSTREAM_RETRY_BASE_MS:-300}
-      CORS_ALLOWED_ORIGINS: http://localhost:3000
+      UPSTREAM_KEY_COOLDOWN_MS: ${UPSTREAM_KEY_COOLDOWN_MS:-60000}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://openachieve.asia}
+      APP_BASE_URL: ${APP_BASE_URL:-https://openachieve.asia}
     depends_on:
       db:
         condition: service_healthy
 
   db:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: aijinapi
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-openachieve}
+      POSTGRES_USER: ${POSTGRES_USER:-openachieve}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     volumes:
-      - aijinapi-postgres:/var/lib/postgresql/data
+      - openachieve-postgres:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d aijinapi"]
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 5s
       timeout: 3s
       retries: 20
 
 volumes:
-  aijinapi-postgres:
+  openachieve-postgres:

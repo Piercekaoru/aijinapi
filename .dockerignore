@@ -3,6 +3,7 @@ node_modules
 backend/target
 backend/.env
 .env
+.env.docker
 .git
 .DS_Store
 *.log

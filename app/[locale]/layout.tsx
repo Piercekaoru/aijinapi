@@ -15,7 +15,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   return {
-    title: "AIJinAPI",
+    title: "OpenAchieve",
     description:
       locale === "ja"
         ? "中国開発者向け AI API 中継サービス"

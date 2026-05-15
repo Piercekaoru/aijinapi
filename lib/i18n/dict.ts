@@ -37,7 +37,7 @@ const zh: Dict = {
   "auth.welcome": "欢迎回来",
   "auth.welcomeSub": "登录后管理余额、API Key、调用记录和文档。",
   "auth.register": "创建账号",
-  "auth.registerSub": "注册后即可充值余额，获取 AIJinAPI Key。",
+  "auth.registerSub": "注册后即可充值余额，获取 OpenAchieve Key。",
   "auth.email": "邮箱",
   "auth.password": "密码",
   "auth.name": "用户名",
@@ -155,7 +155,7 @@ const zh: Dict = {
 
   // Docs
   "docs.title": "开发文档",
-  "docs.subtitle": "只需接入统一 OpenAI-compatible 接口；Free/Plus 权限由 AIJinAPI 自动处理。",
+  "docs.subtitle": "只需接入统一 OpenAI-compatible 接口；Free/Plus 权限由 OpenAchieve 自动处理。",
   "docs.label": "开发文档",
   "docs.baseURL": "接口地址",
   "docs.baseURLDesc": "所有请求发送到此接口即可，无需关注后端架构。",
@@ -205,7 +205,7 @@ const ja: Dict = {
   "auth.welcome": "おかえりなさい",
   "auth.welcomeSub": "ログイン後、残高・API Key・呼出履歴・ドキュメントを管理できます。",
   "auth.register": "アカウント作成",
-  "auth.registerSub": "登録後に残高をチャージして AIJinAPI Key を取得できます。",
+  "auth.registerSub": "登録後に残高をチャージして OpenAchieve Key を取得できます。",
   "auth.email": "メールアドレス",
   "auth.password": "パスワード",
   "auth.name": "ユーザー名",
@@ -319,7 +319,7 @@ const ja: Dict = {
   "playground.placeholder": "インターフェースURLとAPI Keyを入力し、モデル一覧を取得するかリクエストを送信してください。",
 
   "docs.title": "開発ドキュメント",
-  "docs.subtitle": "単一の OpenAI 互換インターフェースに接続するだけ。Free/Plus の権限制御は AIJinAPI が自動処理。",
+  "docs.subtitle": "単一の OpenAI 互換インターフェースに接続するだけ。Free/Plus の権限制御は OpenAchieve が自動処理。",
   "docs.label": "開発ドキュメント",
   "docs.baseURL": "インターフェースURL",
   "docs.baseURLDesc": "このインターフェースにリクエストを送信してください。バックエンドのアドレスを意識する必要はありません。",

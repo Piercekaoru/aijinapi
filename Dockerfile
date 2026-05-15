@@ -10,8 +10,8 @@ COPY components ./components
 COPY lib ./lib
 COPY public ./public
 COPY components.json next.config.ts tsconfig.json tailwind.config.ts postcss.config.mjs eslint.config.mjs next-env.d.ts ./
-COPY aijinapi-landing.html aijinapi-login.html aijinapi-models.html ./
-COPY aijinapi-landing-ja.html aijinapi-login-ja.html aijinapi-models-ja.html ./
+COPY openachieve-landing.html openachieve-login.html openachieve-models.html ./
+COPY openachieve-landing-ja.html openachieve-login-ja.html openachieve-models-ja.html ./
 RUN pnpm build
 
 FROM rust:1.95-bookworm AS backend-builder
@@ -20,7 +20,7 @@ WORKDIR /app/backend
 COPY backend/Cargo.toml backend/Cargo.lock ./
 COPY backend/src ./src
 COPY backend/migrations ./migrations
-RUN cargo build --release --bin aijinapi-backend --bin migrate --bin set_plan --bin create_key
+RUN cargo build --release --bin openachieve-backend --bin migrate --bin set_plan --bin create_key
 
 FROM node:20-bookworm-slim AS runner
 WORKDIR /app
@@ -37,7 +37,7 @@ RUN apt-get update \
 COPY --from=frontend-builder /app/.next/standalone ./
 COPY --from=frontend-builder /app/.next/static ./.next/static
 COPY --from=frontend-builder /app/public ./public
-COPY --from=backend-builder /app/backend/target/release/aijinapi-backend ./backend/aijinapi-backend
+COPY --from=backend-builder /app/backend/target/release/openachieve-backend ./backend/openachieve-backend
 COPY --from=backend-builder /app/backend/target/release/migrate ./backend/migrate
 COPY --from=backend-builder /app/backend/target/release/set_plan ./backend/set_plan
 COPY --from=backend-builder /app/backend/target/release/create_key ./backend/create_key

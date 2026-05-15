@@ -93,7 +93,7 @@ export function AccountClient() {
       if (!response.ok) throw new Error(await errorText(response));
       const payload = (await response.json()) as DashboardResponse;
       setDashboard(payload);
-      window.localStorage.setItem("aijinapi_user", JSON.stringify(payload.user));
+      window.localStorage.setItem("openachieve_user", JSON.stringify(payload.user));
       setStatus(t("account.updated"));
     } catch (error) {
       setStatus(error instanceof Error ? error.message : t("account.loadFailed"));
@@ -103,7 +103,7 @@ export function AccountClient() {
   }, [t]);
 
   useEffect(() => {
-    const token = window.localStorage.getItem("aijinapi_session_token") ?? "";
+    const token = window.localStorage.getItem("openachieve_session_token") ?? "";
     setSessionToken(token);
 
     if (!token) {
@@ -113,7 +113,7 @@ export function AccountClient() {
     }
 
     void loadAccount(token);
-  }, [loadAccount]);
+  }, [loadAccount, t]);
 
   return (
     <main className="account-page">

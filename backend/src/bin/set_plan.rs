@@ -1,6 +1,6 @@
 use std::env;
 
-use aijinapi_backend::{
+use openachieve_backend::{
     config::Config,
     plans::{FREE_MONTHLY_REQUEST_LIMIT, PLUS_MONTHLY_REQUEST_LIMIT},
 };

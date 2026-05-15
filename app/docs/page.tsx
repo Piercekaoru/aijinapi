@@ -116,27 +116,27 @@ export default function DocsPage() {
           <section className="panel" id="base-url">
             <p>{t("route.docsBaseUrl")}</p>
             <h2>{t("docs.baseURL")}</h2>
-            <pre>https://api.aijinapi.com/v1</pre>
+            <pre>https://openachieve.asia/v1</pre>
             <span>{t("docs.baseURLDesc")}</span>
           </section>
 
           <section className="panel" id="auth">
             <p>{t("docs.authLabel")}</p>
             <h2>{t("docs.auth")}</h2>
-            <pre>{`Authorization: Bearer aijin_xxxxxxxxxxxxxxxx`}</pre>
+            <pre>{`Authorization: Bearer openachieve_xxxxxxxxxxxxxxxx`}</pre>
             <span>{t("docs.authDesc")}</span>
           </section>
 
           <section className="panel wide" id="chat">
             <p>{t("route.docsChat")}</p>
             <h2>{t("docs.chat")}</h2>
-            <pre>{`curl https://api.aijinapi.com/v1/chat/completions \\
-  -H "Authorization: Bearer aijin_xxxxxxxxxxxxxxxx" \\
+            <pre>{`curl https://openachieve.asia/v1/chat/completions \\
+  -H "Authorization: Bearer openachieve_xxxxxxxxxxxxxxxx" \\
   -H "Content-Type: application/json" \\
   -d '{
     "model": "qwen3.6-plus",
     "messages": [
-      { "role": "user", "content": "介绍一下 AIJinAPI" }
+      { "role": "user", "content": "介绍一下 OpenAchieve" }
     ]
   }'`}</pre>
           </section>

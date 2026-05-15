@@ -1,4 +1,10 @@
-use std::time::Instant;
+use std::{
+    sync::{
+        Arc,
+        atomic::{AtomicU64, AtomicUsize, Ordering},
+    },
+    time::{Instant, SystemTime, UNIX_EPOCH},
+};
 
 use actix_web::{HttpResponse, http::header};
 use bytes::Bytes;
@@ -31,11 +37,103 @@ pub enum UpstreamRoute {
     Go,
 }
 
+#[derive(Clone)]
+pub struct UpstreamKeyRing {
+    zen: Arc<RouteKeyRing>,
+    go: Arc<RouteKeyRing>,
+    cooldown_ms: u64,
+}
+
+struct RouteKeyRing {
+    keys: Vec<String>,
+    next: AtomicUsize,
+    cooldown_until_ms: Vec<AtomicU64>,
+}
+
 #[derive(Debug)]
 pub struct UpstreamResult {
     pub response: HttpResponse,
     pub status_code: u16,
     pub latency_ms: i32,
+}
+
+impl UpstreamKeyRing {
+    pub fn from_config(config: &Config) -> Self {
+        Self {
+            zen: Arc::new(RouteKeyRing::new(config.opencode_zen_api_keys.clone())),
+            go: Arc::new(RouteKeyRing::new(config.opencode_go_api_keys.clone())),
+            cooldown_ms: config.upstream_key_cooldown_ms,
+        }
+    }
+
+    pub fn key_count(&self, route: UpstreamRoute) -> usize {
+        self.route_keys(route).key_count()
+    }
+
+    fn route_keys(&self, route: UpstreamRoute) -> &RouteKeyRing {
+        match route {
+            UpstreamRoute::Zen => &self.zen,
+            UpstreamRoute::Go => &self.go,
+        }
+    }
+
+    fn cool_down(&self, route: UpstreamRoute, key_index: usize) {
+        if self.cooldown_ms == 0 {
+            return;
+        }
+
+        self.route_keys(route)
+            .cool_down(key_index, now_millis().saturating_add(self.cooldown_ms));
+    }
+}
+
+impl RouteKeyRing {
+    fn new(keys: Vec<String>) -> Self {
+        assert!(
+            !keys.is_empty(),
+            "upstream key ring requires at least one key"
+        );
+        let cooldown_until_ms = keys.iter().map(|_| AtomicU64::new(0)).collect();
+
+        Self {
+            keys,
+            next: AtomicUsize::new(0),
+            cooldown_until_ms,
+        }
+    }
+
+    fn key_count(&self) -> usize {
+        self.keys.len()
+    }
+
+    fn key(&self, index: usize) -> &str {
+        &self.keys[index]
+    }
+
+    fn request_order(&self) -> Vec<usize> {
+        let key_count = self.key_count();
+        let start = self.next.fetch_add(1, Ordering::Relaxed) % key_count;
+        let order: Vec<usize> = (0..key_count)
+            .map(|offset| (start + offset) % key_count)
+            .collect();
+
+        if key_count == 1 {
+            return order;
+        }
+
+        let now = now_millis();
+        let active: Vec<usize> = order
+            .iter()
+            .copied()
+            .filter(|index| self.cooldown_until_ms[*index].load(Ordering::Relaxed) <= now)
+            .collect();
+
+        if active.is_empty() { order } else { active }
+    }
+
+    fn cool_down(&self, index: usize, until_ms: u64) {
+        self.cooldown_until_ms[index].store(until_ms, Ordering::Relaxed);
+    }
 }
 
 pub fn is_supported_chat_model(model: &str) -> bool {
@@ -76,15 +174,12 @@ pub fn route_for_model(plan: &str, model: &str) -> Result<UpstreamRoute, ApiErro
 pub async fn forward_models(
     client: &Client,
     config: &Config,
+    key_ring: &UpstreamKeyRing,
     route: UpstreamRoute,
 ) -> Result<UpstreamResult, ApiError> {
     let started = Instant::now();
-    let api_key = match route {
-        UpstreamRoute::Zen => &config.opencode_zen_api_key,
-        UpstreamRoute::Go => &config.opencode_go_api_key,
-    };
     let url = model_url(config, route);
-    let upstream = send_with_retries(config, "models", route, url, || {
+    let upstream = send_with_key_failover(config, key_ring, "models", route, url, |api_key| {
         client.get(url).bearer_auth(api_key)
     })
     .await?;
@@ -95,13 +190,14 @@ pub async fn forward_models(
 pub async fn forward_chat(
     client: &Client,
     config: &Config,
+    key_ring: &UpstreamKeyRing,
     body: Value,
     route: UpstreamRoute,
 ) -> Result<UpstreamResult, ApiError> {
     let is_stream = request_is_stream(&body);
     let started = Instant::now();
-    let (url, api_key) = upstream_parts(config, route);
-    let upstream = send_with_retries(config, "chat", route, url, || {
+    let url = chat_url(config, route);
+    let upstream = send_with_key_failover(config, key_ring, "chat", route, url, |api_key| {
         client.post(url).bearer_auth(api_key).json(&body)
     })
     .await?;
@@ -109,48 +205,86 @@ pub async fn forward_chat(
     response_from_upstream(upstream, started, is_stream).await
 }
 
-async fn send_with_retries(
+async fn send_with_key_failover(
     config: &Config,
+    key_ring: &UpstreamKeyRing,
     operation: &'static str,
     route: UpstreamRoute,
     url: &str,
-    mut build: impl FnMut() -> RequestBuilder,
+    mut build: impl FnMut(&str) -> RequestBuilder,
 ) -> Result<reqwest::Response, ApiError> {
-    let attempts = config.upstream_max_attempts.max(1);
+    let route_keys = key_ring.route_keys(route);
+    let key_count = route_keys.key_count();
+    let attempts_per_key = if key_count == 1 {
+        config.upstream_max_attempts.max(1)
+    } else {
+        1
+    };
+    let mut last_response = None;
+    let mut last_error = None;
 
-    for attempt in 1..=attempts {
-        match build().send().await {
-            Ok(response) => return Ok(response),
-            Err(err) if attempt < attempts => {
-                let delay_ms = retry_delay_ms(config.upstream_retry_base_ms, attempt);
-                warn!(
-                    operation,
-                    route = ?route,
-                    url,
-                    attempt,
-                    attempts,
-                    delay_ms,
-                    error = %err,
-                    "upstream request failed; retrying"
-                );
-                sleep(Duration::from_millis(delay_ms)).await;
-            }
-            Err(err) => {
-                warn!(
-                    operation,
-                    route = ?route,
-                    url,
-                    attempt,
-                    attempts,
-                    error = %err,
-                    "upstream request failed; no attempts remaining"
-                );
-                return Err(ApiError::UpstreamRequest(err));
+    for key_index in route_keys.request_order() {
+        for attempt in 1..=attempts_per_key {
+            match build(route_keys.key(key_index)).send().await {
+                Ok(response) => {
+                    let status = response.status();
+
+                    if should_cool_down_key(status) {
+                        key_ring.cool_down(route, key_index);
+                    }
+
+                    if key_count > 1 && should_try_next_key(status) {
+                        warn!(
+                            operation,
+                            route = ?route,
+                            url,
+                            key_index,
+                            key_count,
+                            status = status.as_u16(),
+                            "upstream key returned retryable status; trying next key"
+                        );
+                        last_response = Some(response);
+                        break;
+                    }
+
+                    return Ok(response);
+                }
+                Err(err) => {
+                    let can_retry_same_key = key_count == 1 && attempt < attempts_per_key;
+                    let delay_ms = retry_delay_ms(config.upstream_retry_base_ms, attempt);
+                    warn!(
+                        operation,
+                        route = ?route,
+                        url,
+                        key_index,
+                        key_count,
+                        attempt,
+                        attempts = attempts_per_key,
+                        delay_ms = if can_retry_same_key { delay_ms } else { 0 },
+                        error = %err,
+                        "upstream request failed"
+                    );
+                    last_error = Some(err);
+
+                    if can_retry_same_key {
+                        sleep(Duration::from_millis(delay_ms)).await;
+                    } else {
+                        break;
+                    }
+                }
             }
         }
     }
 
-    unreachable!("attempts is always at least one")
+    if let Some(response) = last_response {
+        return Ok(response);
+    }
+
+    if let Some(err) = last_error {
+        return Err(ApiError::UpstreamRequest(err));
+    }
+
+    unreachable!("key rings are never empty")
 }
 
 fn retry_delay_ms(base_ms: u64, attempt: usize) -> u64 {
@@ -158,16 +292,24 @@ fn retry_delay_ms(base_ms: u64, attempt: usize) -> u64 {
     base_ms.saturating_mul(multiplier).min(5_000)
 }
 
-fn upstream_parts(config: &Config, route: UpstreamRoute) -> (&str, &str) {
+fn should_try_next_key(status: StatusCode) -> bool {
+    matches!(
+        status,
+        StatusCode::UNAUTHORIZED | StatusCode::TOO_MANY_REQUESTS
+    ) || status.is_server_error()
+}
+
+fn should_cool_down_key(status: StatusCode) -> bool {
+    matches!(
+        status,
+        StatusCode::UNAUTHORIZED | StatusCode::TOO_MANY_REQUESTS
+    )
+}
+
+fn chat_url(config: &Config, route: UpstreamRoute) -> &str {
     match route {
-        UpstreamRoute::Zen => (
-            &config.zen_chat_completions_url,
-            &config.opencode_zen_api_key,
-        ),
-        UpstreamRoute::Go => (
-            &config.zen_go_chat_completions_url,
-            &config.opencode_go_api_key,
-        ),
+        UpstreamRoute::Zen => &config.zen_chat_completions_url,
+        UpstreamRoute::Go => &config.zen_go_chat_completions_url,
     }
 }
 
@@ -234,6 +376,13 @@ fn to_actix_status(status: StatusCode) -> actix_web::http::StatusCode {
         .unwrap_or(actix_web::http::StatusCode::BAD_GATEWAY)
 }
 
+fn now_millis() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis().min(u64::MAX as u128) as u64)
+        .unwrap_or(0)
+}
+
 pub fn openai_models_payload(models: &[&str]) -> Value {
     let data: Vec<Value> = models
         .iter()
@@ -241,7 +390,7 @@ pub fn openai_models_payload(models: &[&str]) -> Value {
             serde_json::json!({
                 "id": model,
                 "object": "model",
-                "owned_by": "aijinapi"
+                "owned_by": "openachieve"
             })
         })
         .collect();

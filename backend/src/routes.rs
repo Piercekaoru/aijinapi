@@ -38,7 +38,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
 async fn health() -> impl Responder {
     web::Json(HealthResponse {
         ok: true,
-        service: "aijinapi-backend",
+        service: "openachieve-backend",
     })
 }
 
@@ -227,7 +227,14 @@ async fn chat_completions(
         "proxying chat completion"
     );
 
-    let result = forward_chat(&state.http, &state.config, body, route).await?;
+    let result = forward_chat(
+        &state.http,
+        &state.config,
+        &state.upstream_keys,
+        body,
+        route,
+    )
+    .await?;
     touch_key(&state.db, api_key.id).await?;
     record_usage(
         &state.db,

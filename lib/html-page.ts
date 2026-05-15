@@ -12,9 +12,9 @@ export type StaticHtmlPage = {
 };
 
 const htmlFiles: Record<RouteKind, string> = {
-  landing: "aijinapi-landing",
-  login: "aijinapi-login",
-  models: "aijinapi-models",
+  landing: "openachieve-landing",
+  login: "openachieve-login",
+  models: "openachieve-models",
 };
 
 function localeFilename(kind: RouteKind, locale: Locale): string {
@@ -71,7 +71,7 @@ function rewriteLinks(html: string, kind: RouteKind) {
   if (kind === "models") {
     next = next
       .replace('href="#top"', 'href="/"')
-      .replaceAll('href="aijinapi-dashboard.html"', 'href="/dashboard"');
+      .replaceAll('href="openachieve-dashboard.html"', 'href="/dashboard"');
   }
 
   return next;
@@ -80,7 +80,7 @@ function rewriteLinks(html: string, kind: RouteKind) {
 export function getStaticHtmlPage(kind: RouteKind, locale: Locale = "zh"): StaticHtmlPage {
   const filename = localeFilename(kind, locale);
   const raw = readFileSync(join(process.cwd(), filename), "utf8");
-  const title = raw.match(/<title>(.*?)<\/title>/s)?.[1] ?? "AIJinAPI";
+  const title = raw.match(/<title>(.*?)<\/title>/s)?.[1] ?? "OpenAchieve";
   const style = raw.match(/<style>(.*?)<\/style>/s)?.[1] ?? "";
   const body = raw.match(/<body>(.*?)<\/body>/s)?.[1] ?? "";
   const bodyWithoutScript = body.replace(/<script>[\s\S]*?<\/script>/g, "");

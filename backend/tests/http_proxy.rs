@@ -9,12 +9,13 @@ use wiremock::{
     matchers::{header as wire_header, method, path},
 };
 
-use aijinapi_backend::{
+use openachieve_backend::{
     config::Config,
     db::create_customer_key_for_user,
     plans::{FREE_MONTHLY_REQUEST_LIMIT, PLUS_MONTHLY_REQUEST_LIMIT},
     routes,
     state::AppState,
+    upstream::UpstreamKeyRing,
 };
 
 #[sqlx::test(migrations = "./migrations")]
@@ -190,6 +191,93 @@ async fn streaming_chat_response_is_proxied_and_recorded(pool: PgPool) {
     assert_usage_count(&pool, 1, Some(200), Some(true)).await;
 }
 
+#[sqlx::test(migrations = "./migrations")]
+async fn upstream_failover_success_is_recorded_with_final_status(pool: PgPool) {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/go/chat/completions"))
+        .and(wire_header("authorization", "Bearer real-go-key"))
+        .respond_with(ResponseTemplate::new(500).set_body_json(json!({
+            "error": "first key failed"
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/go/chat/completions"))
+        .and(wire_header("authorization", "Bearer fallback-go-key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "id": "fallback_chat",
+            "object": "chat.completion"
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let api_key = create_key_for_user(
+        &pool,
+        "plus",
+        "active",
+        PLUS_MONTHLY_REQUEST_LIMIT,
+        Some(Utc::now() + Duration::days(30)),
+    )
+    .await;
+    let app = test_app_with_keys(
+        pool.clone(),
+        &server,
+        vec!["real-zen-key"],
+        vec!["real-go-key", "fallback-go-key"],
+    )
+    .await;
+    let response = post_chat(&app, &api_key, "qwen3.6-plus", false).await;
+
+    assert_eq!(response.status(), 200);
+    assert_usage_count(&pool, 1, Some(200), Some(false)).await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn all_upstream_http_failures_return_last_response_and_record_usage(pool: PgPool) {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/go/chat/completions"))
+        .and(wire_header("authorization", "Bearer real-go-key"))
+        .respond_with(ResponseTemplate::new(500).set_body_json(json!({
+            "error": "first key failed"
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/go/chat/completions"))
+        .and(wire_header("authorization", "Bearer fallback-go-key"))
+        .respond_with(ResponseTemplate::new(502).set_body_json(json!({
+            "error": "fallback key failed"
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let api_key = create_key_for_user(
+        &pool,
+        "plus",
+        "active",
+        PLUS_MONTHLY_REQUEST_LIMIT,
+        Some(Utc::now() + Duration::days(30)),
+    )
+    .await;
+    let app = test_app_with_keys(
+        pool.clone(),
+        &server,
+        vec!["real-zen-key"],
+        vec!["real-go-key", "fallback-go-key"],
+    )
+    .await;
+    let response = post_chat(&app, &api_key, "qwen3.6-plus", false).await;
+
+    assert_eq!(response.status(), 502);
+    assert_usage_count(&pool, 1, Some(502), Some(false)).await;
+}
+
 async fn test_app(
     pool: PgPool,
     server: &MockServer,
@@ -198,33 +286,56 @@ async fn test_app(
     Response = actix_web::dev::ServiceResponse,
     Error = actix_web::Error,
 > {
+    test_app_with_keys(pool, server, vec!["real-zen-key"], vec!["real-go-key"]).await
+}
+
+async fn test_app_with_keys(
+    pool: PgPool,
+    server: &MockServer,
+    zen_keys: Vec<&str>,
+    go_keys: Vec<&str>,
+) -> impl actix_service::Service<
+    actix_http::Request,
+    Response = actix_web::dev::ServiceResponse,
+    Error = actix_web::Error,
+> {
     test::init_service(
         App::new()
-            .app_data(web::Data::new(app_state(pool, server)))
+            .app_data(web::Data::new(app_state(pool, server, zen_keys, go_keys)))
             .configure(routes::configure),
     )
     .await
 }
 
-fn app_state(pool: PgPool, server: &MockServer) -> AppState {
+fn app_state(
+    pool: PgPool,
+    server: &MockServer,
+    zen_keys: Vec<&str>,
+    go_keys: Vec<&str>,
+) -> AppState {
+    let config = Config {
+        database_url: "postgres://postgres:postgres@localhost/openachieve_test".to_string(),
+        opencode_zen_api_keys: zen_keys.into_iter().map(str::to_string).collect(),
+        opencode_go_api_keys: go_keys.into_iter().map(str::to_string).collect(),
+        server_host: "127.0.0.1".parse().unwrap(),
+        server_port: 8080,
+        default_monthly_request_limit: FREE_MONTHLY_REQUEST_LIMIT,
+        zen_chat_completions_url: format!("{}/zen/chat/completions", server.uri()),
+        zen_go_chat_completions_url: format!("{}/go/chat/completions", server.uri()),
+        zen_models_url: format!("{}/zen/models", server.uri()),
+        zen_go_models_url: format!("{}/go/models", server.uri()),
+        upstream_max_attempts: 1,
+        upstream_retry_base_ms: 0,
+        upstream_key_cooldown_ms: 60_000,
+        cors_allowed_origins: vec!["http://localhost:3000".to_string()],
+    };
+    let upstream_keys = UpstreamKeyRing::from_config(&config);
+
     AppState {
-        config: Config {
-            database_url: "postgres://postgres:postgres@localhost/aijinapi_test".to_string(),
-            opencode_zen_api_key: "real-zen-key".to_string(),
-            opencode_go_api_key: "real-go-key".to_string(),
-            server_host: "127.0.0.1".parse().unwrap(),
-            server_port: 8080,
-            default_monthly_request_limit: FREE_MONTHLY_REQUEST_LIMIT,
-            zen_chat_completions_url: format!("{}/zen/chat/completions", server.uri()),
-            zen_go_chat_completions_url: format!("{}/go/chat/completions", server.uri()),
-            zen_models_url: format!("{}/zen/models", server.uri()),
-            zen_go_models_url: format!("{}/go/models", server.uri()),
-            upstream_max_attempts: 1,
-            upstream_retry_base_ms: 0,
-            cors_allowed_origins: vec!["http://localhost:3000".to_string()],
-        },
+        config,
         db: pool,
         http: Client::new(),
+        upstream_keys,
     }
 }
 

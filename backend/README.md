@@ -1,4 +1,4 @@
-# AIJinAPI Backend
+# OpenAchieve Backend
 
 Rust `actix-web` + PostgreSQL API relay for OpenAI-compatible requests.
 
@@ -8,6 +8,7 @@ Rust `actix-web` + PostgreSQL API relay for OpenAI-compatible requests.
 cd backend
 cp .env.example .env
 # edit DATABASE_URL and OPENCODE_GO_API_KEY
+# or set OPENCODE_GO_API_KEYS=key1,key2 for upstream key rotation
 cargo run --bin migrate
 cargo run --bin create_key -- --name "test customer"
 cargo run
@@ -30,3 +31,9 @@ curl http://127.0.0.1:8080/v1/chat/completions \
 ```
 
 Customer API keys are only shown once by `create_key`. The database stores only the SHA-256 hash.
+
+## Upstream Keys
+
+Use `OPENCODE_GO_API_KEY` and optional `OPENCODE_ZEN_API_KEY` for single-key deployments.
+For rotation and failover, use comma-separated `OPENCODE_GO_API_KEYS` and
+`OPENCODE_ZEN_API_KEYS`. If Zen keys are omitted, Zen falls back to the Go key list.

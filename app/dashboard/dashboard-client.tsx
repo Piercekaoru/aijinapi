@@ -97,8 +97,8 @@ export function DashboardClient() {
   }, [normalizedBackendUrl, sessionToken, t]);
 
   useEffect(() => {
-    const token = window.localStorage.getItem("aijinapi_session_token") ?? "";
-    const storedKey = window.localStorage.getItem("aijinapi_latest_customer_key") ?? "";
+    const token = window.localStorage.getItem("openachieve_session_token") ?? "";
+    const storedKey = window.localStorage.getItem("openachieve_latest_customer_key") ?? "";
     setSessionToken(token);
     setLatestKey(storedKey);
     if (!token) {
@@ -127,7 +127,7 @@ export function DashboardClient() {
       });
       if (!response.ok) throw new Error(await errorText(response));
       const issued = (await response.json()) as IssuedApiKey;
-      window.localStorage.setItem("aijinapi_latest_customer_key", issued.key);
+      window.localStorage.setItem("openachieve_latest_customer_key", issued.key);
       setLatestKey(issued.key);
       setStatus(t("dashboard.generated"));
       await loadDashboard();
@@ -163,7 +163,7 @@ export function DashboardClient() {
             <input
               value={backendUrl}
               onChange={(event) => setBackendUrl(event.target.value)}
-              placeholder="https://api.aijinapi.com"
+              placeholder="https://openachieve.asia"
               aria-label={t("dashboard.apiBaseURL")}
             />
           </label>

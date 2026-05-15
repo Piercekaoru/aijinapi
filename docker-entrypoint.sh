@@ -6,13 +6,13 @@ if [ -z "${DATABASE_URL:-}" ]; then
   exit 1
 fi
 
-if [ -z "${OPENCODE_GO_API_KEY:-}" ]; then
-  echo "OPENCODE_GO_API_KEY is required" >&2
+if [ -z "${OPENCODE_GO_API_KEYS:-}" ] && [ -z "${OPENCODE_GO_API_KEY:-}" ]; then
+  echo "OPENCODE_GO_API_KEYS or OPENCODE_GO_API_KEY is required" >&2
   exit 1
 fi
 
 ./backend/migrate
-./backend/aijinapi-backend &
+./backend/openachieve-backend &
 backend_pid="$!"
 
 cleanup() {
