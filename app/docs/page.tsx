@@ -3,7 +3,52 @@
 import Image from "next/image";
 import { SiteFooter } from "../components/SiteFooter";
 import { SiteHeader } from "../components/SiteHeader";
-import { useLocale } from "@/lib/i18n/context";
+
+const freeModelIds = [
+  "big-pickle",
+  "deepseek-v4-flash-free",
+  "minimax-m2.5-free",
+  "ring-2.6-1t-free",
+  "nemotron-3-super-free",
+];
+
+const kiloSteps = [
+  {
+    kicker: "Step 1",
+    title: "安装 Kilo Code",
+    body: "在 VS Code 的 Extensions 面板搜索 Kilo Code，安装官方扩展。安装完成后，打开 Kilo Settings。",
+    image: "/images/docs/kilo-code-install.png",
+    alt: "VS Code Extensions 中的 Kilo Code 扩展详情页",
+  },
+  {
+    kicker: "Step 2",
+    title: "点击自定义提供商",
+    body: "进入 Kilo Code Settings 的 Providers 页面，在热门提供商里找到自定义提供商，点击右侧的连接按钮。",
+    image: "/images/docs/kilo-code-custom-provider.png",
+    alt: "Kilo Code Providers 页面中的自定义提供商入口",
+  },
+  {
+    kicker: "Step 3",
+    title: "填写 OpenAchieve 配置",
+    body: "Provider ID 和显示名称都填 openachieve，Base URL 填 https://openachieve.asia/v1，API 密钥填写你在 OpenAchieve 控制台生成的 API Key。",
+    image: "/images/docs/kilo-code-provider-form.png",
+    alt: "Kilo Code 自定义提供商配置弹窗",
+  },
+  {
+    kicker: "Step 4",
+    title: "导入 Free 模型",
+    body: "Kilo Code 会从 OpenAchieve 读取模型列表。Free 用户建议先全选 5 个免费模型，然后点击添加模型。",
+    image: "/images/docs/kilo-code-import-models.png",
+    alt: "Kilo Code 导入 OpenAchieve 模型列表",
+  },
+  {
+    kicker: "Step 5",
+    title: "选择模型开始使用",
+    body: "确认模型已写入后，在 Kilo Code 右下角模型选择器里选择 openachieve / big-pickle 或其他可用模型即可开始对话。",
+    image: "/images/docs/kilo-code-model-list.png",
+    alt: "Kilo Code 已连接 OpenAchieve 并选择模型",
+  },
+];
 
 const models = [
   {
@@ -129,8 +174,6 @@ const models = [
 ];
 
 export default function DocsPage() {
-  const { t } = useLocale();
-
   return (
     <main className="docs-page">
       <section className="docs-shell">
@@ -138,30 +181,30 @@ export default function DocsPage() {
 
         <section className="intro">
           <div>
-            <p>{t("docs.label")}</p>
-            <h1>{t("docs.title")}</h1>
+            <p>开发文档</p>
+            <h1>开发文档</h1>
           </div>
-          <span>{t("docs.subtitle")}</span>
+          <span>只需接入统一 OpenAI-compatible 接口；Free/Plus 权限由 OpenAchieve 自动处理。</span>
         </section>
 
         <div className="docs-grid">
           <section className="panel" id="base-url">
-            <p>{t("route.docsBaseUrl")}</p>
-            <h2>{t("docs.baseURL")}</h2>
+            <p>接口地址</p>
+            <h2>Base URL</h2>
             <pre>https://openachieve.asia/v1</pre>
-            <span>{t("docs.baseURLDesc")}</span>
+            <span>所有请求发送到此接口即可，无需关注后端架构。</span>
           </section>
 
           <section className="panel" id="auth">
-            <p>{t("docs.authLabel")}</p>
-            <h2>{t("docs.auth")}</h2>
+            <p>认证</p>
+            <h2>认证方式</h2>
             <pre>{`Authorization: Bearer openachieve_xxxxxxxxxxxxxxxx`}</pre>
-            <span>{t("docs.authDesc")}</span>
+            <span>API Key 在注册或控制台生成，数据库只保存哈希；额度按账号套餐统一计算。</span>
           </section>
 
           <section className="panel wide" id="chat">
-            <p>{t("route.docsChat")}</p>
-            <h2>{t("docs.chat")}</h2>
+            <p>聊天补全示例</p>
+            <h2>聊天补全</h2>
             <pre>{`curl https://openachieve.asia/v1/chat/completions \\
   -H "Authorization: Bearer openachieve_xxxxxxxxxxxxxxxx" \\
   -H "Content-Type: application/json" \\
@@ -172,27 +215,82 @@ export default function DocsPage() {
     ]
   }'`}</pre>
           </section>
-
-          <section className="panel wide" id="models">
-            <p>{t("docs.models")}</p>
-            <h2>{t("docs.models")}</h2>
-            <span>{t("docs.modelsDesc")}</span>
-            <span>{t("docs.freePrivacyNote")}</span>
-            <div className="model-card-grid">
-              {models.map((model) => (
-                <article className={`model-card ${model.tone === "dark" ? "dark" : ""}`} key={model.id}>
-                  <div className="model-copy">
-                    <span className="model-tag">{model.tag}</span>
-                    <h3>{model.title}</h3>
-                    <p>{model.description}</p>
-                    <code className="model-id">{model.id}</code>
-                  </div>
-                  <Image className="model-art" src={model.image} alt="" width={220} height={230} />
-                </article>
-              ))}
-            </div>
-          </section>
         </div>
+
+        <section className="kilo-guide" id="kilo-code">
+          <div className="section-head">
+            <p>Kilo Code</p>
+            <h2>Kilo Code 接入教程</h2>
+            <span>
+              Kilo Code 支持 OpenAI-compatible 自定义提供商。按下面 5 步配置后，就能在 VS Code 里直接使用 OpenAchieve 模型。
+            </span>
+          </div>
+
+          <div className="config-strip" aria-label="Kilo Code 配置速查">
+            <div>
+              <span>Provider ID</span>
+              <code>openachieve</code>
+            </div>
+            <div>
+              <span>Base URL</span>
+              <code>https://openachieve.asia/v1</code>
+            </div>
+            <div>
+              <span>API Key</span>
+              <code>openachieve_xxx</code>
+            </div>
+          </div>
+
+          <div className="free-model-strip">
+            <span>Free 用户推荐先导入：</span>
+            {freeModelIds.map((id) => (
+              <code key={id}>{id}</code>
+            ))}
+          </div>
+
+          <div className="kilo-steps">
+            {kiloSteps.map((step, index) => (
+              <article className="kilo-step" key={step.title}>
+                <div className="step-copy">
+                  <p>{step.kicker}</p>
+                  <h3>{step.title}</h3>
+                  <span>{step.body}</span>
+                </div>
+                <figure>
+                  <Image
+                    src={step.image}
+                    alt={step.alt}
+                    width={1400}
+                    height={834}
+                    priority={index === 0}
+                  />
+                </figure>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="model-section" id="models">
+          <div className="section-head">
+            <p>支持模型</p>
+            <h2>支持模型</h2>
+            <span>Free 可调用 5 个免费模型；Plus 为 $13/月、1500 次/月，并额外开放完整 Plus 模型池。</span>
+            <span>免费模型可能用于服务改进或试用目的，请避免提交个人、商业机密或其他敏感信息。</span>
+          </div>
+          <div className="model-card-grid">
+            {models.map((model) => (
+              <article className={`model-card ${model.tone === "dark" ? "dark" : ""}`} key={model.id}>
+                <div className="model-copy">
+                  <span className="model-tag">{model.tag}</span>
+                  <h3>{model.title}</h3>
+                  <p>{model.description}</p>
+                  <code className="model-id">{model.id}</code>
+                </div>
+                <Image className="model-art" src={model.image} alt="" width={220} height={230} />
+              </article>
+            ))}
+          </div>
+        </section>
       </section>
       <SiteFooter />
 
@@ -214,6 +312,7 @@ export default function DocsPage() {
           margin: 0 auto;
           min-width: 0;
         }
+
         .intro {
           display: grid;
           grid-template-columns: minmax(0, 0.9fr) minmax(300px, 0.48fr);
@@ -226,7 +325,9 @@ export default function DocsPage() {
         }
 
         .intro p,
-        .panel p {
+        .panel p,
+        .section-head p,
+        .step-copy p {
           margin: 0 0 8px;
           color: #c96442;
           font-size: 12px;
@@ -236,7 +337,8 @@ export default function DocsPage() {
         }
 
         h1,
-        h2 {
+        h2,
+        h3 {
           margin: 0;
           letter-spacing: 0;
         }
@@ -250,71 +352,157 @@ export default function DocsPage() {
         }
 
         h2 {
-          font-size: 23px;
+          font-size: 26px;
+        }
+
+        h3 {
+          font-size: 22px;
         }
 
         .intro span,
-        .panel span {
+        .panel span,
+        .section-head span,
+        .step-copy span {
           display: block;
           color: #5e5d59;
           line-height: 1.72;
         }
 
-        .intro span {
-          max-width: 420px;
-          margin: 0 0 10px;
-          font-size: 18px;
-        }
-
-        .panel span {
-          margin-top: 12px;
-        }
-
         .docs-grid {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 16px;
-          margin-top: 22px;
+          gap: 18px;
         }
 
         .panel {
-          border: 1px solid #f0eee6;
-          border-radius: 12px;
-          padding: 22px;
-          background: rgba(250, 249, 245, 0.76);
-          box-shadow:
-            0 0 0 1px rgba(209, 207, 197, 0.42),
-            0 4px 24px rgba(20, 20, 19, 0.05);
+          min-width: 0;
+          border: 1px solid #d8d5ca;
+          border-radius: 8px;
+          padding: 24px;
+          background: rgba(250, 249, 245, 0.78);
+          box-shadow: 0 18px 50px rgba(20, 20, 19, 0.07);
         }
 
-        .wide {
+        .panel.wide {
           grid-column: 1 / -1;
         }
 
-        pre {
-          overflow: auto;
-          margin: 16px 0 0;
-          border: 1px solid rgba(23, 23, 21, 0.1);
-          border-radius: 8px;
-          padding: 16px;
-          background: #181816;
-          color: #fff8e8;
-          font-size: 13px;
-          line-height: 1.7;
-          white-space: pre-wrap;
-          overflow-wrap: anywhere;
-          word-break: break-word;
+        pre,
+        code {
+          font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+          letter-spacing: 0;
         }
 
-        code {
-          font-family: "SFMono-Regular", Consolas, monospace;
+        pre {
+          max-width: 100%;
+          margin: 18px 0 0;
+          overflow-x: auto;
+          border-radius: 8px;
+          padding: 18px;
+          color: #f5f4ed;
+          background: #141413;
+          font-size: 13px;
+          line-height: 1.7;
+          white-space: pre;
+        }
+
+        .kilo-guide,
+        .model-section {
+          margin-top: 24px;
+          border-top: 1px solid #dfdacf;
+          padding-top: 36px;
+        }
+
+        .section-head {
+          display: grid;
+          gap: 8px;
+          max-width: 760px;
+          margin-bottom: 22px;
+        }
+
+        .config-strip,
+        .free-model-strip {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+          align-items: center;
+          margin-bottom: 14px;
+        }
+
+        .config-strip div,
+        .free-model-strip code {
+          border: 1px solid #d8d5ca;
+          border-radius: 8px;
+          background: rgba(250, 249, 245, 0.82);
+        }
+
+        .config-strip div {
+          display: grid;
+          gap: 6px;
+          min-width: min(100%, 240px);
+          padding: 13px 14px;
+        }
+
+        .config-strip span,
+        .free-model-strip span {
+          color: #6a6861;
+          font-size: 12px;
+          font-weight: 800;
+        }
+
+        .config-strip code,
+        .free-model-strip code {
+          color: #141413;
+          font-size: 13px;
+          overflow-wrap: anywhere;
+        }
+
+        .free-model-strip code {
+          padding: 8px 10px;
+        }
+
+        .kilo-steps {
+          display: grid;
+          gap: 18px;
+          margin-top: 22px;
+        }
+
+        .kilo-step {
+          display: grid;
+          grid-template-columns: minmax(220px, 0.36fr) minmax(0, 0.64fr);
+          gap: 18px;
+          align-items: center;
+          border: 1px solid #d8d5ca;
+          border-radius: 8px;
+          padding: 18px;
+          background: rgba(250, 249, 245, 0.74);
+          box-shadow: 0 18px 50px rgba(20, 20, 19, 0.06);
+        }
+
+        .step-copy {
+          display: grid;
+          gap: 10px;
+        }
+
+        figure {
+          min-width: 0;
+          margin: 0;
+          overflow: hidden;
+          border: 1px solid rgba(20, 20, 19, 0.12);
+          border-radius: 8px;
+          background: #141413;
+        }
+
+        figure :global(img) {
+          display: block;
+          width: 100%;
+          height: auto;
         }
 
         .model-card-grid {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 14px;
-          margin-top: 18px;
+          gap: 18px;
         }
 
         .model-card {
@@ -363,6 +551,11 @@ export default function DocsPage() {
         }
 
         h3 {
+          margin: 0;
+          font-size: 22px;
+        }
+
+        .model-card h3 {
           margin: 0;
           font-family: "Iowan Old Style", "Yu Mincho", "Hiragino Mincho ProN", Georgia, serif;
           font-size: clamp(28px, 4vw, 42px);

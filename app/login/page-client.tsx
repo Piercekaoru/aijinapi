@@ -3,7 +3,6 @@
 import { useEffect, useRef } from "react";
 import { SiteFooter } from "../components/SiteFooter";
 import { SiteHeader } from "../components/SiteHeader";
-import { useLocale } from "@/lib/i18n/context";
 
 type LoginPageClientProps = {
   style: string;
@@ -42,9 +41,33 @@ class AuthRequestError extends Error {
   }
 }
 
+const copy: Record<string, string> = {
+  welcome: "欢迎回来",
+  welcomeSub: "登录后管理余额、API Key、调用记录和文档。",
+  register: "创建账号",
+  registerSub: "注册后即可充值余额，获取 OpenAchieve Key。",
+  requestFailed: "请求失败",
+  passwordWeak: "弱",
+  passwordMedium: "中",
+  passwordStrong: "强",
+  confirmAgain: "请再次输入密码",
+  passwordMismatch: "两次输入的密码不一致",
+  showPassword: "显示密码",
+  hidePassword: "隐藏密码",
+  loginSuccess: "登录成功，正在进入控制台",
+  loginFailed: "登录失败",
+  termsToast: "请先同意服务条款",
+  registerSuccess: "注册成功，API Key 已生成",
+  registerFailed: "注册失败",
+};
+
+function t(key: string) {
+  const shortKey = key.split(".").at(-1) ?? key;
+  return copy[key] ?? copy[shortKey] ?? key;
+}
+
 export function LoginPageClient({ style, html }: LoginPageClientProps) {
   const rootRef = useRef<HTMLDivElement>(null);
-  const { t } = useLocale();
 
   useEffect(() => {
     const root = rootRef.current;
@@ -337,7 +360,7 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
       controller.abort();
       if (toastTimer) window.clearTimeout(toastTimer);
     };
-  }, [t]);
+  }, []);
 
   return (
     <div>

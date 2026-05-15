@@ -5,7 +5,6 @@ import Link from "next/link";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { SiteFooter } from "../components/SiteFooter";
 import { SiteHeader } from "../components/SiteHeader";
-import { useLocale } from "@/lib/i18n/context";
 
 const defaultBackendUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/+$/, "") ?? "/api/backend";
@@ -35,6 +34,52 @@ const modelDisplayNames: Record<string, string> = {
   "qwen3.6-plus": "Qwen3.6 Plus",
   "qwen3.5-plus": "Qwen3.5 Plus",
 };
+
+const copy: Record<string, string> = {
+  title: "账号总览",
+  loading: "正在读取账号...",
+  needLogin: "需要登录",
+  needLoginDesc: "登录后可以查看当前 API Key、月度额度、剩余额度和最近调用。",
+  goLogin: "去登录",
+  refresh: "刷新",
+  remaining: "本月仍可调用请求数",
+  usedQuota: "已用额度",
+  usedDesc: "本月已记录请求",
+  monthlyTotal: "月度总额",
+  monthlyDesc: "账号套餐额度",
+  modelRange: "模型范围",
+  modelRangeDesc: "免费 + Plus 模型池",
+  modelRangeFree: "5 个免费模型",
+  viewModels: "查看可用模型",
+  availableModels: "可用模型",
+  close: "关闭",
+  modelPrivacyNote: "免费模型可能用于服务改进或试用目的，请避免提交个人、商业机密或其他敏感信息。",
+  monthlyUsage: "本月用量",
+  thisMonth: "本月额度",
+  used: "已用",
+  remainingLabel: "剩余",
+  freeNote: "Free 用户每月 500 次，可调用 5 个免费模型。",
+  plusExpires: "Plus 到期",
+  notSet: "未设置",
+  apiKeys: "API Keys",
+  recentUsage: "最近调用",
+  noUsage: "暂无调用记录",
+  label: "账号",
+  keysLabel: "密钥",
+  nameTitle: "的账号",
+  updated: "账号信息已更新",
+  loadFailed: "账号读取失败",
+  noKeys: "还没有 API Key，请到控制台生成。",
+  apiKeysSub: "多个 Key 共享账号套餐额度，不再按单个 Key 独立计费。",
+  oldKeyPrefix: "旧 Key 未保存前缀",
+  enabled: "启用",
+  disabled: "停用",
+};
+
+function t(key: string) {
+  const shortKey = key.split(".").at(-1) ?? key;
+  return copy[key] ?? copy[shortKey] ?? key;
+}
 
 type DashboardResponse = {
   user: {
@@ -80,7 +125,6 @@ type DashboardResponse = {
 };
 
 export function AccountClient() {
-  const { t } = useLocale();
   const [sessionToken, setSessionToken] = useState("");
   const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
   const [status, setStatus] = useState(t("account.loading"));
@@ -135,7 +179,7 @@ export function AccountClient() {
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, []);
 
   useEffect(() => {
     const token = window.localStorage.getItem("openachieve_session_token") ?? "";
@@ -148,7 +192,7 @@ export function AccountClient() {
     }
 
     void loadAccount(token);
-  }, [loadAccount, t]);
+  }, [loadAccount]);
 
   useEffect(() => {
     if (!modelsOpen) return;
@@ -169,21 +213,21 @@ export function AccountClient() {
         <section className="account-hero">
           <div>
             <p>{t("account.label")}</p>
-            <h1>{dashboard ? `${dashboard.user.name} ${t("account.nameTitle")}` : t("account.title")}</h1>
+            <h1>{dashboard ? `${dashboard.user.name} ${t("nameTitle")}` : "账号总览"}</h1>
             <span>
               {dashboard ? `${dashboard.user.email} · ${summary.planLabel} 会员` : status}
             </span>
           </div>
           <Button type="button" onClick={() => sessionToken && loadAccount(sessionToken)} disabled={loading || !sessionToken}>
-            {loading ? t("account.loading") : t("account.refresh")}
+            {loading ? t("loading") : t("refresh")}
           </Button>
         </section>
 
         {!sessionToken ? (
           <section className="empty-state">
-            <h2>{t("account.needLogin")}</h2>
-            <p>{t("account.needLoginDesc")}</p>
-            <Link className={buttonVariants({ variant: "default" })} href="/login">{t("account.goLogin")}</Link>
+            <h2>{t("needLogin")}</h2>
+            <p>{t("needLoginDesc")}</p>
+            <Link className={buttonVariants({ variant: "default" })} href="/login">{t("goLogin")}</Link>
           </section>
         ) : (
           <>

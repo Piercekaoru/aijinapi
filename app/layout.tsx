@@ -2,9 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Geist } from "next/font/google";
 import { cn } from "@/lib/utils";
-import { LocaleClientLayout } from "@/components/LocaleClientLayout";
 
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
+const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
   title: "OpenAchieve",
@@ -18,9 +17,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN" className={cn("font-sans", geist.variable)}>
-      <body>
-        <LocaleClientLayout>{children}</LocaleClientLayout>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

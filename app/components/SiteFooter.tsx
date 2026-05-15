@@ -1,20 +1,15 @@
 import Link from "next/link";
-import { footerGroupsFor } from "@/lib/site-routes";
-import { useLocale } from "@/lib/i18n/context";
+import { footerGroups } from "@/lib/site-routes";
 
 export function SiteFooter() {
-  const { locale, t } = useLocale();
-  const footerGroups = footerGroupsFor(locale);
-  const localePrefix = locale === "zh" ? "" : `/${locale}`;
-
   return (
     <footer className="site-footer">
       <div className="site-footer-inner">
         <div className="site-footer-brand">
-          <Link className="site-footer-logo" href={localePrefix + "/"}>
+          <Link className="site-footer-logo" href="/">
             OpenAchieve
           </Link>
-          <p>{t("footer.brand")}</p>
+          <p>面向国内开发者的 OpenAI-compatible API 中转服务。</p>
         </div>
 
         <div className="site-footer-map" aria-label="页脚站点地图">

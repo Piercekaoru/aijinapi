@@ -4,7 +4,6 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { SiteFooter } from "../components/SiteFooter";
 import { SiteHeader } from "../components/SiteHeader";
-import { useLocale } from "@/lib/i18n/context";
 
 const defaultBackendUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/+$/, "") ?? "/api/backend";
@@ -13,8 +12,30 @@ type ModelListResponse = {
   data?: Array<{ id?: string }>;
 };
 
+const copy: Record<string, string> = {
+  title: "API 调试台",
+  label: "接口调试",
+  apiBaseURL: "接口地址",
+  apiKey: "API Key",
+  model: "模型",
+  message: "消息",
+  send: "发送请求",
+  loadModels: "获取模型列表",
+  waiting: "等待请求",
+  loadingModels: "正在读取模型列表...",
+  loadingChatStream: "正在读取流式响应...",
+  loadingChat: "正在请求聊天接口...",
+  requestFailed: "请求失败",
+  response: "响应",
+  placeholder: "输入接口地址和 API Key，即可获取模型或发送请求。",
+};
+
+function t(key: string) {
+  const shortKey = key.split(".").at(-1) ?? key;
+  return copy[key] ?? copy[shortKey] ?? key;
+}
+
 export function PlaygroundClient() {
-  const { t } = useLocale();
   const [backendUrl, setBackendUrl] = useState(defaultBackendUrl);
   const [apiKey, setApiKey] = useState("");
   const [model, setModel] = useState("big-pickle");

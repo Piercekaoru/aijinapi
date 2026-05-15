@@ -2,7 +2,6 @@
 
 import { SiteFooter } from "../components/SiteFooter";
 import { SiteHeader } from "../components/SiteHeader";
-import { useLocale } from "@/lib/i18n/context";
 
 function TermsBodyZh() {
   return (
@@ -64,69 +63,7 @@ function TermsBodyZh() {
   );
 }
 
-function TermsBodyJa() {
-  return (
-    <article className="terms-body">
-      <section>
-        <h2>1. サービス概要</h2>
-        <p>OpenAchieve（以下「本サービス」）は、開発者向けの AI API 中継プラットフォームです。OpenAI 互換インターフェースを提供し、リクエストを上流モデルプロバイダーに転送します。Free と Plus の 2 プランがあります。</p>
-      </section>
-      <section>
-        <h2>2. アカウント登録とセキュリティ</h2>
-        <p>本サービスを利用するにはアカウント登録が必要です。登録時には正確なメールアドレスを提供し、パスワードと API Key を厳重に管理してください。</p>
-        <p>API Key は作成時に一度だけ表示されます。必ずすぐに保存してください。OpenAchieve は API Key の平文を一切保存しません。API Key の漏洩や紛失による損害は利用者の責任となります。</p>
-        <p>アカウントの貸与・譲渡・売買は禁止されています。</p>
-      </section>
-      <section>
-        <h2>3. 利用許諾</h2>
-        <p>本サービスを以下の目的で使用することは禁止されています：</p>
-        <ul>
-          <li>違法・有害・詐欺的・中傷的・嫌がらせ・ヘイトコンテンツの生成または拡散</li>
-          <li>他者の知的財産権、プライバシー権、その他合法的権利の侵害</li>
-          <li>本サービスの利用枠制限の回避、または悪意ある大量リクエスト</li>
-          <li>兵器開発、軍事用途、または適用法令に違反する活動</li>
-        </ul>
-        <p>OpenAchieve は違反行為を発見した場合、直ちにアカウントを停止または終了する権利を留保します。</p>
-      </section>
-      <section>
-        <h2>4. プランと課金</h2>
-        <p>Free プラン：無料、月 500 リクエスト、5 つの無料モデルを利用可。登録時に自動付与。</p>
-        <p>Plus プラン：$13/月、月 1500 リクエスト、全 Plus モデルプール利用可。Plus は管理者が有効化し、30 日間有効。期限切れ後は自動的に Free にダウングレード。</p>
-        <p>現在 Plus は管理者による手動有効化ですが、今後 Alipay / WeChat での自動購入に対応予定です。</p>
-        <p>リクエスト枠は毎月 1 日にリセットされます。未使用分は翌月に繰り越されません。</p>
-      </section>
-      <section>
-        <h2>5. サービス可用性と制限</h2>
-        <p>本サービスは上流モデルプロバイダーの可用性に依存します。OpenAchieve は安定稼働に努めますが、100% の可用性を保証するものではありません。上流モデルのメンテナンスや制限により、一時的にリクエストが処理できない場合があります。</p>
-        <p>Free・Plus 両プランに月間リクエスト上限があります。上限超過時は 429 エラーが返され、翌月まで利用できません。異常なリクエストパターンに対しては一時的な制限がかかることがあります。</p>
-      </section>
-      <section>
-        <h2>6. 免責事項</h2>
-        <p>AI モデルの出力は上流プロバイダーによって生成されます。OpenAchieve はモデル出力の正確性、完全性、合法性、適合性について明示・黙示を問わず一切保証しません。利用者はモデル出力内容を自己責任で評価・検証してください。</p>
-        <p>法令で認められる最大限の範囲において、OpenAchieve は本サービスの利用または利用不能に起因する直接的・間接的・付随的・特別・結果的損害について一切責任を負いません。</p>
-      </section>
-      <section>
-        <h2>7. プライバシーとデータ</h2>
-        <p>当社はサービス提供に必要な最小限の情報のみを収集します：メールアドレス、パスワードのハッシュ値、API Key のハッシュ値、API 呼出記録（モデル名、リクエストパス、ステータスコード、レイテンシ等）。</p>
-        <p>API 経由で送信されたチャットメッセージの内容を読み取り、保存、分析することはありません。リクエスト内容は上流プロバイダーへの転送時にサーバーを一時的に通過するのみです。一部の上流無料モデルでは改善・試用目的でデータが扱われる場合があるため、個人情報・機密情報は送信しないでください。</p>
-        <p>法令で要求される場合を除き、お客様の個人情報を第三者に販売または共有することはありません。</p>
-      </section>
-      <section>
-        <h2>8. 規約の変更</h2>
-        <p>OpenAchieve は本利用規約を随時更新することがあります。重要な変更はウェブサイトでの告知またはメールで通知します。継続利用をもって変更後の規約に同意したものとみなします。</p>
-      </section>
-      <section>
-        <h2>9. お問い合わせ</h2>
-        <p>本規約に関するご質問は以下までお問い合わせください：</p>
-        <p>GitHub: github.com/Piercekaoru/openachieve</p>
-      </section>
-    </article>
-  );
-}
-
 export default function TermsPage() {
-  const { locale, t } = useLocale();
-
   return (
     <main className="terms-page">
       <div className="terms-header">
@@ -136,11 +73,11 @@ export default function TermsPage() {
       <section className="terms-shell">
         <div className="terms-intro">
           <p>Terms of Service</p>
-          <h1>{t("terms.title")}</h1>
-          <span>{t("terms.updated")}</span>
+          <h1>服务条款</h1>
+          <span>最后更新：2026 年 5 月</span>
         </div>
 
-        {locale === "ja" ? <TermsBodyJa /> : <TermsBodyZh />}
+        <TermsBodyZh />
       </section>
 
       <SiteFooter />

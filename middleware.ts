@@ -1,49 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const SUPPORTED_LOCALES = ["zh", "ja"] as const;
-const DEFAULT_LOCALE = "zh";
+const LEGACY_LOCALES = ["ja", "zh"] as const;
 
-function getLocaleFromPath(pathname: string): string | null {
-  for (const locale of SUPPORTED_LOCALES) {
-    if (pathname === `/${locale}` || pathname.startsWith(`/${locale}/`)) {
-      return locale;
-    }
+function legacyLocaleRedirect(pathname: string) {
+  for (const locale of LEGACY_LOCALES) {
+    if (pathname === `/${locale}`) return "/";
+    if (pathname.startsWith(`/${locale}/`)) return pathname.slice(locale.length + 1) || "/";
   }
+
   return null;
 }
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const redirectedPath = legacyLocaleRedirect(pathname);
 
-  // Skip internal Next.js paths and static assets
-  if (
-    pathname.startsWith("/_next") ||
-    pathname.startsWith("/api") ||
-    pathname.startsWith("/images") ||
-    pathname.match(/\.\w+$/)
-  ) {
-    return NextResponse.next();
-  }
+  if (!redirectedPath) return NextResponse.next();
 
-  const pathLocale = getLocaleFromPath(pathname);
-
-  if (pathLocale) {
-    // Already has locale prefix — rewrite to [locale] route
-    const pathWithoutLocale = pathname === `/${pathLocale}`
-      ? "/"
-      : pathname.slice(pathLocale.length + 1);
-
-    const url = request.nextUrl.clone();
-    url.pathname = `/${pathLocale}${pathWithoutLocale}`;
-    return NextResponse.rewrite(url);
-  }
-
-  // No locale — redirect to default locale
   const url = request.nextUrl.clone();
-  url.pathname = `/${DEFAULT_LOCALE}${pathname}`;
-  return NextResponse.redirect(url);
+  url.pathname = redirectedPath;
+  return NextResponse.redirect(url, 308);
 }
 
 export const config = {
-  matcher: ["/((?!_next|api|images|favicon.ico|.*\\.\\w+$).*)"],
+  matcher: ["/((?!_next|api|v1|images|favicon.ico|.*\\.\\w+$).*)"],
 };

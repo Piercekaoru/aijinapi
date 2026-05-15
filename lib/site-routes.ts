@@ -1,7 +1,3 @@
-import type { Locale } from "./i18n/types";
-import { DEFAULT_LOCALE } from "./i18n/types";
-import { t } from "./i18n/dict";
-
 export type SiteRouteKey =
   | "pricing"
   | "models"
@@ -21,82 +17,40 @@ export type SiteNavItem = {
   label: string;
 };
 
-const routeLabelKeys: Record<SiteRouteKey, string> = {
-  pricing: "route.pricing",
-  models: "route.models",
-  docs: "route.docs",
-  account: "route.account",
-  dashboard: "route.dashboard",
-  playground: "route.playground",
-  login: "route.login",
-  register: "route.register",
-  docsBaseUrl: "route.docsBaseUrl",
-  docsChat: "route.docsChat",
-  terms: "route.terms",
+export const siteRoutes: Record<SiteRouteKey, SiteNavItem> = {
+  pricing: { key: "pricing", href: "/#pricing", label: "价格套餐" },
+  models: { key: "models", href: "/models", label: "支持模型" },
+  docs: { key: "docs", href: "/docs", label: "开发文档" },
+  account: { key: "account", href: "/account", label: "账号总览" },
+  dashboard: { key: "dashboard", href: "/dashboard", label: "Key 控制台" },
+  playground: { key: "playground", href: "/playground", label: "API 调试台" },
+  login: { key: "login", href: "/login", label: "登录" },
+  register: { key: "register", href: "/login?mode=register", label: "注册" },
+  docsBaseUrl: { key: "docsBaseUrl", href: "/docs#base-url", label: "接口地址" },
+  docsChat: { key: "docsChat", href: "/docs#chat", label: "聊天补全示例" },
+  terms: { key: "terms", href: "/terms", label: "服务条款" },
 };
 
-const routeHrefs: Record<SiteRouteKey, string> = {
-  pricing: "/#pricing",
-  models: "/models",
-  docs: "/docs",
-  account: "/account",
-  dashboard: "/dashboard",
-  playground: "/playground",
-  login: "/login",
-  register: "/login?mode=register",
-  docsBaseUrl: "/docs#base-url",
-  docsChat: "/docs#chat",
-  terms: "/terms",
-};
+export const publicNavItems = [siteRoutes.pricing, siteRoutes.models, siteRoutes.docs] as const;
 
-export function siteRoutesFor(locale: Locale): Record<SiteRouteKey, SiteNavItem> {
-  const prefix = locale === DEFAULT_LOCALE ? "" : `/${locale}`;
-  const result = {} as Record<SiteRouteKey, SiteNavItem>;
+export const workspaceNavItems = [
+  siteRoutes.account,
+  siteRoutes.dashboard,
+  siteRoutes.playground,
+  siteRoutes.docs,
+] as const;
 
-  for (const key of Object.keys(routeHrefs) as SiteRouteKey[]) {
-    const href = routeHrefs[key].startsWith("/#")
-      ? `${prefix}${routeHrefs[key]}`
-      : `${prefix}${routeHrefs[key]}`;
-    result[key] = {
-      key,
-      href,
-      label: t(locale, routeLabelKeys[key]),
-    };
-  }
-
-  return result;
-}
-
-export const siteRoutes = siteRoutesFor(DEFAULT_LOCALE);
-
-export function publicNavItemsFor(locale: Locale) {
-  const r = siteRoutesFor(locale);
-  return [r.pricing, r.models, r.docs] as const;
-}
-
-export function workspaceNavItemsFor(locale: Locale) {
-  const r = siteRoutesFor(locale);
-  return [r.account, r.dashboard, r.playground, r.docs] as const;
-}
-
-export function footerGroupsFor(locale: Locale) {
-  const r = siteRoutesFor(locale);
-  return [
-    {
-      title: t(locale, "footer.product"),
-      links: [r.pricing, r.models, r.docs, r.terms],
-    },
-    {
-      title: t(locale, "footer.account"),
-      links: [r.login, r.register, r.account, r.dashboard],
-    },
-    {
-      title: t(locale, "footer.developer"),
-      links: [r.playground, r.docsBaseUrl, r.docsChat],
-    },
-  ] as const;
-}
-
-export const publicNavItems = publicNavItemsFor(DEFAULT_LOCALE);
-export const workspaceNavItems = workspaceNavItemsFor(DEFAULT_LOCALE);
-export const footerGroups = footerGroupsFor(DEFAULT_LOCALE);
+export const footerGroups = [
+  {
+    title: "产品",
+    links: [siteRoutes.pricing, siteRoutes.models, siteRoutes.docs, siteRoutes.terms],
+  },
+  {
+    title: "账号",
+    links: [siteRoutes.login, siteRoutes.register, siteRoutes.account, siteRoutes.dashboard],
+  },
+  {
+    title: "开发者",
+    links: [siteRoutes.playground, siteRoutes.docsBaseUrl, siteRoutes.docsChat],
+  },
+] as const;

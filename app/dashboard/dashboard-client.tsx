@@ -5,7 +5,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { SiteFooter } from "../components/SiteFooter";
 import { SiteHeader } from "../components/SiteHeader";
-import { useLocale } from "@/lib/i18n/context";
 
 const defaultBackendUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/+$/, "") ?? "/api/backend";
@@ -60,8 +59,41 @@ type IssuedApiKey = {
   monthly_request_limit: number;
 };
 
+const copy: Record<string, string> = {
+  title: "Key 控制台",
+  loading: "正在读取控制台...",
+  loadingKeys: "读取中...",
+  keyLabel: "API 密钥",
+  apiBaseURL: "接口地址",
+  createKey: "生成新 Key",
+  creating: "正在生成...",
+  keyCopied: "已复制到剪贴板",
+  keyWarning: "此 Key 仅在创建时显示一次，请立即复制并妥善存储。",
+  connected: "已连接",
+  failed: "控制台读取失败",
+  needLogin: "需要登录",
+  needLoginDesc: "登录或注册后会生成 API Key，并在这里查看额度和调用记录。",
+  goLogin: "去登录",
+  generated: "新 API Key 已生成，请现在保存",
+  copy: "复制",
+  apiKeys: "API 密钥",
+  apiKeysSub: "多个 Key 共享账号套餐额度，不再按单个 Key 独立计费。",
+  noKeys: "还没有 API Key，点击右上角生成一个。",
+  oldKeyPrefix: "旧 Key 未保存前缀",
+  enabled: "启用",
+  disabled: "停用",
+  recentUsage: "最近调用",
+  refresh: "刷新",
+  noUsage: "暂无调用记录。",
+  label: "控制台",
+};
+
+function t(key: string) {
+  const shortKey = key.split(".").at(-1) ?? key;
+  return copy[key] ?? copy[shortKey] ?? key;
+}
+
 export function DashboardClient() {
-  const { t } = useLocale();
   const [backendUrl, setBackendUrl] = useState(defaultBackendUrl);
   const [sessionToken, setSessionToken] = useState("");
   const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
@@ -94,7 +126,7 @@ export function DashboardClient() {
     } finally {
       setLoading(false);
     }
-  }, [normalizedBackendUrl, sessionToken, t]);
+  }, [normalizedBackendUrl, sessionToken]);
 
   useEffect(() => {
     const token = window.localStorage.getItem("openachieve_session_token") ?? "";
@@ -107,7 +139,7 @@ export function DashboardClient() {
       return;
     }
     void loadDashboard(token, normalizedBackendUrl);
-  }, [loadDashboard, normalizedBackendUrl, t]);
+  }, [loadDashboard, normalizedBackendUrl]);
 
   async function createKey() {
     if (!sessionToken) return;

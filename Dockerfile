@@ -11,7 +11,6 @@ COPY lib ./lib
 COPY public ./public
 COPY components.json next.config.ts tsconfig.json tailwind.config.ts postcss.config.mjs eslint.config.mjs next-env.d.ts ./
 COPY openachieve-landing.html openachieve-login.html openachieve-models.html ./
-COPY openachieve-landing-ja.html openachieve-login-ja.html openachieve-models-ja.html ./
 RUN pnpm build
 
 FROM rust:1.95-bookworm AS backend-builder

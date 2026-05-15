@@ -5,14 +5,13 @@ import { Menu, X } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
-  publicNavItemsFor,
-  siteRoutesFor,
+  publicNavItems,
+  siteRoutes,
   type SiteRouteKey,
-  workspaceNavItemsFor,
+  workspaceNavItems,
 } from "@/lib/site-routes";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { useLocale } from "@/lib/i18n/context";
 
 const defaultBackendUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/+$/, "") ?? "/api/backend";
@@ -31,13 +30,10 @@ type SiteHeaderProps = {
 };
 
 export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }: SiteHeaderProps) {
-  const { locale, t } = useLocale();
   const [token, setToken] = useState("");
   const [user, setUser] = useState<PublicUser | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const siteRoutes = siteRoutesFor(locale);
-  const navItems = variant === "workspace" ? workspaceNavItemsFor(locale) : publicNavItemsFor(locale);
-  const localePrefix = locale === "zh" ? "" : `/${locale}`;
+  const navItems = variant === "workspace" ? workspaceNavItems : publicNavItems;
   const pathname = usePathname();
 
   const initial = useMemo(() => {
@@ -74,7 +70,7 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
         window.localStorage.setItem("openachieve_user", JSON.stringify(freshUser));
         setUser(freshUser);
       } catch {
-        // Keep cached user when backend is temporarily unavailable
+        // Keep cached user when backend is temporarily unavailable.
       }
     }
 
@@ -92,47 +88,14 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
     window.location.href = logoutRedirect;
   }
 
-  function localePath(target: "zh" | "ja"): string {
-    const p = pathname || "/";
-    if (p.startsWith("/ja/") || p === "/ja") {
-      return target === "zh" ? p.replace(/^\/ja/, "/zh") : p;
-    }
-    if (p.startsWith("/zh/") || p === "/zh") {
-      return target === "ja" ? p.replace(/^\/zh/, "/ja") : p;
-    }
-    return target === "ja" ? `/ja${p}` : p;
-  }
-
-  function renderLangSwitch(className?: string) {
-    return (
-      <div className={cn("lang-switch", className)}>
-        <Link
-          className={locale === "zh" ? "active" : ""}
-          href={localePath("zh")}
-          aria-label="切换到中文"
-        >
-          中
-        </Link>
-        <span className="lang-sep">/</span>
-        <Link
-          className={locale === "ja" ? "active" : ""}
-          href={localePath("ja")}
-          aria-label="日本語に切替"
-        >
-          日
-        </Link>
-      </div>
-    );
-  }
-
   function renderAccountActions() {
     return token ? (
       <>
         <Link className={cn("account-chip", active === "account" && "active")} href={siteRoutes.account.href}>
           <span className="account-avatar">{initial}</span>
           <span className="account-copy">
-            <strong>{user?.name || t("nav.account")}</strong>
-            <small>{user?.email || t("nav.dashboard")}</small>
+            <strong>{user?.name || "账号总览"}</strong>
+            <small>{user?.email || "Key 控制台"}</small>
           </span>
         </Link>
         {variant === "public" && (
@@ -141,7 +104,7 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
           </Link>
         )}
         <Button variant="secondary" type="button" onClick={logout}>
-          {t("nav.logout")}
+          退出
         </Button>
       </>
     ) : (
@@ -159,13 +122,12 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
   return (
     <header className="site-header">
       <div className="site-header-brand">
-        <Link className="site-brand" href={localePrefix + "/"}>
+        <Link className="site-brand" href="/">
           OpenAchieve
         </Link>
       </div>
 
       <div className="site-header-mobile-controls">
-        {renderLangSwitch("mobile-lang-switch")}
         <button
           className="mobile-menu-button"
           type="button"
@@ -178,7 +140,7 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
       </div>
 
       <div className="site-header-center">
-        <nav aria-label={locale === "ja" ? "サイトナビゲーション" : "站点导航"}>
+        <nav aria-label="站点导航">
           {navItems.map((item) => (
             <Link
               className={active === item.key ? "active" : ""}
@@ -189,10 +151,6 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
             </Link>
           ))}
         </nav>
-
-        <div className="lang-split" aria-hidden="true" />
-
-        {renderLangSwitch()}
       </div>
 
       <div className="site-header-right">
@@ -200,7 +158,7 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
       </div>
 
       <div className={cn("site-mobile-menu", menuOpen && "open")}>
-        <nav aria-label={locale === "ja" ? "モバイルナビゲーション" : "移动端导航"}>
+        <nav aria-label="移动端导航">
           {navItems.map((item) => (
             <Link
               className={active === item.key ? "active" : ""}
@@ -267,7 +225,6 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 0;
         }
 
         nav {
@@ -294,44 +251,6 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
         nav :global(a.active:visited) {
           color: #141413;
           text-decoration: none;
-        }
-
-        .lang-split {
-          width: 1px;
-          height: 20px;
-          margin: 0 18px;
-          background: #dfdacf;
-        }
-
-        .lang-switch {
-          display: inline-flex;
-          align-items: center;
-          gap: 2px;
-        }
-
-        .lang-switch :global(a) {
-          color: #b5b2a9;
-          font-size: 12px;
-          font-weight: 700;
-          text-decoration: none;
-          padding: 2px 4px;
-          border-radius: 4px;
-          transition: all 0.18s ease;
-        }
-
-        .lang-switch :global(a:hover) {
-          color: #5e5d59;
-          background: #eeeadd;
-        }
-
-        .lang-switch :global(a.active) {
-          color: #141413;
-        }
-
-        .lang-sep {
-          color: #d8d5ca;
-          font-size: 12px;
-          user-select: none;
         }
 
         .site-header-right {
@@ -499,10 +418,6 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
         @media (max-width: 520px) {
           :global(.site-brand) {
             font-size: 22px;
-          }
-
-          .mobile-lang-switch {
-            display: inline-flex;
           }
 
           .site-mobile-menu .account-copy {
