@@ -658,6 +658,10 @@ export default function DocsPage() {
             grid-template-columns: 1fr;
           }
 
+          .kilo-step {
+            grid-template-columns: 1fr;
+          }
+
           .model-copy {
             max-width: 100%;
           }
