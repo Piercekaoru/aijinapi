@@ -88,7 +88,7 @@ const models = [
     title: "Nemotron 3 Super Free",
     description: "免费试用型模型，适合非敏感内容验证和能力探索。",
     tag: "Free",
-    image: "/images/GrHDjXQXYAACVsc.jpg",
+    image: "/images/GtH_mkRawAA2bJU.jpg",
     tone: "light",
   },
   {
@@ -112,7 +112,7 @@ const models = [
     title: "Kimi K2.5",
     description: "面向长上下文、文档总结和多轮对话的模型能力。",
     tag: "Plus",
-    image: "/images/HG42ZYwa8AAGBEd.jpg",
+    image: "/images/GsIHaDsaUAYwOmB.jpg",
     tone: "dark",
   },
   {
@@ -136,7 +136,7 @@ const models = [
     title: "DeepSeek V4 Flash",
     description: "低延迟响应和成本敏感场景，用于高频产品调用。",
     tag: "Plus",
-    image: "/images/HHZ_hQzbIAEw83V.jpg",
+    image: "/images/GS8OLQObIAcG_0D.jpg",
     tone: "dark",
   },
   {
@@ -144,7 +144,7 @@ const models = [
     title: "MiMo V2.5",
     description: "创作、对话和轻量推理任务的平衡型模型入口。",
     tag: "Plus",
-    image: "/images/HAh3SWLacAAA6By.jpg",
+    image: "/images/GkYCpj6awAAZSl0.jpg",
     tone: "light",
   },
   {
@@ -168,7 +168,7 @@ const models = [
     title: "Qwen3.5 Plus",
     description: "稳定通用能力，适合作为应用默认模型和日常请求入口。",
     tag: "Plus",
-    image: "/images/Gth0fxcawAARQmB.jpg",
+    image: "/images/GZCDeteaYAA-phJ.jpg",
     tone: "light",
   },
 ];
