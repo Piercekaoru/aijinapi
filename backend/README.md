@@ -37,3 +37,10 @@ Customer API keys are only shown once by `create_key`. The database stores only 
 Use `OPENCODE_GO_API_KEY` and optional `OPENCODE_ZEN_API_KEY` for single-key deployments.
 For rotation and failover, use comma-separated `OPENCODE_GO_API_KEYS` and
 `OPENCODE_ZEN_API_KEYS`. If Zen keys are omitted, Zen falls back to the Go key list.
+
+## Model Routing
+
+Free users can call the OpenCode Zen free model pool: `big-pickle`,
+`deepseek-v4-flash-free`, `minimax-m2.5-free`, `ring-2.6-1t-free`, and
+`nemotron-3-super-free`. Plus users can call those same Zen free models plus the
+paid Plus model pool routed through OpenCode Go.

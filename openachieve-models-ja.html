@@ -611,14 +611,14 @@
           <div class="hero-copy">
             <p class="eyebrow">Model Plaza / Developer Docs</p>
             <h1 data-od-id="headline">在一个广场里挑模型，在一套 API 里调用。</h1>
-            <p class="lead">OpenAchieve 将 Big Pickle、Kimi、GLM、MiMo、Qwen 与 DeepSeek 收束到 OpenAI-compatible 接口。Free 仅 Big Pickle，Plus 模型统一自动分配通道。</p>
+            <p class="lead">OpenAchieve は 5 つの無料モデルと Kimi、GLM、MiMo、Qwen、DeepSeek などの Plus モデルを OpenAI 互換 API に統合します。Free は無料モデルプール、Plus は追加モデルプールを利用できます。</p>
             <div class="hero-actions">
               <a class="btn primary" href="#models">浏览模型</a>
               <a class="btn ghost" href="#docs">查看 base_url</a>
             </div>
             <div class="hero-meta" aria-label="模型广场摘要">
               <div class="meta-card"><strong>6</strong><span>模型家族覆盖</span></div>
-              <div class="meta-card"><strong>11</strong><span>当前可用模型</span></div>
+              <div class="meta-card"><strong>15</strong><span>現在利用可能なモデル</span></div>
               <div class="meta-card"><strong>/v1</strong><span>兼容 OpenAI 调用格式</span></div>
             </div>
           </div>
@@ -627,7 +627,7 @@
             <div class="hero-frame">
               <img src="moyfxjoe-GwvxlZqbIAAqlQB.jpg" alt="OpenAchieve 模型广场二次元背景图" />
             </div>
-            <div class="hero-label">AIJin Model Index</div>
+            <div class="hero-label">OpenAchieve Model Index</div>
             <div class="base-card">
               <span>统一入口</span>
               <code>base_url = https://openachieve.asia/v1</code>
@@ -643,7 +643,7 @@
               <p class="eyebrow">Recommended</p>
               <h2>先从这四个模型开始试。</h2>
             </div>
-            <p>推荐榜单按订阅权限和常见开发场景组织：Free 先试 Big Pickle，Plus 再打开完整模型池。</p>
+            <p>おすすめはプランと用途別に整理。Free は無料モデルから、Plus は追加モデルプールまで利用できます。</p>
           </div>
 
           <div class="recommend">
@@ -654,7 +654,7 @@
               <article class="rank-card"><div class="rank-no">01</div><div><h3>Qwen3.6 Plus</h3><p>通用开发默认推荐，适合中文业务问答、工具调用与代码辅助。</p></div><span class="tag">通用首选</span></article>
               <article class="rank-card"><div class="rank-no">02</div><div><h3>DeepSeek V4 Pro</h3><p>偏推理和复杂任务，适合规划、分析和需要更稳回答的业务流程。</p></div><span class="tag">推理增强</span></article>
               <article class="rank-card"><div class="rank-no">03</div><div><h3>Kimi K2.6</h3><p>适合长文本阅读、摘要、知识库问答和多轮上下文场景。</p></div><span class="tag">长文本</span></article>
-              <article class="rank-card"><div class="rank-no">04</div><div><h3>Big Pickle</h3><p>Free 用户可用的免费模型入口，适合先验证接入链路和轻量实验。</p></div><span class="tag">Free</span></article>
+              <article class="rank-card"><div class="rank-no">04</div><div><h3>DeepSeek V4 Flash Free</h3><p>Free で使える低遅延の無料モデル。接続確認や軽量な実験に向いています。</p></div><span class="tag">Free</span></article>
             </div>
           </div>
         </div>
@@ -667,7 +667,7 @@
               <p class="eyebrow">Catalog</p>
               <h2>模型卡片带上调用名、套餐权限和套餐范围。</h2>
             </div>
-            <p>Free 每月 500 次但只允许 big-pickle；Plus 每月 13 美元、1500 次，所有 Plus 模型统一自动分配通道。</p>
+            <p>Free は月 500 回、5 つの無料モデルを利用可能。Plus は $13/月・1500 回/月で、Plus モデルプールも追加で利用できます。無料モデルには改善・試用目的のデータ利用があり得るため、機密情報は送信しないでください。</p>
           </div>
 
           <div class="filters" aria-label="模型分类筛选">
@@ -685,6 +685,10 @@
             <article class="model-card" data-category="chat reasoning"><p class="model-tier">Plus</p><h3>GLM-5.1</h3><p class="model-desc">中文业务问答、知识检索、工具调用和企业级 Agent 流程。</p><code class="model-id">glm-5.1</code></article>
             <article class="model-card" data-category="chat"><p class="model-tier">Plus</p><h3>GLM-5</h3><p class="model-desc">通用中文对话模型，适合客服、内容整理和常规业务助手。</p><code class="model-id">glm-5</code></article>
             <article class="model-card" data-category="creative fast"><p class="model-tier">Free</p><h3>Big Pickle</h3><p class="model-desc">Free 用户可用模型，适合轻量实验、验证接入和探索型生成场景。</p><code class="model-id">big-pickle</code></article>
+            <article class="model-card featured" data-category="reasoning fast chat"><p class="model-tier">Free</p><h3>DeepSeek V4 Flash Free</h3><p class="model-desc">無料の低遅延推論モデル。高頻度のQA、コード補助、素早い実験に向いています。</p><code class="model-id">deepseek-v4-flash-free</code></article>
+            <article class="model-card" data-category="creative chat"><p class="model-tier">Free</p><h3>MiniMax M2.5 Free</h3><p class="model-desc">無料の汎用対話モデル。文章生成、リライト、軽量業務アシスタント向け。</p><code class="model-id">minimax-m2.5-free</code></article>
+            <article class="model-card" data-category="long chat"><p class="model-tier">Free</p><h3>Ring 2.6 1T Free</h3><p class="model-desc">無料の長文コンテキスト入口。文書理解、要約、ナレッジベース実験向け。</p><code class="model-id">ring-2.6-1t-free</code></article>
+            <article class="model-card" data-category="reasoning chat"><p class="model-tier">Free</p><h3>Nemotron 3 Super Free</h3><p class="model-desc">無料試用型モデル。非機密コンテンツの検証と能力探索に向いています。</p><code class="model-id">nemotron-3-super-free</code></article>
             <article class="model-card" data-category="reasoning creative"><p class="model-tier">Plus</p><h3>MiMo V2.5 Pro</h3><p class="model-desc">适合更复杂的创作、推理和多步骤任务，偏高质量输出。</p><code class="model-id">mimo-v2.5-pro</code></article>
             <article class="model-card" data-category="creative chat"><p class="model-tier">Plus</p><h3>MiMo V2.5</h3><p class="model-desc">轻量助手、文本润色和不需要最高推理强度的创作流程。</p><code class="model-id">mimo-v2.5</code></article>
             <article class="model-card" data-category="reasoning chat"><p class="model-tier">Plus</p><h3>Qwen3.6 Plus</h3><p class="model-desc">默认通用模型，覆盖问答、代码、工具调用和业务流程原型。</p><code class="model-id">qwen3.6-plus</code></article>
@@ -746,7 +750,7 @@
           <div class="faq-grid">
             <article class="faq"><h3>是否需要外卡或海外支付？</h3><p>不需要。OpenAchieve 面向国内开发者，支持支付宝/微信以人民币充值，到账后即可调用。</p></article>
             <article class="faq"><h3>是否兼容 OpenAI SDK？</h3><p>兼容 OpenAI 风格的请求格式。通常只需要替换 base_url、API Key 和模型名。</p></article>
-            <article class="faq"><h3>Plus 价格和额度是什么？</h3><p>Plus 为 13 美元/月，包含 1500 次/月请求额度；Free 是 500 次/月，但只能调用 Big Pickle。</p></article>
+            <article class="faq"><h3>Plus 価格と利用枠は？</h3><p>Plus は $13/月、月 1500 リクエスト。Free は月 500 リクエストで、5 つの無料モデルを利用できます。</p></article>
             <article class="faq"><h3>可以在同一个项目里切换模型吗？</h3><p>可以。把模型名作为请求参数传入，就能在同一套接口下切换 Kimi、GLM、Qwen、DeepSeek 等模型。</p></article>
           </div>
         </div>

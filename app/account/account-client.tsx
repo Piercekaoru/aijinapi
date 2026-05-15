@@ -10,6 +10,32 @@ import { useLocale } from "@/lib/i18n/context";
 const defaultBackendUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/+$/, "") ?? "/api/backend";
 
+const fallbackFreeModels = [
+  "big-pickle",
+  "deepseek-v4-flash-free",
+  "minimax-m2.5-free",
+  "ring-2.6-1t-free",
+  "nemotron-3-super-free",
+];
+
+const modelDisplayNames: Record<string, string> = {
+  "big-pickle": "Big Pickle",
+  "deepseek-v4-flash-free": "DeepSeek V4 Flash Free",
+  "minimax-m2.5-free": "MiniMax M2.5 Free",
+  "ring-2.6-1t-free": "Ring 2.6 1T Free",
+  "nemotron-3-super-free": "Nemotron 3 Super Free",
+  "glm-5.1": "GLM-5.1",
+  "glm-5": "GLM-5",
+  "kimi-k2.5": "Kimi K2.5",
+  "kimi-k2.6": "Kimi K2.6",
+  "deepseek-v4-pro": "DeepSeek V4 Pro",
+  "deepseek-v4-flash": "DeepSeek V4 Flash",
+  "mimo-v2.5": "MiMo V2.5",
+  "mimo-v2.5-pro": "MiMo V2.5 Pro",
+  "qwen3.6-plus": "Qwen3.6 Plus",
+  "qwen3.5-plus": "Qwen3.5 Plus",
+};
+
 type DashboardResponse = {
   user: {
     id: number;
@@ -59,6 +85,7 @@ export function AccountClient() {
   const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
   const [status, setStatus] = useState(t("account.loading"));
   const [loading, setLoading] = useState(true);
+  const [modelsOpen, setModelsOpen] = useState(false);
 
   const summary = useMemo(() => {
     const monthlyLimit = dashboard?.subscription.monthly_request_limit ?? 500;
@@ -74,10 +101,18 @@ export function AccountClient() {
       usagePercent,
       plan,
       planLabel: plan === "plus" ? "Plus" : "Free",
-      allowedModels: dashboard?.subscription.allowed_models ?? ["big-pickle"],
+      allowedModels: dashboard?.subscription.allowed_models ?? fallbackFreeModels,
       plusExpiresAt: dashboard?.subscription.plus_expires_at ?? null,
     };
   }, [dashboard]);
+
+  const allowedModelItems = useMemo(
+    () => summary.allowedModels.map((id) => ({
+      id,
+      name: modelDisplayNames[id] ?? id,
+    })),
+    [summary.allowedModels],
+  );
 
   const loadAccount = useCallback(async (token: string) => {
     setLoading(true);
@@ -114,6 +149,17 @@ export function AccountClient() {
 
     void loadAccount(token);
   }, [loadAccount, t]);
+
+  useEffect(() => {
+    if (!modelsOpen) return;
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setModelsOpen(false);
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [modelsOpen]);
 
   return (
     <main className="account-page">
@@ -157,12 +203,50 @@ export function AccountClient() {
                 <strong>{summary.monthlyLimit.toLocaleString()}</strong>
                 <span>{t("account.monthlyDesc")}</span>
               </article>
-              <article className="quota-card">
+              <button
+                className="quota-card model-range-card"
+                type="button"
+                aria-haspopup="dialog"
+                aria-expanded={modelsOpen}
+                onClick={() => setModelsOpen(true)}
+              >
                 <p>{t("account.modelRange")}</p>
                 <strong>{summary.allowedModels.length}</strong>
                 <span>{summary.plan === "plus" ? t("account.modelRangeDesc") : t("account.modelRangeFree")}</span>
-              </article>
+                <em>{t("account.viewModels")}</em>
+              </button>
             </section>
+
+            {modelsOpen && (
+              <div className="model-dialog-backdrop" role="presentation" onClick={() => setModelsOpen(false)}>
+                <section
+                  aria-labelledby="model-dialog-title"
+                  aria-modal="true"
+                  className="model-dialog"
+                  role="dialog"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="model-dialog-head">
+                    <div>
+                      <p>{summary.planLabel}</p>
+                      <h2 id="model-dialog-title">{t("account.availableModels")}</h2>
+                    </div>
+                    <button className="dialog-close" type="button" onClick={() => setModelsOpen(false)}>
+                      {t("account.close")}
+                    </button>
+                  </div>
+                  <div className="model-list">
+                    {allowedModelItems.map((model) => (
+                      <article className="model-row" key={model.id}>
+                        <strong>{model.name}</strong>
+                        <code>{model.id}</code>
+                      </article>
+                    ))}
+                  </div>
+                  <p className="model-dialog-note">{t("account.modelPrivacyNote")}</p>
+                </section>
+              </div>
+            )}
 
             <section className="usage-panel">
               <div className="panel-head">
@@ -348,6 +432,30 @@ export function AccountClient() {
           padding: 22px;
         }
 
+        .model-range-card {
+          width: 100%;
+          color: inherit;
+          font: inherit;
+          text-align: left;
+          cursor: pointer;
+          transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+        }
+
+        .model-range-card:hover,
+        .model-range-card:focus-visible {
+          border-color: #c96442;
+          box-shadow: 0 18px 54px rgba(201, 100, 66, 0.16);
+          transform: translateY(-2px);
+          outline: none;
+        }
+
+        .model-range-card em {
+          color: #be5331;
+          font-size: 12px;
+          font-style: normal;
+          font-weight: 850;
+        }
+
         .quota-card.primary {
           color: #faf9f5;
           background: #141413;
@@ -381,6 +489,97 @@ export function AccountClient() {
 
         .panel-head {
           margin-bottom: 18px;
+        }
+
+        .model-dialog-backdrop {
+          position: fixed;
+          inset: 0;
+          z-index: 50;
+          display: grid;
+          place-items: center;
+          padding: 24px;
+          background: rgba(20, 20, 19, 0.48);
+        }
+
+        .model-dialog {
+          width: min(620px, 100%);
+          max-height: min(720px, calc(100vh - 48px));
+          overflow: auto;
+          border: 1px solid #e0ded4;
+          border-radius: 18px;
+          background: #faf9f5;
+          box-shadow: 0 28px 90px rgba(20, 20, 19, 0.28);
+          padding: 24px;
+        }
+
+        .model-dialog-head {
+          display: flex;
+          align-items: start;
+          justify-content: space-between;
+          gap: 18px;
+          margin-bottom: 18px;
+        }
+
+        .model-dialog-head p {
+          margin: 0 0 8px;
+          color: #be5331;
+          font-size: 12px;
+          font-weight: 850;
+          text-transform: uppercase;
+        }
+
+        .dialog-close {
+          min-height: 44px;
+          border: 1px solid #d8d5c8;
+          border-radius: 999px;
+          padding: 0 18px;
+          color: #141413;
+          background: #ebe8dc;
+          font: inherit;
+          font-size: 13px;
+          font-weight: 850;
+          cursor: pointer;
+        }
+
+        .dialog-close:hover,
+        .dialog-close:focus-visible {
+          border-color: #c96442;
+          outline: none;
+        }
+
+        .model-list {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 10px;
+        }
+
+        .model-row {
+          min-width: 0;
+          display: grid;
+          gap: 6px;
+          border: 1px solid #e0ded4;
+          border-radius: 12px;
+          padding: 14px;
+          background: #fffdfa;
+        }
+
+        .model-row strong,
+        .model-row code {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .model-row code {
+          color: #6a6861;
+          font-size: 12px;
+        }
+
+        .model-dialog-note {
+          margin: 16px 0 0;
+          color: #6a6861;
+          font-size: 13px;
+          line-height: 1.7;
         }
 
         .panel-head code {
@@ -573,9 +772,29 @@ export function AccountClient() {
           }
 
           .key-row strong,
-          .usage-row strong {
+          .usage-row strong,
+          .model-row strong,
+          .model-row code {
             white-space: normal;
             overflow-wrap: anywhere;
+          }
+
+          .model-dialog-backdrop {
+            padding: 14px;
+          }
+
+          .model-dialog {
+            border-radius: 12px;
+            padding: 18px;
+          }
+
+          .model-dialog-head {
+            display: grid;
+            grid-template-columns: 1fr;
+          }
+
+          .model-list {
+            grid-template-columns: 1fr;
           }
         }
       `}</style>

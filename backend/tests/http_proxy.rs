@@ -19,7 +19,7 @@ use openachieve_backend::{
 };
 
 #[sqlx::test(migrations = "./migrations")]
-async fn free_big_pickle_chat_uses_zen_upstream_and_records_usage(pool: PgPool) {
+async fn free_zen_free_model_uses_zen_upstream_and_records_usage(pool: PgPool) {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/zen/chat/completions"))
@@ -35,7 +35,7 @@ async fn free_big_pickle_chat_uses_zen_upstream_and_records_usage(pool: PgPool) 
     let api_key =
         create_key_for_user(&pool, "free", "active", FREE_MONTHLY_REQUEST_LIMIT, None).await;
     let app = test_app(pool.clone(), &server).await;
-    let response = post_chat(&app, &api_key, "big-pickle", false).await;
+    let response = post_chat(&app, &api_key, "deepseek-v4-flash-free", false).await;
 
     assert_eq!(response.status(), 200);
     assert_usage_count(&pool, 1, Some(200), Some(false)).await;
@@ -74,6 +74,35 @@ async fn plus_models_use_go_upstream_and_go_key(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "./migrations")]
+async fn plus_free_models_use_zen_upstream_and_zen_key(pool: PgPool) {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/zen/chat/completions"))
+        .and(wire_header("authorization", "Bearer real-zen-key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "id": "plus_free_chat",
+            "object": "chat.completion"
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let api_key = create_key_for_user(
+        &pool,
+        "plus",
+        "active",
+        PLUS_MONTHLY_REQUEST_LIMIT,
+        Some(Utc::now() + Duration::days(30)),
+    )
+    .await;
+    let app = test_app(pool.clone(), &server).await;
+    let response = post_chat(&app, &api_key, "minimax-m2.5-free", false).await;
+
+    assert_eq!(response.status(), 200);
+    assert_usage_count(&pool, 1, Some(200), Some(false)).await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn models_endpoint_returns_models_for_effective_plan(pool: PgPool) {
     let server = MockServer::start().await;
     let free_key =
@@ -89,13 +118,23 @@ async fn models_endpoint_returns_models_for_effective_plan(pool: PgPool) {
     let app = test_app(pool.clone(), &server).await;
 
     let free_models = get_models(&app, &free_key).await;
-    assert_eq!(model_ids(&free_models), vec!["big-pickle"]);
+    assert_eq!(
+        model_ids(&free_models),
+        vec![
+            "big-pickle",
+            "deepseek-v4-flash-free",
+            "minimax-m2.5-free",
+            "ring-2.6-1t-free",
+            "nemotron-3-super-free"
+        ]
+    );
 
     let plus_models = get_models(&app, &plus_key).await;
     let plus_ids = model_ids(&plus_models);
     assert!(plus_ids.contains(&"qwen3.6-plus"));
     assert!(plus_ids.contains(&"deepseek-v4-pro"));
-    assert!(!plus_ids.contains(&"big-pickle"));
+    assert!(plus_ids.contains(&"big-pickle"));
+    assert!(plus_ids.contains(&"nemotron-3-super-free"));
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -116,7 +155,7 @@ async fn plan_model_errors_return_expected_status_codes(pool: PgPool) {
     let free_response = post_chat(&app, &free_key, "qwen3.6-plus", false).await;
     assert_eq!(free_response.status(), 403);
 
-    let plus_response = post_chat(&app, &plus_key, "big-pickle", false).await;
+    let plus_response = post_chat(&app, &plus_key, "qwen3.6-plus-free", false).await;
     assert_eq!(plus_response.status(), 400);
 }
 

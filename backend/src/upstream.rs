@@ -16,9 +16,33 @@ use tracing::warn;
 
 use crate::{config::Config, errors::ApiError};
 
-pub const FREE_MODELS: &[&str] = &["big-pickle"];
+pub const FREE_MODELS: &[&str] = &[
+    "big-pickle",
+    "deepseek-v4-flash-free",
+    "minimax-m2.5-free",
+    "ring-2.6-1t-free",
+    "nemotron-3-super-free",
+];
 
 pub const PLUS_MODELS: &[&str] = &[
+    "glm-5.1",
+    "glm-5",
+    "kimi-k2.5",
+    "kimi-k2.6",
+    "deepseek-v4-pro",
+    "deepseek-v4-flash",
+    "mimo-v2.5",
+    "mimo-v2.5-pro",
+    "qwen3.6-plus",
+    "qwen3.5-plus",
+];
+
+pub const PLUS_ALLOWED_MODELS: &[&str] = &[
+    "big-pickle",
+    "deepseek-v4-flash-free",
+    "minimax-m2.5-free",
+    "ring-2.6-1t-free",
+    "nemotron-3-super-free",
     "glm-5.1",
     "glm-5",
     "kimi-k2.5",
@@ -142,7 +166,7 @@ pub fn is_supported_chat_model(model: &str) -> bool {
 
 pub fn allowed_models_for_plan(plan: &str) -> &'static [&'static str] {
     if plan == "plus" {
-        PLUS_MODELS
+        PLUS_ALLOWED_MODELS
     } else {
         FREE_MODELS
     }
@@ -159,16 +183,19 @@ pub fn request_is_stream(body: &Value) -> bool {
 }
 
 pub fn route_for_model(plan: &str, model: &str) -> Result<UpstreamRoute, ApiError> {
-    if !is_supported_chat_model(model) {
-        return Err(ApiError::UnsupportedModel(model.to_string()));
+    if FREE_MODELS.contains(&model) {
+        return Ok(UpstreamRoute::Zen);
     }
 
-    match plan {
-        "plus" if PLUS_MODELS.contains(&model) => Ok(UpstreamRoute::Go),
-        "free" if FREE_MODELS.contains(&model) => Ok(UpstreamRoute::Zen),
-        "plus" => Err(ApiError::UnsupportedModel(model.to_string())),
-        _ => Err(ApiError::ModelNotAllowed(model.to_string())),
+    if PLUS_MODELS.contains(&model) {
+        return if plan == "plus" {
+            Ok(UpstreamRoute::Go)
+        } else {
+            Err(ApiError::ModelNotAllowed(model.to_string()))
+        };
     }
+
+    Err(ApiError::UnsupportedModel(model.to_string()))
 }
 
 pub async fn forward_models(
@@ -416,24 +443,44 @@ mod tests {
         assert!(is_supported_chat_model("qwen3.6-plus"));
         assert!(is_supported_chat_model("kimi-k2.6"));
         assert!(is_supported_chat_model("big-pickle"));
+        assert!(is_supported_chat_model("deepseek-v4-flash-free"));
+        assert!(is_supported_chat_model("nemotron-3-super-free"));
         assert!(!is_supported_chat_model("unknown-model"));
     }
 
     #[test]
     fn exposes_allowed_models_by_plan() {
         let free_models = allowed_models_for_plan("free");
-        assert_eq!(free_models, ["big-pickle"]);
+        assert_eq!(
+            free_models,
+            [
+                "big-pickle",
+                "deepseek-v4-flash-free",
+                "minimax-m2.5-free",
+                "ring-2.6-1t-free",
+                "nemotron-3-super-free"
+            ]
+        );
 
         let plus_models = allowed_models_for_plan("plus");
         assert!(plus_models.contains(&"qwen3.6-plus"));
         assert!(plus_models.contains(&"deepseek-v4-pro"));
-        assert!(!plus_models.contains(&"big-pickle"));
+        assert!(plus_models.contains(&"big-pickle"));
+        assert!(plus_models.contains(&"deepseek-v4-flash-free"));
     }
 
     #[test]
     fn routes_models_by_plan() {
         assert_eq!(
             route_for_model("free", "big-pickle").unwrap(),
+            UpstreamRoute::Zen
+        );
+        assert_eq!(
+            route_for_model("free", "deepseek-v4-flash-free").unwrap(),
+            UpstreamRoute::Zen
+        );
+        assert_eq!(
+            route_for_model("plus", "deepseek-v4-flash-free").unwrap(),
             UpstreamRoute::Zen
         );
         assert_eq!(
@@ -445,7 +492,7 @@ mod tests {
             Err(ApiError::ModelNotAllowed(_))
         ));
         assert!(matches!(
-            route_for_model("plus", "big-pickle"),
+            route_for_model("plus", "qwen3.6-plus-free"),
             Err(ApiError::UnsupportedModel(_))
         ));
         assert!(matches!(

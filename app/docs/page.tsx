@@ -9,7 +9,39 @@ const models = [
   {
     id: "big-pickle",
     title: "Big Pickle",
-    description: "Free 用户专属入口，适合验证接入链路和轻量探索。",
+    description: "免费模型入口，适合验证接入链路和轻量探索。",
+    tag: "Free",
+    image: "/images/GrHDjXQXYAACVsc.jpg",
+    tone: "light",
+  },
+  {
+    id: "deepseek-v4-flash-free",
+    title: "DeepSeek V4 Flash Free",
+    description: "免费低延迟推理模型，适合高频问答、代码辅助和快速实验。",
+    tag: "Free",
+    image: "/images/HHZ_hQzbIAEw83V.jpg",
+    tone: "dark",
+  },
+  {
+    id: "minimax-m2.5-free",
+    title: "MiniMax M2.5 Free",
+    description: "免费通用对话模型，适合内容生成、润色和轻量业务助手。",
+    tag: "Free",
+    image: "/images/HAh3SWLacAAA6By.jpg",
+    tone: "light",
+  },
+  {
+    id: "ring-2.6-1t-free",
+    title: "Ring 2.6 1T Free",
+    description: "免费长上下文入口，适合文档理解、摘要和知识库实验。",
+    tag: "Free",
+    image: "/images/HG42ZYwa8AAGBEd.jpg",
+    tone: "dark",
+  },
+  {
+    id: "nemotron-3-super-free",
+    title: "Nemotron 3 Super Free",
+    description: "免费试用型模型，适合非敏感内容验证和能力探索。",
     tag: "Free",
     image: "/images/GrHDjXQXYAACVsc.jpg",
     tone: "light",
@@ -145,6 +177,7 @@ export default function DocsPage() {
             <p>{t("docs.models")}</p>
             <h2>{t("docs.models")}</h2>
             <span>{t("docs.modelsDesc")}</span>
+            <span>{t("docs.freePrivacyNote")}</span>
             <div className="model-card-grid">
               {models.map((model) => (
                 <article className={`model-card ${model.tone === "dark" ? "dark" : ""}`} key={model.id}>

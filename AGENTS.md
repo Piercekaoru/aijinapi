@@ -85,8 +85,11 @@ docker compose --env-file .env.docker up --build
 - User passwords: argon2 hashed
 
 ### Model routing
-- **Free tier** (plan="free"): model `big-pickle` only, routed to **Zen** upstream
-- **Plus tier** (plan="plus", status="active", not expired): all 10 models, routed to **Go** upstream
+- **Free tier** (plan="free"): 5 OpenCode Zen free models, routed to **Zen** upstream
+  - big-pickle, deepseek-v4-flash-free, minimax-m2.5-free, ring-2.6-1t-free, nemotron-3-super-free
+- **Plus tier** (plan="plus", status="active", not expired): all Free models plus 10 paid Plus models
+  - Free models continue routing to **Zen**
+  - Paid Plus models route to **Go**
   - glm-5.1, glm-5, kimi-k2.5, kimi-k2.6, deepseek-v4-pro, deepseek-v4-flash,
   - mimo-v2.5, mimo-v2.5-pro, qwen3.6-plus, qwen3.5-plus
 - Monthly limits: free=500, plus=1500 (`DEFAULT_MONTHLY_REQUEST_LIMIT` is the legacy/default key-creation fallback)

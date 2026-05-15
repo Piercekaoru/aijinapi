@@ -140,7 +140,8 @@ async fn subscription_summary_reports_plus_1500_and_remaining_quota(pool: PgPool
     assert_eq!(summary.requests_this_month, 10);
     assert_eq!(summary.remaining_requests, 1490);
     assert!(summary.allowed_models.contains(&"qwen3.6-plus"));
-    assert!(!summary.allowed_models.contains(&"big-pickle"));
+    assert!(summary.allowed_models.contains(&"big-pickle"));
+    assert!(summary.allowed_models.contains(&"deepseek-v4-flash-free"));
 }
 
 #[sqlx::test(migrations = "./migrations")]
