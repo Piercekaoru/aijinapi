@@ -88,6 +88,19 @@ pub async fn authenticate_session(pool: &PgPool, bearer_token: &str) -> Result<U
     user.ok_or(ApiError::InvalidSession)
 }
 
+pub async fn authenticate_admin_session(
+    pool: &PgPool,
+    bearer_token: &str,
+    admin_emails: &[String],
+) -> Result<User, ApiError> {
+    let user = authenticate_session(pool, bearer_token).await?;
+    if admin_emails.contains(&user.email) {
+        Ok(user)
+    } else {
+        Err(ApiError::Forbidden)
+    }
+}
+
 pub async fn user_for_api_key(pool: &PgPool, api_key: &ApiKey) -> Result<User, ApiError> {
     let user_id = api_key.user_id.ok_or(ApiError::InvalidApiKey)?;
     let user = sqlx::query_as::<_, User>(

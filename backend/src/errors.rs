@@ -25,6 +25,10 @@ pub enum ApiError {
     InvalidCredentials,
     #[error("invalid or expired session")]
     InvalidSession,
+    #[error("forbidden")]
+    Forbidden,
+    #[error("resource not found")]
+    NotFound,
     #[error("upstream request failed")]
     UpstreamRequest(#[from] reqwest::Error),
     #[error("database error")]
@@ -44,6 +48,8 @@ impl ApiError {
             Self::EmailAlreadyRegistered => "email_already_registered",
             Self::InvalidCredentials => "invalid_credentials",
             Self::InvalidSession => "invalid_session",
+            Self::Forbidden => "forbidden",
+            Self::NotFound => "not_found",
             Self::UpstreamRequest(_) => "upstream_error",
             Self::Database(_) => "database_error",
         }
@@ -57,10 +63,13 @@ impl ResponseError for ApiError {
             | Self::InvalidApiKey
             | Self::InvalidCredentials
             | Self::InvalidSession => StatusCode::UNAUTHORIZED,
-            Self::DisabledApiKey | Self::ModelNotAllowed(_) => StatusCode::FORBIDDEN,
+            Self::DisabledApiKey | Self::Forbidden | Self::ModelNotAllowed(_) => {
+                StatusCode::FORBIDDEN
+            }
             Self::QuotaExceeded => StatusCode::TOO_MANY_REQUESTS,
             Self::UnsupportedModel(_) | Self::InvalidRequest(_) => StatusCode::BAD_REQUEST,
             Self::EmailAlreadyRegistered => StatusCode::CONFLICT,
+            Self::NotFound => StatusCode::NOT_FOUND,
             Self::UpstreamRequest(_) => StatusCode::BAD_GATEWAY,
             Self::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }

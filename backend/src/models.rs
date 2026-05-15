@@ -43,22 +43,30 @@ pub struct PublicUser {
     pub monthly_request_limit: i32,
     pub plus_started_at: Option<DateTime<Utc>>,
     pub plus_expires_at: Option<DateTime<Utc>>,
+    pub is_admin: bool,
 }
 
 impl From<User> for PublicUser {
     fn from(user: User) -> Self {
+        Self::from_user(&user, &[])
+    }
+}
+
+impl PublicUser {
+    pub fn from_user(user: &User, admin_emails: &[String]) -> Self {
         let effective_plan = user.effective_plan().to_string();
         let monthly_request_limit = user.effective_monthly_request_limit();
         Self {
             id: user.id,
-            email: user.email,
-            name: user.name,
+            email: user.email.clone(),
+            name: user.name.clone(),
             created_at: user.created_at,
             plan: effective_plan,
-            plan_status: user.plan_status,
+            plan_status: user.plan_status.clone(),
             monthly_request_limit,
             plus_started_at: user.plus_started_at,
             plus_expires_at: user.plus_expires_at,
+            is_admin: admin_emails.contains(&user.email),
         }
     }
 }
@@ -222,6 +230,20 @@ pub struct CreateUserKeyRequest {
     pub monthly_request_limit: Option<i32>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct AdminCreateUserRequest {
+    pub email: String,
+    pub name: String,
+    pub plan: Option<String>,
+    pub days: Option<i32>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AdminUpdatePlanRequest {
+    pub plan: String,
+    pub days: Option<i32>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct AuthResponse {
     pub session_token: String,
@@ -256,4 +278,60 @@ pub struct SubscriptionSummary {
     pub plus_started_at: Option<DateTime<Utc>>,
     pub plus_expires_at: Option<DateTime<Utc>>,
     pub allowed_models: Vec<&'static str>,
+}
+
+#[derive(Debug, FromRow)]
+pub struct AdminUserRow {
+    pub id: i64,
+    pub email: String,
+    pub name: String,
+    pub created_at: DateTime<Utc>,
+    pub plan: String,
+    pub plan_status: String,
+    pub monthly_request_limit: i32,
+    pub plus_started_at: Option<DateTime<Utc>>,
+    pub plus_expires_at: Option<DateTime<Utc>>,
+    pub api_key_count: i64,
+    pub requests_this_month: i64,
+    pub last_used_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AdminUserSummary {
+    pub id: i64,
+    pub email: String,
+    pub name: String,
+    pub created_at: DateTime<Utc>,
+    pub plan: String,
+    pub stored_plan: String,
+    pub plan_status: String,
+    pub monthly_request_limit: i32,
+    pub requests_this_month: i64,
+    pub remaining_requests: i64,
+    pub plus_started_at: Option<DateTime<Utc>>,
+    pub plus_expires_at: Option<DateTime<Utc>>,
+    pub api_key_count: i64,
+    pub last_used_at: Option<DateTime<Utc>>,
+    pub is_admin: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AdminUserStats {
+    pub total_users: usize,
+    pub free_users: usize,
+    pub plus_users: usize,
+    pub inactive_plus_users: usize,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AdminUsersResponse {
+    pub stats: AdminUserStats,
+    pub users: Vec<AdminUserSummary>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AdminCreateUserResponse {
+    pub user: AdminUserSummary,
+    pub temporary_password: String,
+    pub api_key: IssuedApiKey,
 }

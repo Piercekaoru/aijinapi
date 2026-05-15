@@ -31,7 +31,7 @@ async fn main() -> anyhow::Result<()> {
             .cors_allowed_origins
             .iter()
             .fold(Cors::default(), |cors, origin| cors.allowed_origin(origin))
-            .allowed_methods(["GET", "POST", "OPTIONS"])
+            .allowed_methods(["GET", "POST", "PATCH", "DELETE", "OPTIONS"])
             .allowed_headers([header::AUTHORIZATION, header::CONTENT_TYPE])
             .max_age(3600);
 

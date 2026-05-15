@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { plusMonthlyPriceLabel } from "@/lib/pricing";
 import { SiteFooter } from "../components/SiteFooter";
 import { SiteHeader } from "../components/SiteHeader";
 
@@ -308,7 +309,7 @@ export function AccountClient() {
                 <span>{t("account.remainingLabel")} {summary.remaining.toLocaleString()}</span>
               </div>
               <div className="plan-note">
-                <strong>{summary.plan === "plus" ? "$13 / 月" : "$0 / 月"}</strong>
+                <strong>{summary.plan === "plus" ? plusMonthlyPriceLabel : "$0 / 月"}</strong>
                 <span>
                   {summary.plan === "plus"
                     ? `${t("account.plusExpires")}：${summary.plusExpiresAt ? new Date(summary.plusExpiresAt).toLocaleString() : t("account.notSet")}`

@@ -354,6 +354,7 @@ fn app_state(
 ) -> AppState {
     let config = Config {
         database_url: "postgres://postgres:postgres@localhost/openachieve_test".to_string(),
+        admin_emails: vec!["admin@example.com".to_string()],
         opencode_zen_api_keys: zen_keys.into_iter().map(str::to_string).collect(),
         opencode_go_api_keys: go_keys.into_iter().map(str::to_string).collect(),
         server_host: "127.0.0.1".parse().unwrap(),

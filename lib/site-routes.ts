@@ -3,6 +3,7 @@ export type SiteRouteKey =
   | "models"
   | "docs"
   | "account"
+  | "admin"
   | "dashboard"
   | "playground"
   | "login"
@@ -22,6 +23,7 @@ export const siteRoutes: Record<SiteRouteKey, SiteNavItem> = {
   models: { key: "models", href: "/models", label: "支持模型" },
   docs: { key: "docs", href: "/docs", label: "开发文档" },
   account: { key: "account", href: "/account", label: "账号总览" },
+  admin: { key: "admin", href: "/admin", label: "管理后台" },
   dashboard: { key: "dashboard", href: "/dashboard", label: "Key 控制台" },
   playground: { key: "playground", href: "/playground", label: "API 调试台" },
   login: { key: "login", href: "/login", label: "登录" },

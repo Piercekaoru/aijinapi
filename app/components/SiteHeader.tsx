@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   publicNavItems,
   siteRoutes,
+  type SiteNavItem,
   type SiteRouteKey,
   workspaceNavItems,
 } from "@/lib/site-routes";
@@ -21,6 +22,7 @@ type PublicUser = {
   email: string;
   name: string;
   created_at: string;
+  is_admin: boolean;
 };
 
 type SiteHeaderProps = {
@@ -33,8 +35,15 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
   const [token, setToken] = useState("");
   const [user, setUser] = useState<PublicUser | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const navItems = variant === "workspace" ? workspaceNavItems : publicNavItems;
   const pathname = usePathname();
+  const navItems = useMemo(() => {
+    const items: SiteNavItem[] =
+      variant === "workspace" ? [...workspaceNavItems] : [...publicNavItems];
+    if (variant === "workspace" && user?.is_admin) {
+      items.push(siteRoutes.admin);
+    }
+    return items;
+  }, [user?.is_admin, variant]);
 
   const initial = useMemo(() => {
     const source = user?.name || user?.email || "A";

@@ -530,7 +530,7 @@
               <a class="btn primary" href="#">立即注册获取 Key</a>
               <a class="btn ghost" href="#start">查看接入方式</a>
             </div>
-            <p class="hero-note"><b>核心优势：</b>Plus 仅 $13/月，享约 $60 等值 API 调用额度 — 比官方直购节省近 80%。</p>
+            <p class="hero-note"><b>核心优势：</b>Plus 仅 {{PLUS_MONTHLY_PRICE}}，享约 {{PLUS_VALUE}} 等值 API 调用额度 — 比官方直购节省近 {{PLUS_SAVINGS_PERCENT}}。</p>
           </div>
 
           <div class="hero-visual" data-od-id="hero">
@@ -538,7 +538,7 @@
               <img src="moycqu29-IMG_4393.JPG" alt="OpenAchieve 二次元风格主视觉插画" />
             </div>
             <div class="hero-card" aria-label="服务状态摘要">
-              <div class="line"><span>Plus 超值</span><span>$13 ≈ $60 等值额度</span></div>
+              <div class="line"><span>Plus 超值</span><span>{{PLUS_PRICE}} ≈ {{PLUS_VALUE}} 等值额度</span></div>
               <div class="line"><span>接口格式</span><span>OpenAI-compatible</span></div>
               <div class="line"><span>到账状态</span><span>Real-time</span></div>
             </div>
@@ -551,7 +551,7 @@
           <div class="section-head">
             <div>
               <p class="eyebrow">Pricing</p>
-              <h2>Plus $13/月，享 $60+ 等值调用额 — 比直购省近 80%。</h2>
+              <h2>Plus {{PLUS_MONTHLY_PRICE}}，享 {{PLUS_VALUE_PLUS}} 等值调用额 — 比直购省近 {{PLUS_SAVINGS_PERCENT}}。</h2>
             </div>
             <p>单一接口接入全部模型。Free 每月 500 次试手，Plus 每月 1500 次 — 同等额度官方直购需 $60+。</p>
           </div>
@@ -574,7 +574,7 @@
             <article class="plan-card featured">
               <span class="plan-kicker">Plus</span>
               <h3>Plus 会员</h3>
-              <div class="price">$13</div>
+              <div class="price">{{PLUS_PRICE}}</div>
               <div class="quota">1500 次/月 · Plus 模型池</div>
               <div class="savings">≈ $60 等值额度 · 省 78%</div>
               <ul class="feature-list">
@@ -606,7 +606,7 @@
           <div class="section-head">
             <div>
               <p class="eyebrow">Compare</p>
-              <h2>Plus $13/月 vs 官方直购：同样额度能省多少？</h2>
+              <h2>Plus {{PLUS_MONTHLY_PRICE}} vs 官方直购：同样额度能省多少？</h2>
             </div>
             <p>以 DeepSeek V4 Pro 为例，1500 次/月调用在官方渠道约 $60/月 — 在 OpenAchieve 仅 $13。</p>
           </div>
@@ -625,7 +625,7 @@
 
             <article class="compare-card winner">
               <span class="compare-kicker">OpenAchieve Plus</span>
-              <div class="compare-price">$13<span>/月</span></div>
+              <div class="compare-price">{{PLUS_PRICE}}<span>/月</span></div>
               <ul class="compare-list">
                 <li>支付宝 / 微信支付</li>
                 <li>单一接口接入 10+ 模型</li>
@@ -689,7 +689,7 @@
                 <div class="step-num">2</div>
                 <div>
                   <h3>选择套餐</h3>
-                  <p>Free 可用 5 个免费模型；Plus 每月 13 美元开放主流模型池。</p>
+                  <p>Free 可用 5 个免费模型；Plus {{PLUS_MONTHLY_PRICE_TEXT}}，开放主流模型池。</p>
                 </div>
               </article>
               <article class="step">

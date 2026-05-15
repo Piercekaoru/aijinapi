@@ -3,6 +3,7 @@ use std::{env, net::IpAddr};
 #[derive(Clone, Debug)]
 pub struct Config {
     pub database_url: String,
+    pub admin_emails: Vec<String>,
     pub opencode_zen_api_keys: Vec<String>,
     pub opencode_go_api_keys: Vec<String>,
     pub server_host: IpAddr,
@@ -45,6 +46,7 @@ impl Config {
 
         Ok(Self {
             database_url: required("DATABASE_URL")?,
+            admin_emails: admin_emails_from_env(),
             opencode_zen_api_keys,
             opencode_go_api_keys,
             server_host,
@@ -100,6 +102,13 @@ fn api_keys_from_env(plural: &str, singular: &str) -> Vec<String> {
         .unwrap_or_default()
 }
 
+fn admin_emails_from_env() -> Vec<String> {
+    optional("ADMIN_EMAILS")
+        .map(|value| parse_email_list(&value))
+        .filter(|emails| !emails.is_empty())
+        .unwrap_or_else(|| vec!["xiaolinyihai@gmail.com".to_string()])
+}
+
 fn parse_key_list(value: &str) -> Vec<String> {
     value
         .split(',')
@@ -109,15 +118,44 @@ fn parse_key_list(value: &str) -> Vec<String> {
         .collect()
 }
 
+fn parse_email_list(value: &str) -> Vec<String> {
+    value
+        .split(',')
+        .map(str::trim)
+        .filter(|email| !email.is_empty())
+        .map(str::to_ascii_lowercase)
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
-    use super::parse_key_list;
+    use super::{admin_emails_from_env, parse_email_list, parse_key_list};
 
     #[test]
     fn parses_comma_separated_api_keys() {
         assert_eq!(
             parse_key_list(" key-a, key-b ,,key-c "),
             vec!["key-a", "key-b", "key-c"]
+        );
+    }
+
+    #[test]
+    fn parses_admin_emails_case_insensitively() {
+        assert_eq!(
+            parse_email_list(" Admin@Example.com, xiaolinyihai@gmail.com "),
+            vec!["admin@example.com", "xiaolinyihai@gmail.com"]
+        );
+    }
+
+    #[test]
+    fn defaults_admin_email_when_unset() {
+        unsafe {
+            std::env::remove_var("ADMIN_EMAILS");
+        }
+
+        assert_eq!(
+            admin_emails_from_env(),
+            vec!["xiaolinyihai@gmail.com".to_string()]
         );
     }
 }

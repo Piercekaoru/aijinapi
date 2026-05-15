@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { plusMonthlyPriceLabel } from "@/lib/pricing";
 import { SiteFooter } from "../components/SiteFooter";
 import { SiteHeader } from "../components/SiteHeader";
 
@@ -274,7 +275,7 @@ export default function DocsPage() {
           <div className="section-head">
             <p>支持模型</p>
             <h2>支持模型</h2>
-            <span>Free 可调用 5 个免费模型；Plus 为 $13/月、1500 次/月，并额外开放完整 Plus 模型池。</span>
+            <span>Free 可调用 5 个免费模型；Plus 为 {plusMonthlyPriceLabel}、1500 次/月，并额外开放完整 Plus 模型池。</span>
             <span>免费模型可能用于服务改进或试用目的，请避免提交个人、商业机密或其他敏感信息。</span>
           </div>
           <div className="model-card-grid">

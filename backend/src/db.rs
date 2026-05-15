@@ -9,6 +9,39 @@ use crate::{
     upstream::allowed_models_for_plan,
 };
 
+pub async fn record_admin_audit(
+    pool: &PgPool,
+    actor: &User,
+    target_user_id: Option<i64>,
+    target_email: &str,
+    action: &str,
+    details: serde_json::Value,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        INSERT INTO admin_audit_events (
+          actor_user_id,
+          actor_email,
+          target_user_id,
+          target_email,
+          action,
+          details
+        )
+        VALUES ($1, $2, $3, $4, $5, $6)
+        "#,
+    )
+    .bind(actor.id)
+    .bind(&actor.email)
+    .bind(target_user_id)
+    .bind(target_email)
+    .bind(action)
+    .bind(details)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
 pub async fn record_usage(pool: &PgPool, event: UsageEvent<'_>) -> Result<(), sqlx::Error> {
     sqlx::query(
         r#"

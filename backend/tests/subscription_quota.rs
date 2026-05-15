@@ -246,6 +246,7 @@ async fn expired_plus_user_falls_back_to_free_quota(pool: PgPool) {
 fn app_state(pool: PgPool) -> AppState {
     let config = Config {
         database_url: "postgres://postgres:postgres@localhost/openachieve_test".to_string(),
+        admin_emails: vec!["admin@example.com".to_string()],
         opencode_zen_api_keys: vec!["real-zen-key".to_string()],
         opencode_go_api_keys: vec!["real-go-key".to_string()],
         server_host: "127.0.0.1".parse().unwrap(),

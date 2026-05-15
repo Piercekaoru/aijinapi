@@ -670,7 +670,7 @@
               <p class="eyebrow">Catalog</p>
               <h2>模型卡片带上调用名、套餐权限和套餐范围。</h2>
             </div>
-            <p>Free 每月 500 次，可调用 5 个免费模型；Plus 每月 13 美元、1500 次，并额外开放完整 Plus 模型池。免费模型可能用于改进或试用目的，请避免提交敏感信息。</p>
+            <p>Free 每月 {{FREE_MONTHLY_REQUESTS}} 次，可调用 5 个免费模型；Plus {{PLUS_MONTHLY_PRICE_TEXT}}、{{PLUS_MONTHLY_REQUESTS}} 次，并额外开放完整 Plus 模型池。免费模型可能用于改进或试用目的，请避免提交敏感信息。</p>
           </div>
 
           <div class="filters" aria-label="模型分类筛选">
@@ -753,7 +753,7 @@
           <div class="faq-grid">
             <article class="faq"><h3>是否需要外卡或海外支付？</h3><p>不需要。OpenAchieve 面向国内开发者，支持支付宝/微信以人民币充值，到账后即可调用。</p></article>
             <article class="faq"><h3>是否兼容 OpenAI SDK？</h3><p>兼容 OpenAI 风格的请求格式。通常只需要替换 base_url、API Key 和模型名。</p></article>
-            <article class="faq"><h3>Plus 价格和额度是什么？</h3><p>Plus 为 13 美元/月，包含 1500 次/月请求额度；Free 是 500 次/月，可调用 5 个免费模型。</p></article>
+            <article class="faq"><h3>Plus 价格和额度是什么？</h3><p>Plus 为 {{PLUS_MONTHLY_PRICE_TEXT}}，包含 {{PLUS_MONTHLY_REQUESTS}} 次/月请求额度；Free 是 {{FREE_MONTHLY_REQUESTS}} 次/月，可调用 5 个免费模型。</p></article>
             <article class="faq"><h3>可以在同一个项目里切换模型吗？</h3><p>可以。把模型名作为请求参数传入，就能在同一套接口下切换 Kimi、GLM、Qwen、DeepSeek 等模型。</p></article>
           </div>
         </div>

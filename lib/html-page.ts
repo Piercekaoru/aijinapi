@@ -1,5 +1,6 @@
 import { readFileSync } from "fs";
 import { join } from "path";
+import { pricingTemplateValues } from "./pricing";
 import { siteRoutes } from "./site-routes";
 
 type RouteKind = "landing" | "login" | "models";
@@ -68,6 +69,13 @@ function rewriteLinks(html: string, kind: RouteKind) {
   return next;
 }
 
+function applyPricingTemplates(html: string) {
+  return Object.entries(pricingTemplateValues).reduce(
+    (next, [token, value]) => next.replaceAll(token, value),
+    html,
+  );
+}
+
 export function getStaticHtmlPage(kind: RouteKind): StaticHtmlPage {
   const raw = readFileSync(join(process.cwd(), htmlFiles[kind]), "utf8");
   const title = raw.match(/<title>(.*?)<\/title>/s)?.[1] ?? "OpenAchieve";
@@ -79,6 +87,6 @@ export function getStaticHtmlPage(kind: RouteKind): StaticHtmlPage {
   return {
     title,
     style,
-    body: rewriteLinks(rewriteAssets(bodyWithoutStaticChrome), kind),
+    body: applyPricingTemplates(rewriteLinks(rewriteAssets(bodyWithoutStaticChrome), kind)),
   };
 }
