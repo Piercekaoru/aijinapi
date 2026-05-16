@@ -198,6 +198,201 @@ async fn free_model_catalog_refresh_rejects_probe_failures() {
 }
 
 #[actix_rt::test]
+async fn free_model_catalog_keeps_existing_model_on_probe_rate_limit() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/zen/models"))
+        .and(header("authorization", "Bearer zen-key-a"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "object": "list",
+            "data": [{ "id": "big-pickle" }]
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/zen/chat/completions"))
+        .and(header("authorization", "Bearer zen-key-b"))
+        .respond_with(ResponseTemplate::new(429).set_body_json(json!({
+            "error": "rate limit exceeded"
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/zen/chat/completions"))
+        .and(header("authorization", "Bearer zen-key-a"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"id": "fallback"})))
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    let config = test_config_with_keys(
+        &server,
+        vec!["zen-key-a", "zen-key-b"],
+        vec!["go-key"],
+        60_000,
+    );
+    let key_ring = UpstreamKeyRing::from_config(&config);
+    let catalog = FreeModelCatalog::seeded(["big-pickle"]);
+
+    let models = catalog
+        .refresh(&Client::new(), &config, &key_ring)
+        .await
+        .unwrap();
+
+    assert_eq!(models, vec!["big-pickle"]);
+    assert_eq!(catalog.available_models().await, vec!["big-pickle"]);
+    assert!(catalog.public_snapshot().await.degraded);
+}
+
+#[actix_rt::test]
+async fn free_model_catalog_marks_existing_model_unavailable_on_denied_probe() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/zen/models"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "object": "list",
+            "data": [{ "id": "big-pickle" }]
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/zen/chat/completions"))
+        .respond_with(ResponseTemplate::new(403).set_body_json(json!({
+            "error": "model not supported"
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let config = test_config(&server);
+    let key_ring = UpstreamKeyRing::from_config(&config);
+    let catalog = FreeModelCatalog::seeded(["big-pickle"]);
+
+    let models = catalog
+        .refresh(&Client::new(), &config, &key_ring)
+        .await
+        .unwrap();
+
+    assert!(models.is_empty());
+    assert!(catalog.available_models().await.is_empty());
+    assert!(catalog.public_snapshot().await.degraded);
+}
+
+#[actix_rt::test]
+async fn free_model_catalog_removes_models_missing_from_upstream_list() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/zen/models"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "object": "list",
+            "data": []
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/zen/chat/completions"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    let config = test_config(&server);
+    let key_ring = UpstreamKeyRing::from_config(&config);
+    let catalog = FreeModelCatalog::seeded(["big-pickle"]);
+
+    let models = catalog
+        .refresh(&Client::new(), &config, &key_ring)
+        .await
+        .unwrap();
+
+    assert!(models.is_empty());
+    assert!(catalog.available_models().await.is_empty());
+}
+
+#[actix_rt::test]
+async fn free_model_catalog_probes_existing_models_round_robin() {
+    let server = MockServer::start().await;
+    let models = [
+        "big-pickle",
+        "deepseek-v4-flash-free",
+        "minimax-m2.5-free",
+        "nemotron-3-super-free",
+        "ring-2.6-1t-free",
+    ];
+    Mock::given(method("GET"))
+        .and(path("/zen/models"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "object": "list",
+            "data": models.iter().map(|id| json!({ "id": id })).collect::<Vec<_>>()
+        })))
+        .expect(5)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/zen/chat/completions"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "id": "probe",
+            "object": "chat.completion"
+        })))
+        .expect(5)
+        .mount(&server)
+        .await;
+
+    let config = test_config(&server);
+    let key_ring = UpstreamKeyRing::from_config(&config);
+    let catalog = FreeModelCatalog::seeded(models);
+
+    for _ in 0..5 {
+        let refreshed = catalog
+            .refresh(&Client::new(), &config, &key_ring)
+            .await
+            .unwrap();
+        assert_eq!(refreshed.len(), 5);
+    }
+}
+
+#[actix_rt::test]
+async fn free_model_catalog_restores_unavailable_model_after_successful_probe() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/zen/models"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "object": "list",
+            "data": [{ "id": "big-pickle" }]
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/zen/chat/completions"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "id": "probe",
+            "object": "chat.completion"
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let config = test_config(&server);
+    let key_ring = UpstreamKeyRing::from_config(&config);
+    let catalog = FreeModelCatalog::seeded(["big-pickle"]);
+    catalog.trip_model("big-pickle", "test trip").await;
+    assert!(catalog.available_models().await.is_empty());
+
+    let models = catalog
+        .refresh(&Client::new(), &config, &key_ring)
+        .await
+        .unwrap();
+
+    assert_eq!(models, vec!["big-pickle"]);
+    assert_eq!(catalog.available_models().await, vec!["big-pickle"]);
+}
+
+#[actix_rt::test]
 async fn round_robins_across_multiple_go_keys() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))

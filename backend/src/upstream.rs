@@ -261,6 +261,24 @@ pub async fn forward_chat(
     response_from_upstream(upstream, started, is_stream).await
 }
 
+pub async fn forward_chat_once(
+    client: &Client,
+    config: &Config,
+    key_ring: &UpstreamKeyRing,
+    body: Value,
+    route: UpstreamRoute,
+) -> Result<UpstreamResult, ApiError> {
+    let is_stream = request_is_stream(&body);
+    let started = Instant::now();
+    let url = chat_url(config, route);
+    let upstream = send_with_single_key(key_ring, "chat_probe", route, url, |api_key| {
+        client.post(url).bearer_auth(api_key).json(&body)
+    })
+    .await?;
+
+    response_from_upstream(upstream, started, is_stream).await
+}
+
 async fn send_with_key_failover(
     config: &Config,
     key_ring: &UpstreamKeyRing,
@@ -341,6 +359,46 @@ async fn send_with_key_failover(
     }
 
     unreachable!("key rings are never empty")
+}
+
+async fn send_with_single_key(
+    key_ring: &UpstreamKeyRing,
+    operation: &'static str,
+    route: UpstreamRoute,
+    url: &str,
+    mut build: impl FnMut(&str) -> RequestBuilder,
+) -> Result<reqwest::Response, ApiError> {
+    let route_keys = key_ring.route_keys(route);
+    let key_count = route_keys.key_count();
+    let key_index = route_keys
+        .request_order()
+        .into_iter()
+        .next()
+        .expect("key rings are never empty");
+
+    match build(route_keys.key(key_index)).send().await {
+        Ok(response) => {
+            let status = response.status();
+
+            if should_cool_down_key(status) {
+                key_ring.cool_down(route, key_index);
+            }
+
+            Ok(response)
+        }
+        Err(err) => {
+            warn!(
+                operation,
+                route = ?route,
+                url,
+                key_index,
+                key_count,
+                error = %err,
+                "upstream single-key request failed"
+            );
+            Err(ApiError::UpstreamRequest(err))
+        }
+    }
 }
 
 fn retry_delay_ms(base_ms: u64, attempt: usize) -> u64 {

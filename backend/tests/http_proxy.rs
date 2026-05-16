@@ -262,6 +262,32 @@ async fn risky_free_model_upstream_status_trips_catalog(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "./migrations")]
+async fn rate_limited_free_model_upstream_status_does_not_trip_catalog(pool: PgPool) {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/zen/chat/completions"))
+        .respond_with(ResponseTemplate::new(429).set_body_json(json!({
+            "error": {
+                "message": "rate limit exceeded"
+            }
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let free_key =
+        create_key_for_user(&pool, "free", "active", FREE_MONTHLY_REQUEST_LIMIT, None).await;
+    let catalog = FreeModelCatalog::seeded(["big-pickle"]);
+    let app = test_app_with_free_models(pool.clone(), &server, catalog).await;
+
+    let response = post_chat(&app, &free_key, "big-pickle", false).await;
+    assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+
+    let free_models = get_models(&app, &free_key).await;
+    assert!(model_ids(&free_models).contains(&"big-pickle"));
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn plan_model_errors_return_expected_status_codes(pool: PgPool) {
     let server = MockServer::start().await;
     let free_key =

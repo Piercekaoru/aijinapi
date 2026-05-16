@@ -13,12 +13,13 @@ use tracing::{info, warn};
 
 use crate::{
     config::Config,
-    upstream::{UpstreamKeyRing, UpstreamRoute, fetch_models_json, forward_chat},
+    upstream::{UpstreamKeyRing, UpstreamRoute, fetch_models_json, forward_chat_once},
 };
 
 const FREE_MODEL_EXCEPTIONS: &[&str] = &["big-pickle"];
 const REFRESH_INTERVAL: Duration = Duration::from_secs(300);
 const STALE_AFTER: Duration = Duration::from_secs(600);
+const FULL_PROBE_INTERVAL: Duration = Duration::from_secs(3600);
 const PROBE_MAX_TOKENS: u8 = 1;
 
 #[derive(Clone)]
@@ -36,6 +37,8 @@ struct CatalogState {
     last_refresh_at: Option<DateTime<Utc>>,
     last_success_monotonic: Option<Instant>,
     last_error: Option<String>,
+    next_probe_index: usize,
+    last_full_probe_monotonic: Option<Instant>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -80,6 +83,8 @@ impl FreeModelCatalog {
                 last_refresh_at: Some(Utc::now()),
                 last_success_monotonic: Some(Instant::now()),
                 last_error: None,
+                next_probe_index: 0,
+                last_full_probe_monotonic: Some(Instant::now()),
             })),
             refresh_interval: REFRESH_INTERVAL,
             stale_after,
@@ -108,36 +113,113 @@ impl FreeModelCatalog {
             }
         };
 
-        let mut verified = Vec::new();
-        let mut probe_errors = Vec::new();
-        for model in candidates {
-            match probe_free_model(client, config, key_ring, &model).await {
-                Ok(()) => verified.push(model),
-                Err(err) => probe_errors.push(format!("{model}: {err}")),
+        let candidate_set = candidates.iter().cloned().collect::<BTreeSet<_>>();
+        let (probe_targets, next_probe_index, full_probe_due) = {
+            let state = self.state.read().await;
+            let known_models = state
+                .models
+                .iter()
+                .chain(state.unavailable_models.iter())
+                .filter(|model| candidate_set.contains(*model))
+                .cloned()
+                .collect::<BTreeSet<_>>();
+            let existing_candidates = candidates
+                .iter()
+                .filter(|model| known_models.contains(*model))
+                .cloned()
+                .collect::<Vec<_>>();
+            let new_candidates = candidates
+                .iter()
+                .filter(|model| !known_models.contains(*model))
+                .cloned()
+                .collect::<Vec<_>>();
+            let full_probe_due = state
+                .last_full_probe_monotonic
+                .map(|instant| instant.elapsed() >= FULL_PROBE_INTERVAL)
+                .unwrap_or(false);
+
+            if full_probe_due {
+                (candidates.clone(), state.next_probe_index, full_probe_due)
+            } else {
+                let mut targets = new_candidates;
+                let mut next_probe_index = state.next_probe_index;
+
+                if !existing_candidates.is_empty() {
+                    let probe_index = state.next_probe_index % existing_candidates.len();
+                    let existing_target = existing_candidates[probe_index].clone();
+                    if !targets.contains(&existing_target) {
+                        targets.push(existing_target);
+                    }
+                    next_probe_index = (probe_index + 1) % existing_candidates.len();
+                }
+
+                (targets, next_probe_index, full_probe_due)
+            }
+        };
+
+        let targeted_all_candidates = !candidates.is_empty()
+            && probe_targets.iter().cloned().collect::<BTreeSet<_>>() == candidate_set;
+        let mut probe_reports = Vec::new();
+        let mut stopped_early = false;
+        for model in probe_targets {
+            let outcome = probe_free_model(client, config, key_ring, &model).await;
+            let stop_current_round = outcome.stop_current_round();
+            probe_reports.push(ProbeReport { model, outcome });
+
+            if stop_current_round {
+                stopped_early = true;
+                break;
             }
         }
 
-        let last_error = if verified.is_empty() && probe_errors.is_empty() {
-            Some("no free model candidates found".to_string())
-        } else if probe_errors.is_empty() {
-            None
-        } else {
-            Some(format!(
-                "free model probe failures: {}",
-                probe_errors.join("; ")
-            ))
-        };
-
         let now = Utc::now();
+        let now_instant = Instant::now();
         let mut state = self.state.write().await;
-        state.models = normalize_model_list(verified);
-        state.unavailable_models.clear();
+        let mut known_models = state
+            .models
+            .iter()
+            .filter(|model| candidate_set.contains(*model))
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        let mut unavailable_models = state
+            .unavailable_models
+            .iter()
+            .filter(|model| candidate_set.contains(*model))
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        let mut probe_errors = Vec::new();
+
+        for report in probe_reports {
+            match report.outcome {
+                ProbeOutcome::Healthy => {
+                    known_models.insert(report.model.clone());
+                    unavailable_models.remove(&report.model);
+                }
+                ProbeOutcome::ModelDenied(reason) => {
+                    unavailable_models.insert(report.model.clone());
+                    probe_errors.push(format!("{}: {reason}", report.model));
+                }
+                ProbeOutcome::Inconclusive { reason, .. } => {
+                    if !known_models.contains(&report.model) {
+                        unavailable_models.insert(report.model.clone());
+                    }
+                    probe_errors.push(format!("{}: {reason}", report.model));
+                }
+            }
+        }
+
+        state.models = known_models.into_iter().collect();
+        state.unavailable_models = unavailable_models;
+        state.next_probe_index = next_probe_index;
         state.last_success_at = Some(now);
         state.last_refresh_at = Some(now);
-        state.last_success_monotonic = Some(Instant::now());
-        state.last_error = last_error;
+        state.last_success_monotonic = Some(now_instant);
+        if full_probe_due || (targeted_all_candidates && !stopped_early) {
+            state.last_full_probe_monotonic = Some(now_instant);
+        }
+        state.last_error = refresh_error(&candidates, &probe_errors, &state.unavailable_models);
 
-        Ok(state.models.clone())
+        Ok(state.available_models())
     }
 
     pub async fn mark_refresh_failure(&self, error: String) {
@@ -152,12 +234,7 @@ impl FreeModelCatalog {
             return Vec::new();
         }
 
-        state
-            .models
-            .iter()
-            .filter(|model| !state.unavailable_models.contains(*model))
-            .cloned()
-            .collect()
+        state.available_models()
     }
 
     pub async fn is_available(&self, model: &str) -> bool {
@@ -239,6 +316,8 @@ impl CatalogState {
             last_refresh_at: None,
             last_success_monotonic: None,
             last_error: None,
+            next_probe_index: 0,
+            last_full_probe_monotonic: None,
         }
     }
 
@@ -246,6 +325,14 @@ impl CatalogState {
         self.last_success_monotonic
             .map(|instant| instant.elapsed() > stale_after)
             .unwrap_or(true)
+    }
+
+    fn available_models(&self) -> Vec<String> {
+        self.models
+            .iter()
+            .filter(|model| !self.unavailable_models.contains(*model))
+            .cloned()
+            .collect()
     }
 }
 
@@ -258,7 +345,7 @@ pub fn should_trip_free_model(status_code: u16, body_text: Option<&str>) -> bool
         return true;
     }
 
-    if status_code < 400 {
+    if status_code < 400 || status_code == 429 || status_code >= 500 {
         return false;
     }
 
@@ -282,6 +369,36 @@ pub fn should_trip_free_model(status_code: u16, body_text: Option<&str>) -> bool
             .any(|needle| body.contains(needle))
         })
         .unwrap_or(false)
+}
+
+fn refresh_error(
+    candidates: &[String],
+    probe_errors: &[String],
+    unavailable_models: &BTreeSet<String>,
+) -> Option<String> {
+    if candidates.is_empty() {
+        return Some("no free model candidates found".to_string());
+    }
+
+    if !probe_errors.is_empty() {
+        return Some(format!(
+            "free model probe issues: {}",
+            probe_errors.join("; ")
+        ));
+    }
+
+    if !unavailable_models.is_empty() {
+        return Some(format!(
+            "free models unavailable: {}",
+            unavailable_models
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+
+    None
 }
 
 pub fn candidate_free_models_from_payload(value: &Value) -> Result<Vec<String>, String> {
@@ -310,12 +427,40 @@ fn normalize_model_list(models: impl IntoIterator<Item = impl Into<String>>) -> 
         .collect()
 }
 
+#[derive(Debug)]
+struct ProbeReport {
+    model: String,
+    outcome: ProbeOutcome,
+}
+
+#[derive(Debug)]
+enum ProbeOutcome {
+    Healthy,
+    ModelDenied(String),
+    Inconclusive {
+        reason: String,
+        stop_current_round: bool,
+    },
+}
+
+impl ProbeOutcome {
+    fn stop_current_round(&self) -> bool {
+        matches!(
+            self,
+            Self::Inconclusive {
+                stop_current_round: true,
+                ..
+            }
+        )
+    }
+}
+
 async fn probe_free_model(
     client: &Client,
     config: &Config,
     key_ring: &UpstreamKeyRing,
     model: &str,
-) -> Result<(), String> {
+) -> ProbeOutcome {
     let body = json!({
         "model": model,
         "stream": false,
@@ -325,22 +470,32 @@ async fn probe_free_model(
         ]
     });
 
-    let result = forward_chat(client, config, key_ring, body, UpstreamRoute::Zen)
-        .await
-        .map_err(|err| err.to_string())?;
+    let result = match forward_chat_once(client, config, key_ring, body, UpstreamRoute::Zen).await {
+        Ok(result) => result,
+        Err(err) => {
+            return ProbeOutcome::Inconclusive {
+                reason: err.to_string(),
+                stop_current_round: true,
+            };
+        }
+    };
+
+    if (200..300).contains(&result.status_code) {
+        return ProbeOutcome::Healthy;
+    }
 
     if should_trip_free_model(result.status_code, result.body_text.as_deref()) {
-        return Err(format!(
+        return ProbeOutcome::ModelDenied(format!(
             "probe returned risky status {}",
             result.status_code
         ));
     }
 
-    if !(200..300).contains(&result.status_code) {
-        return Err(format!("probe returned status {}", result.status_code));
+    let stop_current_round = result.status_code == 429 || result.status_code >= 500;
+    ProbeOutcome::Inconclusive {
+        reason: format!("probe returned status {}", result.status_code),
+        stop_current_round,
     }
-
-    Ok(())
 }
 
 #[cfg(test)]
@@ -405,6 +560,14 @@ mod tests {
         assert!(should_trip_free_model(
             400,
             Some(r#"{"error":"model not supported"}"#)
+        ));
+        assert!(!should_trip_free_model(
+            429,
+            Some(r#"{"error":"rate limit exceeded"}"#)
+        ));
+        assert!(!should_trip_free_model(
+            500,
+            Some(r#"{"error":"upstream temporarily unavailable"}"#)
         ));
         assert!(!should_trip_free_model(
             200,
