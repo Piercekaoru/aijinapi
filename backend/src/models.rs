@@ -292,8 +292,17 @@ pub struct IssuedApiKey {
 pub struct DashboardResponse {
     pub user: PublicUser,
     pub subscription: SubscriptionSummary,
+    pub billing: BillingConfigSummary,
     pub api_keys: Vec<ApiKeySummary>,
     pub recent_usage: Vec<UsageEventSummary>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BillingConfigSummary {
+    pub fovpay_enabled: bool,
+    pub plus_amount_cny: Option<String>,
+    pub plus_days: i32,
+    pub allowed_paytypes: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -362,4 +371,55 @@ pub struct AdminCreateUserResponse {
     pub user: AdminUserSummary,
     pub temporary_password: String,
     pub api_key: IssuedApiKey,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateFovPayCheckoutRequest {
+    pub paytype_code: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CreateFovPayCheckoutResponse {
+    pub order_id: i64,
+    pub out_trade_no: String,
+    pub pay_url: String,
+    pub status: String,
+    pub paytype_code: String,
+    pub amount_cny: String,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct BillingOrder {
+    pub id: i64,
+    pub user_id: i64,
+    pub provider: String,
+    pub out_trade_no: String,
+    pub provider_trade_no: Option<String>,
+    pub amount_cents: i32,
+    pub currency: String,
+    pub paytype_code: String,
+    pub subject: String,
+    pub status: String,
+    pub pay_url: Option<String>,
+    pub notify_payload: Option<String>,
+    pub paid_at: Option<DateTime<Utc>>,
+    pub granted_until: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BillingOrderSummary {
+    pub id: i64,
+    pub out_trade_no: String,
+    pub provider_trade_no: Option<String>,
+    pub amount_cny: String,
+    pub currency: String,
+    pub paytype_code: String,
+    pub status: String,
+    pub pay_url: Option<String>,
+    pub paid_at: Option<DateTime<Utc>>,
+    pub granted_until: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }

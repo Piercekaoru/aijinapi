@@ -46,6 +46,7 @@ fn test_config_with_keys(
         upstream_key_cooldown_ms,
         cors_allowed_origins: vec!["http://localhost:3002".to_string()],
         smtp: None,
+        fovpay: None,
     }
 }
 

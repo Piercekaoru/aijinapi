@@ -1,4 +1,4 @@
-use std::{env, net::IpAddr};
+use std::{env, fmt, net::IpAddr};
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -19,6 +19,7 @@ pub struct Config {
     pub upstream_key_cooldown_ms: u64,
     pub cors_allowed_origins: Vec<String>,
     pub smtp: Option<SmtpConfig>,
+    pub fovpay: Option<FovPayConfig>,
 }
 
 #[derive(Clone, Debug)]
@@ -37,6 +38,31 @@ pub enum SmtpTlsMode {
     StartTls,
     Implicit,
     None,
+}
+
+#[derive(Clone)]
+pub struct FovPayConfig {
+    pub enabled: bool,
+    pub base_url: String,
+    pub pid: String,
+    pub secret_key: String,
+    pub plus_amount_cents: i32,
+    pub plus_days: i32,
+    pub allowed_paytypes: Vec<String>,
+}
+
+impl fmt::Debug for FovPayConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("FovPayConfig")
+            .field("enabled", &self.enabled)
+            .field("base_url", &self.base_url)
+            .field("pid", &self.pid)
+            .field("secret_key", &"<redacted>")
+            .field("plus_amount_cents", &self.plus_amount_cents)
+            .field("plus_days", &self.plus_days)
+            .field("allowed_paytypes", &self.allowed_paytypes)
+            .finish()
+    }
 }
 
 impl Config {
@@ -107,6 +133,7 @@ impl Config {
                 .map(ToOwned::to_owned)
                 .collect(),
             smtp: smtp_config_from_env()?,
+            fovpay: fovpay_config_from_env()?,
         })
     }
 }
@@ -188,6 +215,90 @@ fn smtp_tls_mode_from_env() -> anyhow::Result<SmtpTlsMode> {
     }
 }
 
+fn fovpay_config_from_env() -> anyhow::Result<Option<FovPayConfig>> {
+    let enabled = optional("FOVPAY_ENABLED")
+        .map(|value| parse_bool("FOVPAY_ENABLED", &value))
+        .transpose()?
+        .unwrap_or(false);
+
+    if !enabled {
+        return Ok(None);
+    }
+
+    let allowed_paytypes = optional("FOVPAY_ALLOWED_PAYTYPES")
+        .map(|value| parse_key_list(&value))
+        .filter(|paytypes| !paytypes.is_empty())
+        .unwrap_or_else(|| vec!["alipay".to_string(), "wxpay".to_string()]);
+
+    let plus_days = env::var("FOVPAY_PLUS_DAYS")
+        .unwrap_or_else(|_| "30".to_string())
+        .parse::<i32>()?;
+    if !(1..=365).contains(&plus_days) {
+        return Err(anyhow::anyhow!(
+            "FOVPAY_PLUS_DAYS must be between 1 and 365"
+        ));
+    }
+
+    Ok(Some(FovPayConfig {
+        enabled,
+        base_url: env::var("FOVPAY_BASE_URL")
+            .unwrap_or_else(|_| "https://pay.fovpay.com".to_string())
+            .trim_end_matches('/')
+            .to_string(),
+        pid: required("FOVPAY_PID")?,
+        secret_key: required("FOVPAY_SECRET_KEY")?,
+        plus_amount_cents: parse_cny_to_cents(
+            &env::var("FOVPAY_PLUS_AMOUNT_CNY").unwrap_or_else(|_| "58.00".to_string()),
+        )?,
+        plus_days,
+        allowed_paytypes,
+    }))
+}
+
+fn parse_bool(name: &str, value: &str) -> anyhow::Result<bool> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "1" | "true" | "yes" | "on" => Ok(true),
+        "0" | "false" | "no" | "off" => Ok(false),
+        other => Err(anyhow::anyhow!(
+            "{name} must be true/false, 1/0, yes/no, or on/off; got {other}"
+        )),
+    }
+}
+
+fn parse_cny_to_cents(value: &str) -> anyhow::Result<i32> {
+    let value = value.trim();
+    let (yuan, cents) = value
+        .split_once('.')
+        .map_or((value, ""), |(yuan, cents)| (yuan, cents));
+    if yuan.is_empty()
+        || !yuan.chars().all(|ch| ch.is_ascii_digit())
+        || !cents.chars().all(|ch| ch.is_ascii_digit())
+        || cents.len() > 2
+    {
+        return Err(anyhow::anyhow!(
+            "FOVPAY_PLUS_AMOUNT_CNY must be a positive amount with at most two decimals"
+        ));
+    }
+
+    let yuan = yuan.parse::<i32>()?;
+    let cents = match cents.len() {
+        0 => 0,
+        1 => cents.parse::<i32>()? * 10,
+        2 => cents.parse::<i32>()?,
+        _ => unreachable!("cents length checked above"),
+    };
+    let total = yuan
+        .checked_mul(100)
+        .and_then(|yuan_cents| yuan_cents.checked_add(cents))
+        .ok_or_else(|| anyhow::anyhow!("FOVPAY_PLUS_AMOUNT_CNY is too large"))?;
+    if total <= 0 {
+        return Err(anyhow::anyhow!(
+            "FOVPAY_PLUS_AMOUNT_CNY must be greater than zero"
+        ));
+    }
+    Ok(total)
+}
+
 fn parse_key_list(value: &str) -> Vec<String> {
     value
         .split(',')
@@ -208,7 +319,7 @@ fn parse_email_list(value: &str) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{admin_emails_from_env, parse_email_list, parse_key_list};
+    use super::{admin_emails_from_env, parse_cny_to_cents, parse_email_list, parse_key_list};
 
     #[test]
     fn parses_comma_separated_api_keys() {
@@ -236,5 +347,14 @@ mod tests {
             admin_emails_from_env(),
             vec!["xiaolinyihai@gmail.com".to_string()]
         );
+    }
+
+    #[test]
+    fn parses_cny_amount_to_cents() {
+        assert_eq!(parse_cny_to_cents("58").unwrap(), 5800);
+        assert_eq!(parse_cny_to_cents("58.5").unwrap(), 5850);
+        assert_eq!(parse_cny_to_cents("58.05").unwrap(), 5805);
+        assert!(parse_cny_to_cents("58.005").is_err());
+        assert!(parse_cny_to_cents("0").is_err());
     }
 }

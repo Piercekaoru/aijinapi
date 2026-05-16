@@ -4,7 +4,8 @@ use crate::{
     auth::{generate_email_verification_token, generate_session_token, key_prefix},
     keys::{generate_customer_key, hash_key},
     models::{
-        ApiKeySummary, IssuedApiKey, SubscriptionSummary, UsageEvent, UsageEventSummary, User,
+        ApiKeySummary, BillingOrder, IssuedApiKey, SubscriptionSummary, UsageEvent,
+        UsageEventSummary, User,
     },
     upstream::allowed_models_for_plan,
 };
@@ -389,5 +390,152 @@ pub async fn recent_usage_for_user(
     )
     .bind(user_id)
     .fetch_all(pool)
+    .await
+}
+
+pub async fn insert_billing_order(
+    pool: &PgPool,
+    user_id: i64,
+    out_trade_no: &str,
+    amount_cents: i32,
+    paytype_code: &str,
+    subject: &str,
+) -> Result<BillingOrder, sqlx::Error> {
+    sqlx::query_as::<_, BillingOrder>(
+        r#"
+        INSERT INTO billing_orders (
+          user_id,
+          out_trade_no,
+          amount_cents,
+          paytype_code,
+          subject
+        )
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING
+          id,
+          user_id,
+          provider,
+          out_trade_no,
+          provider_trade_no,
+          amount_cents,
+          currency,
+          paytype_code,
+          subject,
+          status,
+          pay_url,
+          notify_payload,
+          paid_at,
+          granted_until,
+          created_at,
+          updated_at
+        "#,
+    )
+    .bind(user_id)
+    .bind(out_trade_no)
+    .bind(amount_cents)
+    .bind(paytype_code)
+    .bind(subject)
+    .fetch_one(pool)
+    .await
+}
+
+pub async fn update_billing_order_payment(
+    pool: &PgPool,
+    order_id: i64,
+    provider_trade_no: &str,
+    pay_url: &str,
+) -> Result<BillingOrder, sqlx::Error> {
+    sqlx::query_as::<_, BillingOrder>(
+        r#"
+        UPDATE billing_orders
+        SET provider_trade_no = $2,
+            pay_url = $3,
+            status = 'pending',
+            updated_at = now()
+        WHERE id = $1
+        RETURNING
+          id,
+          user_id,
+          provider,
+          out_trade_no,
+          provider_trade_no,
+          amount_cents,
+          currency,
+          paytype_code,
+          subject,
+          status,
+          pay_url,
+          notify_payload,
+          paid_at,
+          granted_until,
+          created_at,
+          updated_at
+        "#,
+    )
+    .bind(order_id)
+    .bind(provider_trade_no)
+    .bind(pay_url)
+    .fetch_one(pool)
+    .await
+}
+
+pub async fn mark_billing_order_failed(
+    pool: &PgPool,
+    order_id: i64,
+    failure: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        UPDATE billing_orders
+        SET status = 'failed',
+            notify_payload = $2,
+            updated_at = now()
+        WHERE id = $1
+        "#,
+    )
+    .bind(order_id)
+    .bind(failure)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+pub async fn billing_order_for_user_by_ref(
+    pool: &PgPool,
+    user_id: i64,
+    order_ref: &str,
+) -> Result<Option<BillingOrder>, sqlx::Error> {
+    let order_id = order_ref.parse::<i64>().ok();
+    sqlx::query_as::<_, BillingOrder>(
+        r#"
+        SELECT
+          id,
+          user_id,
+          provider,
+          out_trade_no,
+          provider_trade_no,
+          amount_cents,
+          currency,
+          paytype_code,
+          subject,
+          status,
+          pay_url,
+          notify_payload,
+          paid_at,
+          granted_until,
+          created_at,
+          updated_at
+        FROM billing_orders
+        WHERE user_id = $1
+          AND (
+            ($2::bigint IS NOT NULL AND id = $2)
+            OR out_trade_no = $3
+          )
+        "#,
+    )
+    .bind(user_id)
+    .bind(order_id)
+    .bind(order_ref)
+    .fetch_optional(pool)
     .await
 }

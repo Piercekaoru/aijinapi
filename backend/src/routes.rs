@@ -1,8 +1,11 @@
+use std::collections::HashMap;
+
 use actix_web::{HttpRequest, HttpResponse, Responder, http::header, web};
-use chrono::Utc;
+use chrono::{Duration, TimeZone, Utc};
 use rand::{Rng, distr::Alphanumeric};
 use serde_json::{Value, json};
 use tracing::info;
+use uuid::Uuid;
 
 use crate::{
     auth::{
@@ -11,22 +14,28 @@ use crate::{
         verify_password,
     },
     db::{
-        api_key_summaries, consume_email_verification_token,
+        api_key_summaries, billing_order_for_user_by_ref, consume_email_verification_token,
         consume_email_verification_token_by_value, consume_unspent_email_verification_tokens,
         create_customer_key_for_user, create_default_customer_key_if_missing,
-        create_email_verification_token, create_session, recent_usage_for_user, record_admin_audit,
-        record_usage, revoke_api_key_for_user, subscription_summary_with_models, touch_key,
-        verification_email_sent_recently,
+        create_email_verification_token, create_session, insert_billing_order,
+        mark_billing_order_failed, recent_usage_for_user, record_admin_audit, record_usage,
+        revoke_api_key_for_user, subscription_summary_with_models, touch_key,
+        update_billing_order_payment, verification_email_sent_recently,
     },
     email::VerificationEmail,
     errors::ApiError,
+    fovpay::{
+        CreateOrderResponse, SIGN_TYPE_MD5, STATUS_PAID, cents_to_amount, sign_md5,
+        trade_status_to_order_status, verify_md5,
+    },
     free_models::{is_free_model_candidate, should_trip_free_model},
     models::{
         AdminCreateUserRequest, AdminCreateUserResponse, AdminUpdatePlanRequest, AdminUserRow,
-        AdminUserStats, AdminUserSummary, AdminUsersResponse, AuthResponse, CreateUserKeyRequest,
-        DashboardResponse, HealthResponse, LoginRequest, PublicUser, RegisterRequest,
-        ResendVerificationRequest, UsageEvent, User, VerificationMessageResponse,
-        VerificationRequiredResponse,
+        AdminUserStats, AdminUserSummary, AdminUsersResponse, AuthResponse, BillingConfigSummary,
+        BillingOrder, BillingOrderSummary, CreateFovPayCheckoutRequest,
+        CreateFovPayCheckoutResponse, CreateUserKeyRequest, DashboardResponse, HealthResponse,
+        LoginRequest, PublicUser, RegisterRequest, ResendVerificationRequest, UsageEvent, User,
+        VerificationMessageResponse, VerificationRequiredResponse,
     },
     plans::{FREE_MONTHLY_REQUEST_LIMIT, FREE_PLAN, PLUS_MONTHLY_REQUEST_LIMIT, PLUS_PLAN},
     state::AppState,
@@ -52,6 +61,15 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             "/dashboard/api-keys/{key_id}",
             web::delete().to(delete_dashboard_key),
         )
+        .route(
+            "/dashboard/billing/fovpay/checkout",
+            web::post().to(create_fovpay_checkout),
+        )
+        .route(
+            "/dashboard/billing/orders/{order_ref}",
+            web::get().to(get_billing_order),
+        )
+        .route("/billing/fovpay/notify", web::post().to(fovpay_notify))
         .route("/admin/users", web::get().to(admin_users))
         .route("/admin/users", web::post().to(admin_create_user))
         .route(
@@ -268,6 +286,7 @@ async fn dashboard(
     Ok(web::Json(DashboardResponse {
         user: PublicUser::from_user(&user, &state.config.admin_emails),
         subscription,
+        billing: billing_config_summary(&state),
         api_keys,
         recent_usage,
     }))
@@ -302,6 +321,162 @@ async fn delete_dashboard_key(
     }
 
     Ok(HttpResponse::NoContent().finish())
+}
+
+async fn create_fovpay_checkout(
+    state: web::Data<AppState>,
+    req: HttpRequest,
+    body: web::Json<CreateFovPayCheckoutRequest>,
+) -> Result<web::Json<CreateFovPayCheckoutResponse>, ApiError> {
+    let user = authenticate_session(&state.db, extract_bearer(&req)?).await?;
+    let config = enabled_fovpay_config(&state)?;
+    let paytype_code = body.paytype_code.trim().to_ascii_lowercase();
+    if !config
+        .allowed_paytypes
+        .iter()
+        .any(|allowed| allowed == &paytype_code)
+    {
+        return Err(ApiError::InvalidRequest("unsupported pay type".into()));
+    }
+
+    let subject = format!("OpenAchieve Plus {} days", config.plus_days);
+    let out_trade_no = format!("OA{}", Uuid::new_v4().simple());
+    let amount_cny = cents_to_amount(config.plus_amount_cents);
+    let order = insert_billing_order(
+        &state.db,
+        user.id,
+        &out_trade_no,
+        config.plus_amount_cents,
+        &paytype_code,
+        &subject,
+    )
+    .await?;
+
+    let notify_url = format!(
+        "{}/api/backend/billing/fovpay/notify",
+        state.config.app_base_url
+    );
+    let return_url = format!(
+        "{}/account?checkout={out_trade_no}",
+        state.config.app_base_url
+    );
+    let timestamp = Utc::now().timestamp().to_string();
+    let mut params = vec![
+        ("pid".to_string(), config.pid.clone()),
+        ("out_trade_no".to_string(), out_trade_no.clone()),
+        ("total_amount".to_string(), amount_cny.clone()),
+        ("subject".to_string(), subject),
+        ("paytype_code".to_string(), paytype_code.clone()),
+        ("notify_url".to_string(), notify_url),
+        ("return_url".to_string(), return_url),
+        ("attach".to_string(), user.id.to_string()),
+        ("client_ip".to_string(), client_ip(&req)),
+        ("timestamp".to_string(), timestamp),
+    ];
+    let sign = sign_md5(&params, &config.secret_key);
+    params.push(("sign_type".to_string(), SIGN_TYPE_MD5.to_string()));
+    params.push(("sign".to_string(), sign));
+
+    let response = state
+        .http
+        .post(format!("{}/openapi/pay/create", config.base_url))
+        .form(&params)
+        .send()
+        .await;
+    let response = match response {
+        Ok(response) => response,
+        Err(error) => {
+            mark_billing_order_failed(&state.db, order.id, &error.to_string()).await?;
+            return Err(ApiError::UpstreamRequest(error));
+        }
+    };
+    let status = response.status();
+    let response_body = response.text().await.unwrap_or_default();
+    if !status.is_success() {
+        mark_billing_order_failed(&state.db, order.id, &response_body).await?;
+        return Err(ApiError::UpstreamStatus {
+            status_code: status.as_u16(),
+            body: response_body,
+        });
+    }
+
+    let payload = match serde_json::from_str::<CreateOrderResponse>(&response_body) {
+        Ok(payload) => payload,
+        Err(_) => {
+            mark_billing_order_failed(&state.db, order.id, &response_body).await?;
+            return Err(ApiError::UpstreamStatus {
+                status_code: 502,
+                body: "invalid fovpay response".to_string(),
+            });
+        }
+    };
+    let Some(data) = payload.data else {
+        mark_billing_order_failed(&state.db, order.id, &payload.msg).await?;
+        return Err(ApiError::UpstreamStatus {
+            status_code: 502,
+            body: payload.msg,
+        });
+    };
+    if payload.code != 1 {
+        let failure = format!("unexpected fovpay response: {}", response_body);
+        mark_billing_order_failed(&state.db, order.id, &failure).await?;
+        return Err(ApiError::UpstreamStatus {
+            status_code: 502,
+            body: failure,
+        });
+    }
+
+    let order =
+        update_billing_order_payment(&state.db, order.id, &data.trade_no, &data.pay_url).await?;
+
+    Ok(web::Json(CreateFovPayCheckoutResponse {
+        order_id: order.id,
+        out_trade_no: order.out_trade_no,
+        pay_url: data.pay_url,
+        status: order.status,
+        paytype_code,
+        amount_cny,
+    }))
+}
+
+async fn get_billing_order(
+    state: web::Data<AppState>,
+    req: HttpRequest,
+    path: web::Path<String>,
+) -> Result<web::Json<BillingOrderSummary>, ApiError> {
+    let user = authenticate_session(&state.db, extract_bearer(&req)?).await?;
+    let order_ref = path.into_inner();
+    let order = billing_order_for_user_by_ref(&state.db, user.id, &order_ref)
+        .await?
+        .ok_or(ApiError::NotFound)?;
+
+    Ok(web::Json(billing_order_summary(order)))
+}
+
+async fn fovpay_notify(
+    state: web::Data<AppState>,
+    form: web::Form<HashMap<String, String>>,
+) -> Result<HttpResponse, ApiError> {
+    let config = enabled_fovpay_config(&state)?;
+    let params = form.into_inner();
+    let pairs = fovpay_pairs(&params);
+    let sign_type = params
+        .get("sign_type")
+        .map(String::as_str)
+        .unwrap_or_default();
+    if !sign_type.eq_ignore_ascii_case(SIGN_TYPE_MD5) {
+        return Err(ApiError::InvalidRequest(
+            "unsupported fovpay sign_type".into(),
+        ));
+    }
+    if !verify_md5(&pairs, &config.secret_key) {
+        return Err(ApiError::InvalidRequest("invalid fovpay signature".into()));
+    }
+
+    process_fovpay_notify(&state, &params).await?;
+    Ok(HttpResponse::Ok()
+        .content_type("text/plain; charset=utf-8")
+        .body("success"))
 }
 
 async fn admin_users(
@@ -732,6 +907,245 @@ async fn user_by_email(pool: &sqlx::PgPool, email: &str) -> Result<User, ApiErro
     .fetch_optional(pool)
     .await?
     .ok_or(ApiError::InvalidCredentials)
+}
+
+fn billing_config_summary(state: &web::Data<AppState>) -> BillingConfigSummary {
+    if let Some(config) = &state.config.fovpay {
+        return BillingConfigSummary {
+            fovpay_enabled: config.enabled,
+            plus_amount_cny: Some(cents_to_amount(config.plus_amount_cents)),
+            plus_days: config.plus_days,
+            allowed_paytypes: config.allowed_paytypes.clone(),
+        };
+    }
+
+    BillingConfigSummary {
+        fovpay_enabled: false,
+        plus_amount_cny: None,
+        plus_days: 30,
+        allowed_paytypes: Vec::new(),
+    }
+}
+
+fn enabled_fovpay_config(
+    state: &web::Data<AppState>,
+) -> Result<crate::config::FovPayConfig, ApiError> {
+    state
+        .config
+        .fovpay
+        .clone()
+        .filter(|config| config.enabled)
+        .ok_or_else(|| ApiError::InvalidRequest("fovpay is not enabled".into()))
+}
+
+fn billing_order_summary(order: BillingOrder) -> BillingOrderSummary {
+    BillingOrderSummary {
+        id: order.id,
+        out_trade_no: order.out_trade_no,
+        provider_trade_no: order.provider_trade_no,
+        amount_cny: cents_to_amount(order.amount_cents),
+        currency: order.currency,
+        paytype_code: order.paytype_code,
+        status: order.status,
+        pay_url: order.pay_url,
+        paid_at: order.paid_at,
+        granted_until: order.granted_until,
+        created_at: order.created_at,
+        updated_at: order.updated_at,
+    }
+}
+
+fn fovpay_pairs(params: &HashMap<String, String>) -> Vec<(String, String)> {
+    params
+        .iter()
+        .map(|(key, value)| (key.clone(), value.clone()))
+        .collect()
+}
+
+fn client_ip(req: &HttpRequest) -> String {
+    for header_name in ["cf-connecting-ip", "x-real-ip", "x-forwarded-for"] {
+        if let Some(value) = req
+            .headers()
+            .get(header_name)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.split(',').next())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            return value.to_string();
+        }
+    }
+
+    req.peer_addr()
+        .map(|addr| addr.ip().to_string())
+        .unwrap_or_else(|| "127.0.0.1".to_string())
+}
+
+fn required_fovpay_param<'a>(
+    params: &'a HashMap<String, String>,
+    name: &str,
+) -> Result<&'a str, ApiError> {
+    params
+        .get(name)
+        .map(String::as_str)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| ApiError::InvalidRequest(format!("missing fovpay parameter: {name}")))
+}
+
+fn fovpay_timestamp(params: &HashMap<String, String>, name: &str) -> Option<chrono::DateTime<Utc>> {
+    params
+        .get(name)
+        .and_then(|value| value.parse::<i64>().ok())
+        .and_then(|timestamp| Utc.timestamp_opt(timestamp, 0).single())
+}
+
+async fn process_fovpay_notify(
+    state: &web::Data<AppState>,
+    params: &HashMap<String, String>,
+) -> Result<(), ApiError> {
+    let config = enabled_fovpay_config(state)?;
+    let out_trade_no = required_fovpay_param(params, "out_trade_no")?;
+    let pid = required_fovpay_param(params, "pid")?;
+    let total_amount = required_fovpay_param(params, "total_amount")?;
+    let trade_status = required_fovpay_param(params, "trade_status")?;
+    if pid != config.pid {
+        return Err(ApiError::InvalidRequest("fovpay pid mismatch".into()));
+    }
+
+    let notify_payload = serde_json::to_string(params)
+        .map_err(|_| ApiError::InvalidRequest("invalid fovpay payload".into()))?;
+    let provider_trade_no = params.get("trade_no").filter(|value| !value.is_empty());
+    let mut tx = state.db.begin().await?;
+    let order = sqlx::query_as::<_, BillingOrder>(
+        r#"
+        SELECT
+          id,
+          user_id,
+          provider,
+          out_trade_no,
+          provider_trade_no,
+          amount_cents,
+          currency,
+          paytype_code,
+          subject,
+          status,
+          pay_url,
+          notify_payload,
+          paid_at,
+          granted_until,
+          created_at,
+          updated_at
+        FROM billing_orders
+        WHERE out_trade_no = $1
+        FOR UPDATE
+        "#,
+    )
+    .bind(out_trade_no)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or(ApiError::NotFound)?;
+
+    if total_amount != cents_to_amount(order.amount_cents) {
+        return Err(ApiError::InvalidRequest("fovpay amount mismatch".into()));
+    }
+
+    let order_status = trade_status_to_order_status(trade_status);
+    if order_status == STATUS_PAID && order.granted_until.is_none() {
+        let user = sqlx::query_as::<_, User>(
+            r#"
+            SELECT
+              id,
+              email,
+              name,
+              password_hash,
+              created_at,
+              email_verified_at,
+              plan,
+              plan_status,
+              monthly_request_limit,
+              plus_started_at,
+              plus_expires_at
+            FROM users
+            WHERE id = $1
+            FOR UPDATE
+            "#,
+        )
+        .bind(order.user_id)
+        .fetch_one(&mut *tx)
+        .await?;
+        let now = Utc::now();
+        let paid_at = fovpay_timestamp(params, "success_time").unwrap_or(now);
+        let grant_start = if user.effective_plan() == PLUS_PLAN {
+            user.plus_expires_at.unwrap_or(now)
+        } else {
+            now
+        };
+        let granted_until = grant_start + Duration::days(i64::from(config.plus_days));
+        let plus_started_at = if user.effective_plan() == PLUS_PLAN {
+            user.plus_started_at.unwrap_or(now)
+        } else {
+            now
+        };
+
+        sqlx::query(
+            r#"
+            UPDATE billing_orders
+            SET status = 'paid',
+                provider_trade_no = COALESCE($2::text, provider_trade_no),
+                notify_payload = $3,
+                paid_at = $4,
+                granted_until = $5,
+                updated_at = now()
+            WHERE id = $1
+            "#,
+        )
+        .bind(order.id)
+        .bind(provider_trade_no)
+        .bind(&notify_payload)
+        .bind(paid_at)
+        .bind(granted_until)
+        .execute(&mut *tx)
+        .await?;
+
+        sqlx::query(
+            r#"
+            UPDATE users
+            SET plan = 'plus',
+                plan_status = 'active',
+                monthly_request_limit = $2,
+                plus_started_at = $3,
+                plus_expires_at = $4
+            WHERE id = $1
+            "#,
+        )
+        .bind(order.user_id)
+        .bind(PLUS_MONTHLY_REQUEST_LIMIT)
+        .bind(plus_started_at)
+        .bind(granted_until)
+        .execute(&mut *tx)
+        .await?;
+    } else {
+        sqlx::query(
+            r#"
+            UPDATE billing_orders
+            SET status = $2,
+                provider_trade_no = COALESCE($3::text, provider_trade_no),
+                notify_payload = $4,
+                paid_at = CASE WHEN $2 = 'paid' THEN COALESCE(paid_at, now()) ELSE paid_at END,
+                updated_at = now()
+            WHERE id = $1
+            "#,
+        )
+        .bind(order.id)
+        .bind(order_status)
+        .bind(provider_trade_no)
+        .bind(&notify_payload)
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    tx.commit().await?;
+    Ok(())
 }
 
 fn normalized_admin_plan(plan: &str) -> Result<String, ApiError> {

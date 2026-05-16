@@ -68,6 +68,20 @@ const copy: Record<string, string> = {
   oldKeyPrefix: "旧 Key 未保存前缀",
   enabled: "启用",
   disabled: "停用",
+  buyPlus: "开通 Plus",
+  renewPlus: "续费 Plus",
+  checkoutTitle: "选择支付方式",
+  checkoutDesc: "Plus 按 30 天开通或续费，支付成功后自动生效。",
+  checkoutAmount: "实际支付",
+  checkoutTip: "支付完成后会自动返回账号页并刷新套餐状态。",
+  alipay: "支付宝",
+  wxpay: "微信支付",
+  payNow: "去支付",
+  checkoutUnavailable: "自助购买暂未开启",
+  checkoutCreating: "正在创建支付订单...",
+  checkoutPending: "正在等待支付结果...",
+  checkoutPaid: "支付成功，Plus 已生效。",
+  checkoutFailed: "支付未完成，请重新发起。",
 };
 
 function t(key: string) {
@@ -97,6 +111,12 @@ type DashboardResponse = {
     plus_expires_at: string | null;
     allowed_models: string[];
   };
+  billing?: {
+    fovpay_enabled: boolean;
+    plus_amount_cny: string | null;
+    plus_days: number;
+    allowed_paytypes: string[];
+  };
   api_keys: Array<{
     id: number;
     name: string;
@@ -118,12 +138,37 @@ type DashboardResponse = {
   }>;
 };
 
+type CheckoutResponse = {
+  order_id: number;
+  out_trade_no: string;
+  pay_url: string;
+  status: string;
+  paytype_code: string;
+  amount_cny: string;
+};
+
+type BillingOrderResponse = {
+  id: number;
+  out_trade_no: string;
+  amount_cny: string;
+  status: string;
+  pay_url: string | null;
+  granted_until: string | null;
+};
+
+const paytypeLabels: Record<string, string> = {
+  alipay: "支付宝",
+  wxpay: "微信支付",
+};
+
 export function AccountClient() {
   const [sessionToken, setSessionToken] = useState("");
   const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
   const [status, setStatus] = useState(t("account.loading"));
   const [loading, setLoading] = useState(true);
   const [modelsOpen, setModelsOpen] = useState(false);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
 
   const summary = useMemo(() => {
     const monthlyLimit = dashboard?.subscription.monthly_request_limit ?? 500;
@@ -151,6 +196,18 @@ export function AccountClient() {
     })),
     [summary.allowedModels],
   );
+
+  const paymentOptions = useMemo(() => {
+    const allowed = dashboard?.billing?.allowed_paytypes ?? [];
+    return ["alipay", "wxpay"]
+      .filter((paytype) => allowed.includes(paytype))
+      .map((paytype) => ({
+        code: paytype,
+        label: paytypeLabels[paytype] ?? paytype,
+      }));
+  }, [dashboard?.billing?.allowed_paytypes]);
+
+  const plusAmountCny = dashboard?.billing?.plus_amount_cny ?? "58.00";
 
   const loadAccount = useCallback(async (token: string) => {
     setLoading(true);
@@ -189,15 +246,107 @@ export function AccountClient() {
   }, [loadAccount]);
 
   useEffect(() => {
-    if (!modelsOpen) return;
+    if (!modelsOpen && !checkoutOpen) return;
 
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setModelsOpen(false);
+      if (event.key === "Escape") {
+        setModelsOpen(false);
+        setCheckoutOpen(false);
+      }
     }
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [modelsOpen]);
+  }, [modelsOpen, checkoutOpen]);
+
+  useEffect(() => {
+    if (!sessionToken) return;
+    const checkoutRef = new URLSearchParams(window.location.search).get("checkout");
+    if (!checkoutRef) return;
+    const orderRef = checkoutRef;
+
+    let cancelled = false;
+    let attempts = 0;
+    setStatus(t("account.checkoutPending"));
+
+    async function pollOrder() {
+      const response = await fetch(
+        `${defaultBackendUrl}/dashboard/billing/orders/${encodeURIComponent(orderRef)}`,
+        {
+          headers: {
+            Authorization: `Bearer ${sessionToken}`,
+          },
+        },
+      );
+      if (!response.ok) throw new Error(await errorText(response));
+      const order = (await response.json()) as BillingOrderResponse;
+      if (cancelled) return true;
+
+      if (order.status === "paid") {
+        setStatus(t("account.checkoutPaid"));
+        window.history.replaceState(null, "", "/account");
+        void loadAccount(sessionToken);
+        return true;
+      }
+
+      if (["closed", "refunded", "frozen", "failed"].includes(order.status)) {
+        setStatus(t("account.checkoutFailed"));
+        window.history.replaceState(null, "", "/account");
+        return true;
+      }
+
+      setStatus(t("account.checkoutPending"));
+      return false;
+    }
+
+    void pollOrder().catch((error) => {
+      if (!cancelled) setStatus(error instanceof Error ? error.message : t("account.checkoutFailed"));
+    });
+    const interval = window.setInterval(() => {
+      attempts += 1;
+      if (attempts > 30) {
+        window.clearInterval(interval);
+        return;
+      }
+
+      void pollOrder()
+        .then((done) => {
+          if (done) window.clearInterval(interval);
+        })
+        .catch((error) => {
+          window.clearInterval(interval);
+          if (!cancelled) setStatus(error instanceof Error ? error.message : t("account.checkoutFailed"));
+        });
+    }, 2000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [loadAccount, sessionToken]);
+
+  async function startCheckout(paytypeCode: string) {
+    if (!sessionToken) return;
+    setCheckoutLoading(paytypeCode);
+    setStatus(t("account.checkoutCreating"));
+
+    try {
+      const response = await fetch(`${defaultBackendUrl}/dashboard/billing/fovpay/checkout`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${sessionToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ paytype_code: paytypeCode }),
+      });
+      if (!response.ok) throw new Error(await errorText(response));
+      const payload = (await response.json()) as CheckoutResponse;
+      window.location.assign(payload.pay_url);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : t("account.checkoutFailed"));
+      setCheckoutLoading(null);
+    }
+  }
 
   return (
     <main className="account-page">
@@ -309,7 +458,65 @@ export function AccountClient() {
                     : t("account.freeNote")}
                 </span>
               </div>
+              <div className="billing-actions">
+                {dashboard?.billing?.fovpay_enabled ? (
+                  <>
+                    <Button type="button" onClick={() => setCheckoutOpen(true)}>
+                      {summary.plan === "plus" ? t("account.renewPlus") : t("account.buyPlus")}
+                    </Button>
+                    <span>{t("account.checkoutAmount")} ¥{plusAmountCny}</span>
+                  </>
+                ) : (
+                  <span>{t("account.checkoutUnavailable")}</span>
+                )}
+              </div>
             </section>
+
+            {checkoutOpen && (
+              <div className="model-dialog-backdrop" role="presentation" onClick={() => setCheckoutOpen(false)}>
+                <section
+                  aria-labelledby="checkout-dialog-title"
+                  aria-modal="true"
+                  className="model-dialog checkout-dialog"
+                  role="dialog"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="model-dialog-head">
+                    <div>
+                      <p>Plus</p>
+                      <h2 id="checkout-dialog-title">{t("account.checkoutTitle")}</h2>
+                    </div>
+                    <button className="dialog-close" type="button" onClick={() => setCheckoutOpen(false)}>
+                      {t("account.close")}
+                    </button>
+                  </div>
+                  <p className="checkout-copy">{t("account.checkoutDesc")}</p>
+                  <div className="checkout-amount">
+                    <span>{plusMonthlyPriceLabel}</span>
+                    <strong>¥{plusAmountCny}</strong>
+                  </div>
+                  <div className="paytype-grid">
+                    {paymentOptions.map((option) => (
+                      <button
+                        className="paytype-button"
+                        disabled={checkoutLoading !== null}
+                        key={option.code}
+                        type="button"
+                        onClick={() => startCheckout(option.code)}
+                      >
+                        <strong>{option.label}</strong>
+                        <span>
+                          {checkoutLoading === option.code
+                            ? t("account.checkoutCreating")
+                            : t("account.payNow")}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="model-dialog-note">{t("account.checkoutTip")}</p>
+                </section>
+              </div>
+            )}
 
             <div className="account-grid">
               <section className="panel">
@@ -650,7 +857,9 @@ export function AccountClient() {
         }
 
         .plan-note,
-        .panel-note {
+        .panel-note,
+        .billing-actions,
+        .checkout-copy {
           margin-top: 14px;
           color: #6a6861;
           font-size: 13px;
@@ -664,6 +873,87 @@ export function AccountClient() {
 
         .plan-note strong {
           color: #141413;
+        }
+
+        .billing-actions {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+        }
+
+        .billing-actions span {
+          color: #6a6861;
+          font-weight: 750;
+        }
+
+        .checkout-dialog {
+          width: min(540px, 100%);
+        }
+
+        .checkout-copy {
+          margin: -4px 0 16px;
+          line-height: 1.7;
+        }
+
+        .checkout-amount {
+          display: flex;
+          align-items: end;
+          justify-content: space-between;
+          gap: 16px;
+          margin-bottom: 16px;
+          border: 1px solid #e0ded4;
+          border-radius: 12px;
+          padding: 16px;
+          background: #fffdfa;
+        }
+
+        .checkout-amount span {
+          color: #6a6861;
+          font-weight: 850;
+        }
+
+        .checkout-amount strong {
+          color: #141413;
+          font-size: 28px;
+        }
+
+        .paytype-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 12px;
+        }
+
+        .paytype-button {
+          min-height: 96px;
+          display: grid;
+          align-content: space-between;
+          gap: 12px;
+          border: 1px solid #e0ded4;
+          border-radius: 12px;
+          padding: 16px;
+          color: #141413;
+          background: #fffdfa;
+          font: inherit;
+          text-align: left;
+          cursor: pointer;
+        }
+
+        .paytype-button:hover,
+        .paytype-button:focus-visible {
+          border-color: #c96442;
+          outline: none;
+        }
+
+        .paytype-button:disabled {
+          cursor: wait;
+          opacity: 0.72;
+        }
+
+        .paytype-button span {
+          color: #be5331;
+          font-size: 12px;
+          font-weight: 850;
         }
 
         .panel-note {
@@ -780,7 +1070,9 @@ export function AccountClient() {
           .key-row,
           .usage-row,
           .meter-labels,
-          .plan-note {
+          .plan-note,
+          .billing-actions,
+          .checkout-amount {
             display: grid;
             grid-template-columns: 1fr;
             justify-items: start;
@@ -832,6 +1124,10 @@ export function AccountClient() {
           }
 
           .model-list {
+            grid-template-columns: 1fr;
+          }
+
+          .paytype-grid {
             grid-template-columns: 1fr;
           }
         }

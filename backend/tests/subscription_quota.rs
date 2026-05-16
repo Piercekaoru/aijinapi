@@ -534,6 +534,7 @@ fn app_state_with_email(pool: PgPool, email: SharedEmailSender) -> AppState {
         upstream_key_cooldown_ms: 60_000,
         cors_allowed_origins: vec!["http://localhost:3000".to_string()],
         smtp: None,
+        fovpay: None,
     };
     let upstream_keys = UpstreamKeyRing::from_config(&config);
 

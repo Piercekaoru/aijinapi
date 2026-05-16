@@ -3,6 +3,7 @@ pub mod config;
 pub mod db;
 pub mod email;
 pub mod errors;
+pub mod fovpay;
 pub mod free_models;
 pub mod keys;
 pub mod models;
