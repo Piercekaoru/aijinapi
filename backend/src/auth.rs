@@ -206,12 +206,22 @@ pub fn key_prefix(key: &str) -> String {
 pub async fn ensure_monthly_quota(pool: &PgPool, user: &User) -> Result<(), ApiError> {
     let used: i64 = sqlx::query_scalar(
         r#"
+        WITH quota_window AS (
+          SELECT GREATEST(
+            date_trunc('month', now()),
+            COALESCE(
+              (SELECT MAX(effective_at) FROM quota_resets WHERE scope = 'global'),
+              date_trunc('month', now())
+            )
+          ) AS usage_start
+        )
         SELECT COUNT(*)
         FROM usage_events e
         JOIN api_keys k ON k.id = e.api_key_id
+        CROSS JOIN quota_window q
         WHERE k.user_id = $1
           AND e.path = '/v1/chat/completions'
-          AND e.created_at >= date_trunc('month', now())
+          AND e.created_at >= q.usage_start
         "#,
     )
     .bind(user.id)

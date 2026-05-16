@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use actix_web::{HttpRequest, HttpResponse, Responder, http::header, web};
-use chrono::{Duration, TimeZone, Utc};
+use chrono::{DateTime, Duration, TimeZone, Utc};
 use rand::{Rng, distr::Alphanumeric};
 use serde_json::{Value, json};
 use tracing::info;
@@ -30,12 +30,13 @@ use crate::{
     },
     free_models::{is_free_model_candidate, should_trip_free_model},
     models::{
-        AdminCreateUserRequest, AdminCreateUserResponse, AdminUpdatePlanRequest, AdminUserRow,
-        AdminUserStats, AdminUserSummary, AdminUsersResponse, AuthResponse, BillingConfigSummary,
-        BillingOrder, BillingOrderSummary, CreateFovPayCheckoutRequest,
-        CreateFovPayCheckoutResponse, CreateUserKeyRequest, DashboardResponse, HealthResponse,
-        LoginRequest, PublicUser, RegisterRequest, ResendVerificationRequest, UsageEvent, User,
-        VerificationMessageResponse, VerificationRequiredResponse,
+        AdminCreateUserRequest, AdminCreateUserResponse, AdminQuotaResetResponse,
+        AdminUpdatePlanRequest, AdminUserRow, AdminUserStats, AdminUserSummary, AdminUsersResponse,
+        AuthResponse, BillingConfigSummary, BillingOrder, BillingOrderSummary,
+        CreateFovPayCheckoutRequest, CreateFovPayCheckoutResponse, CreateUserKeyRequest,
+        DashboardResponse, HealthResponse, LoginRequest, PublicUser, RegisterRequest,
+        ResendVerificationRequest, UsageEvent, User, VerificationMessageResponse,
+        VerificationRequiredResponse,
     },
     plans::{FREE_MONTHLY_REQUEST_LIMIT, FREE_PLAN, PLUS_MONTHLY_REQUEST_LIMIT, PLUS_PLAN},
     state::AppState,
@@ -80,6 +81,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             "/admin/users/{user_id}",
             web::delete().to(admin_delete_user),
         )
+        .route("/admin/quota-resets", web::post().to(admin_reset_all_quota))
         .route("/public/free-models", web::get().to(public_free_models))
         .route("/v1/models", web::get().to(models))
         .route("/v1/chat/completions", web::post().to(chat_completions));
@@ -733,9 +735,59 @@ async fn admin_delete_user(
     Ok(HttpResponse::NoContent().finish())
 }
 
+async fn admin_reset_all_quota(
+    state: web::Data<AppState>,
+    req: HttpRequest,
+) -> Result<web::Json<AdminQuotaResetResponse>, ApiError> {
+    let admin =
+        authenticate_admin_session(&state.db, extract_bearer(&req)?, &state.config.admin_emails)
+            .await?;
+    let users_affected: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users")
+        .fetch_one(&state.db)
+        .await?;
+    let effective_at: DateTime<Utc> = sqlx::query_scalar(
+        r#"
+        INSERT INTO quota_resets (actor_user_id, scope, effective_at)
+        VALUES ($1, 'global', now())
+        RETURNING effective_at
+        "#,
+    )
+    .bind(admin.id)
+    .fetch_one(&state.db)
+    .await?;
+
+    record_admin_audit(
+        &state.db,
+        &admin,
+        None,
+        "*",
+        "reset_all_quota",
+        json!({
+            "scope": "global",
+            "effective_at": effective_at,
+            "users_affected": users_affected,
+        }),
+    )
+    .await?;
+
+    Ok(web::Json(AdminQuotaResetResponse {
+        effective_at,
+        users_affected,
+    }))
+}
+
 async fn admin_user_rows(pool: &sqlx::PgPool) -> Result<Vec<AdminUserRow>, sqlx::Error> {
     sqlx::query_as::<_, AdminUserRow>(
         r#"
+        WITH quota_window AS (
+          SELECT GREATEST(
+            date_trunc('month', now()),
+            COALESCE(
+              (SELECT MAX(effective_at) FROM quota_resets WHERE scope = 'global'),
+              date_trunc('month', now())
+            )
+          ) AS usage_start
+        )
         SELECT
           u.id,
           u.email,
@@ -748,14 +800,15 @@ async fn admin_user_rows(pool: &sqlx::PgPool) -> Result<Vec<AdminUserRow>, sqlx:
           u.plus_expires_at,
           COUNT(DISTINCT k.id) AS api_key_count,
           COUNT(e.id) FILTER (
-            WHERE e.created_at >= date_trunc('month', now())
+            WHERE e.created_at >= q.usage_start
               AND e.path = '/v1/chat/completions'
           ) AS requests_this_month,
           MAX(k.last_used_at) AS last_used_at
         FROM users u
+        CROSS JOIN quota_window q
         LEFT JOIN api_keys k ON k.user_id = u.id
         LEFT JOIN usage_events e ON e.api_key_id = k.id
-        GROUP BY u.id
+        GROUP BY u.id, q.usage_start
         ORDER BY u.created_at DESC
         "#,
     )
@@ -770,6 +823,15 @@ async fn admin_user_summary_by_id(
 ) -> Result<Option<AdminUserSummary>, sqlx::Error> {
     let row = sqlx::query_as::<_, AdminUserRow>(
         r#"
+        WITH quota_window AS (
+          SELECT GREATEST(
+            date_trunc('month', now()),
+            COALESCE(
+              (SELECT MAX(effective_at) FROM quota_resets WHERE scope = 'global'),
+              date_trunc('month', now())
+            )
+          ) AS usage_start
+        )
         SELECT
           u.id,
           u.email,
@@ -782,15 +844,16 @@ async fn admin_user_summary_by_id(
           u.plus_expires_at,
           COUNT(DISTINCT k.id) AS api_key_count,
           COUNT(e.id) FILTER (
-            WHERE e.created_at >= date_trunc('month', now())
+            WHERE e.created_at >= q.usage_start
               AND e.path = '/v1/chat/completions'
           ) AS requests_this_month,
           MAX(k.last_used_at) AS last_used_at
         FROM users u
+        CROSS JOIN quota_window q
         LEFT JOIN api_keys k ON k.user_id = u.id
         LEFT JOIN usage_events e ON e.api_key_id = k.id
         WHERE u.id = $1
-        GROUP BY u.id
+        GROUP BY u.id, q.usage_start
         "#,
     )
     .bind(user_id)

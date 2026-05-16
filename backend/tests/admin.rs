@@ -6,10 +6,11 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use openachieve_backend::{
-    auth::hash_password,
+    auth::{ensure_monthly_quota, hash_password},
     config::Config,
-    db::create_session,
+    db::{create_customer_key_for_user, create_session},
     email::InMemoryEmailSender,
+    errors::ApiError,
     free_models::FreeModelCatalog,
     plans::{FREE_MONTHLY_REQUEST_LIMIT, PLUS_MONTHLY_REQUEST_LIMIT},
     routes,
@@ -38,6 +39,107 @@ async fn admin_routes_require_admin_session(pool: PgPool) {
         .to_request();
     let regular_response = test::call_service(&app, regular_req).await;
     assert_eq!(regular_response.status(), StatusCode::FORBIDDEN);
+
+    let missing_reset_auth = test::TestRequest::post()
+        .uri("/admin/quota-resets")
+        .to_request();
+    let missing_reset_response = test::call_service(&app, missing_reset_auth).await;
+    assert_eq!(missing_reset_response.status(), StatusCode::UNAUTHORIZED);
+
+    let regular_reset_req = test::TestRequest::post()
+        .uri("/admin/quota-resets")
+        .insert_header(("authorization", format!("Bearer {token}")))
+        .to_request();
+    let regular_reset_response = test::call_service(&app, regular_reset_req).await;
+    assert_eq!(regular_reset_response.status(), StatusCode::FORBIDDEN);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn admin_can_reset_all_quota_without_deleting_usage_history(pool: PgPool) {
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state(pool.clone())))
+            .configure(routes::configure),
+    )
+    .await;
+
+    let admin = insert_user(&pool, "admin@example.com", "Admin", "free", None).await;
+    let admin_token = create_session(&pool, admin.id).await.unwrap();
+    let customer = insert_user(&pool, "customer@example.com", "Customer", "free", None).await;
+    let customer_token = create_session(&pool, customer.id).await.unwrap();
+    let key =
+        create_customer_key_for_user(&pool, customer.id, "default", FREE_MONTHLY_REQUEST_LIMIT)
+            .await
+            .unwrap();
+    insert_usage_events(&pool, key.id, FREE_MONTHLY_REQUEST_LIMIT).await;
+
+    assert!(matches!(
+        ensure_monthly_quota(&pool, &customer).await,
+        Err(ApiError::QuotaExceeded)
+    ));
+
+    let reset_req = test::TestRequest::post()
+        .uri("/admin/quota-resets")
+        .insert_header(("authorization", format!("Bearer {admin_token}")))
+        .to_request();
+    let reset_body: Value = test::call_and_read_body_json(&app, reset_req).await;
+    assert_eq!(reset_body["users_affected"], 2);
+    assert!(reset_body["effective_at"].as_str().is_some());
+
+    let retained_usage_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM usage_events")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(retained_usage_count, i64::from(FREE_MONTHLY_REQUEST_LIMIT));
+    ensure_monthly_quota(&pool, &customer).await.unwrap();
+
+    let dashboard_req = test::TestRequest::get()
+        .uri("/dashboard")
+        .insert_header(("authorization", format!("Bearer {customer_token}")))
+        .to_request();
+    let dashboard_body: Value = test::call_and_read_body_json(&app, dashboard_req).await;
+    assert_eq!(dashboard_body["subscription"]["requests_this_month"], 0);
+    assert_eq!(
+        dashboard_body["subscription"]["remaining_requests"],
+        FREE_MONTHLY_REQUEST_LIMIT
+    );
+    assert_eq!(dashboard_body["api_keys"][0]["requests_this_month"], 0);
+
+    let list_req = test::TestRequest::get()
+        .uri("/admin/users")
+        .insert_header(("authorization", format!("Bearer {admin_token}")))
+        .to_request();
+    let list_body: Value = test::call_and_read_body_json(&app, list_req).await;
+    let reset_customer = list_body["users"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|user| user["id"].as_i64() == Some(customer.id))
+        .unwrap();
+    assert_eq!(reset_customer["requests_this_month"], 0);
+    assert_eq!(
+        reset_customer["remaining_requests"],
+        FREE_MONTHLY_REQUEST_LIMIT
+    );
+
+    insert_usage_events(&pool, key.id, 1).await;
+    let dashboard_after_new_usage = test::TestRequest::get()
+        .uri("/dashboard")
+        .insert_header(("authorization", format!("Bearer {customer_token}")))
+        .to_request();
+    let dashboard_after_new_usage_body: Value =
+        test::call_and_read_body_json(&app, dashboard_after_new_usage).await;
+    assert_eq!(
+        dashboard_after_new_usage_body["subscription"]["requests_this_month"],
+        1
+    );
+
+    let audit_action: String =
+        sqlx::query_scalar("SELECT action FROM admin_audit_events ORDER BY id DESC LIMIT 1")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(audit_action, "reset_all_quota");
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -267,4 +369,19 @@ async fn insert_user(
     .fetch_one(pool)
     .await
     .unwrap()
+}
+
+async fn insert_usage_events(pool: &PgPool, api_key_id: i64, count: i32) {
+    sqlx::query(
+        r#"
+        INSERT INTO usage_events (api_key_id, model, path, status_code)
+        SELECT $1, 'big-pickle', '/v1/chat/completions', 200
+        FROM generate_series(1, $2)
+        "#,
+    )
+    .bind(api_key_id)
+    .bind(count)
+    .execute(pool)
+    .await
+    .unwrap();
 }

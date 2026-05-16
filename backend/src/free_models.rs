@@ -17,8 +17,8 @@ use crate::{
 };
 
 const FREE_MODEL_EXCEPTIONS: &[&str] = &["big-pickle"];
-const REFRESH_INTERVAL: Duration = Duration::from_secs(60);
-const STALE_AFTER: Duration = Duration::from_secs(120);
+const REFRESH_INTERVAL: Duration = Duration::from_secs(300);
+const STALE_AFTER: Duration = Duration::from_secs(600);
 const PROBE_MAX_TOKENS: u8 = 1;
 
 #[derive(Clone)]

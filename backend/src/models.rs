@@ -361,6 +361,12 @@ pub struct AdminUserStats {
 }
 
 #[derive(Debug, Serialize)]
+pub struct AdminQuotaResetResponse {
+    pub effective_at: DateTime<Utc>,
+    pub users_affected: i64,
+}
+
+#[derive(Debug, Serialize)]
 pub struct AdminUsersResponse {
     pub stats: AdminUserStats,
     pub users: Vec<AdminUserSummary>,

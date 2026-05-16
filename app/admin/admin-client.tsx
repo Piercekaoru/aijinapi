@@ -48,6 +48,11 @@ type AdminCreateUserResponse = {
   };
 };
 
+type AdminQuotaResetResponse = {
+  effective_at: string;
+  users_affected: number;
+};
+
 type AddUserForm = {
   name: string;
   email: string;
@@ -57,6 +62,7 @@ type AddUserForm = {
 
 type AccessState = "loading" | "allowed" | "forbidden" | "unauthenticated" | "error";
 type UserFilter = "all" | "free" | "plus" | "inactive_plus";
+type PlanAction = { user: AdminUser; plan: "free" | "plus" };
 
 const initialAddUserForm: AddUserForm = {
   name: "",
@@ -84,8 +90,11 @@ export function AdminClient() {
   const [showAddUser, setShowAddUser] = useState(false);
   const [addUserForm, setAddUserForm] = useState<AddUserForm>(initialAddUserForm);
   const [issuedCredentials, setIssuedCredentials] = useState<AdminCreateUserResponse | null>(null);
+  const [planTarget, setPlanTarget] = useState<PlanAction | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [showQuotaReset, setShowQuotaReset] = useState(false);
+  const [quotaResetConfirmation, setQuotaResetConfirmation] = useState("");
   const [busyAction, setBusyAction] = useState("");
 
   const normalizedBackendUrl = useMemo(
@@ -212,6 +221,7 @@ export function AdminClient() {
       });
       if (!response.ok) throw new Error(await errorText(response));
       setStatus(plan === "plus" ? "已开通 Plus" : "已降级 Free");
+      setPlanTarget(null);
       await loadUsers(sessionToken);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "套餐更新失败");
@@ -239,6 +249,31 @@ export function AdminClient() {
       await loadUsers(sessionToken);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "删除用户失败");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  async function resetAllQuota() {
+    if (!sessionToken || quotaResetConfirmation !== "RESET") return;
+    setBusyAction("reset-quota");
+    setStatus("正在重置全部额度...");
+
+    try {
+      const response = await fetch(`${normalizedBackendUrl}/admin/quota-resets`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${sessionToken}`,
+        },
+      });
+      if (!response.ok) throw new Error(await errorText(response));
+      const result = (await response.json()) as AdminQuotaResetResponse;
+      setStatus(`已重置 ${result.users_affected.toLocaleString()} 个用户的额度`);
+      setShowQuotaReset(false);
+      setQuotaResetConfirmation("");
+      await loadUsers(sessionToken);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "额度重置失败");
     } finally {
       setBusyAction("");
     }
@@ -340,6 +375,16 @@ export function AdminClient() {
               <Button type="button" onClick={() => setShowAddUser(true)}>
                 添加用户
               </Button>
+              <Button
+                variant="destructive"
+                type="button"
+                onClick={() => {
+                  setQuotaResetConfirmation("");
+                  setShowQuotaReset(true);
+                }}
+              >
+                重置全部额度
+              </Button>
               <Button variant="secondary" type="button" onClick={() => loadUsers(sessionToken)}>
                 刷新
               </Button>
@@ -385,7 +430,7 @@ export function AdminClient() {
                         size="sm"
                         type="button"
                         disabled={busyAction === `plus-${user.id}` || user.plan === "plus"}
-                        onClick={() => updatePlan(user, "plus")}
+                        onClick={() => setPlanTarget({ user, plan: "plus" })}
                       >
                         升级 Plus
                       </Button>
@@ -394,7 +439,7 @@ export function AdminClient() {
                         variant="secondary"
                         type="button"
                         disabled={busyAction === `free-${user.id}` || isSelf || user.plan !== "plus"}
-                        onClick={() => updatePlan(user, "free")}
+                        onClick={() => setPlanTarget({ user, plan: "free" })}
                       >
                         降级 Free
                       </Button>
@@ -486,6 +531,95 @@ export function AdminClient() {
         </div>
       )}
 
+      {planTarget && (
+        <div className="modal-backdrop" role="presentation">
+          <section className="modal danger" role="dialog" aria-modal="true" aria-labelledby="plan-user-title">
+            <div className="modal-head">
+              <div>
+                <p>{planTarget.plan === "plus" ? "Upgrade" : "Downgrade"}</p>
+                <h2 id="plan-user-title">{planTarget.plan === "plus" ? "确认升级" : "确认降级"}</h2>
+              </div>
+              <button type="button" onClick={() => setPlanTarget(null)} aria-label="关闭">
+                ×
+              </button>
+            </div>
+            <p className="danger-copy">
+              {planTarget.plan === "plus"
+                ? `将 ${planTarget.user.email} 开通 Plus 30 天，额度调整为 1,500 次/月。`
+                : `将 ${planTarget.user.email} 降级为 Free，Plus 到期时间会清空，额度调整为 500 次/月。`}
+            </p>
+            <div className="modal-actions">
+              <Button variant="secondary" type="button" onClick={() => setPlanTarget(null)}>
+                取消
+              </Button>
+              <Button
+                variant={planTarget.plan === "plus" ? "default" : "destructive"}
+                type="button"
+                disabled={busyAction === `${planTarget.plan}-${planTarget.user.id}`}
+                onClick={() => updatePlan(planTarget.user, planTarget.plan)}
+              >
+                {busyAction === `${planTarget.plan}-${planTarget.user.id}`
+                  ? "处理中..."
+                  : planTarget.plan === "plus"
+                    ? "确认升级"
+                    : "确认降级"}
+              </Button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {showQuotaReset && (
+        <div className="modal-backdrop" role="presentation">
+          <section className="modal danger" role="dialog" aria-modal="true" aria-labelledby="reset-quota-title">
+            <div className="modal-head">
+              <div>
+                <p>Reset</p>
+                <h2 id="reset-quota-title">重置全部额度</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowQuotaReset(false);
+                  setQuotaResetConfirmation("");
+                }}
+                aria-label="关闭"
+              >
+                ×
+              </button>
+            </div>
+            <p className="danger-copy">
+              这会让所有用户从现在开始重新计算本月额度。历史调用记录会保留，套餐、Plus 到期时间和 API Key 不会改变。请输入 RESET 确认。
+            </p>
+            <input
+              aria-label="确认重置额度"
+              value={quotaResetConfirmation}
+              onChange={(event) => setQuotaResetConfirmation(event.target.value)}
+            />
+            <div className="modal-actions">
+              <Button
+                variant="secondary"
+                type="button"
+                onClick={() => {
+                  setShowQuotaReset(false);
+                  setQuotaResetConfirmation("");
+                }}
+              >
+                取消
+              </Button>
+              <Button
+                variant="destructive"
+                type="button"
+                disabled={quotaResetConfirmation !== "RESET" || busyAction === "reset-quota"}
+                onClick={resetAllQuota}
+              >
+                {busyAction === "reset-quota" ? "重置中..." : "确认重置"}
+              </Button>
+            </div>
+          </section>
+        </div>
+      )}
+
       {deleteTarget && (
         <div className="modal-backdrop" role="presentation">
           <section className="modal danger" role="dialog" aria-modal="true" aria-labelledby="delete-user-title">
@@ -506,7 +640,7 @@ export function AdminClient() {
               </button>
             </div>
             <p className="danger-copy">
-              删除会移除该用户、API Key 和登录会话。请输入邮箱确认：{deleteTarget.email}
+              删除会永久移除该用户、API Key 和登录会话，历史调用记录会保留为审计记录。此操作无法恢复，请输入邮箱确认：{deleteTarget.email}
             </p>
             <input
               aria-label="确认删除邮箱"
@@ -695,7 +829,7 @@ export function AdminClient() {
 
         .toolbar {
           display: grid;
-          grid-template-columns: minmax(220px, 1fr) auto auto auto;
+          grid-template-columns: minmax(220px, 1fr) auto auto auto auto;
           gap: 12px;
           align-items: center;
           margin-bottom: 18px;

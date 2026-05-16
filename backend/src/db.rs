@@ -295,6 +295,15 @@ pub async fn api_key_summaries(
 ) -> Result<Vec<ApiKeySummary>, sqlx::Error> {
     sqlx::query_as::<_, ApiKeySummary>(
         r#"
+        WITH quota_window AS (
+          SELECT GREATEST(
+            date_trunc('month', now()),
+            COALESCE(
+              (SELECT MAX(effective_at) FROM quota_resets WHERE scope = 'global'),
+              date_trunc('month', now())
+            )
+          ) AS usage_start
+        )
         SELECT
           k.id,
           k.name,
@@ -303,11 +312,12 @@ pub async fn api_key_summaries(
           k.monthly_request_limit,
           k.created_at,
           k.last_used_at,
-          COUNT(e.id) FILTER (WHERE e.created_at >= date_trunc('month', now())) AS requests_this_month
+          COUNT(e.id) FILTER (WHERE e.created_at >= q.usage_start) AS requests_this_month
         FROM api_keys k
+        CROSS JOIN quota_window q
         LEFT JOIN usage_events e ON e.api_key_id = k.id
         WHERE k.user_id = $1
-        GROUP BY k.id
+        GROUP BY k.id, q.usage_start
         ORDER BY k.created_at DESC
         "#,
     )
@@ -319,12 +329,22 @@ pub async fn api_key_summaries(
 pub async fn monthly_chat_usage_for_user(pool: &PgPool, user_id: i64) -> Result<i64, sqlx::Error> {
     sqlx::query_scalar(
         r#"
+        WITH quota_window AS (
+          SELECT GREATEST(
+            date_trunc('month', now()),
+            COALESCE(
+              (SELECT MAX(effective_at) FROM quota_resets WHERE scope = 'global'),
+              date_trunc('month', now())
+            )
+          ) AS usage_start
+        )
         SELECT COUNT(*)
         FROM usage_events e
         JOIN api_keys k ON k.id = e.api_key_id
+        CROSS JOIN quota_window q
         WHERE k.user_id = $1
           AND e.path = '/v1/chat/completions'
-          AND e.created_at >= date_trunc('month', now())
+          AND e.created_at >= q.usage_start
         "#,
     )
     .bind(user_id)
