@@ -23,6 +23,13 @@ services:
       UPSTREAM_KEY_COOLDOWN_MS: ${UPSTREAM_KEY_COOLDOWN_MS:-60000}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://openachieve.asia}
       APP_BASE_URL: ${APP_BASE_URL:-https://openachieve.asia}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-OpenAchieve}
+      SMTP_TLS_MODE: ${SMTP_TLS_MODE:-starttls}
     depends_on:
       db:
         condition: service_healthy

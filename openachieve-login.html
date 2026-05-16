@@ -400,6 +400,20 @@
     }
     .submit:hover { transform: translateY(-1px); background: color-mix(in oklch, var(--accent) 90%, black); }
     .submit[disabled] { cursor: wait; opacity: 0.82; }
+    .resend-verification {
+      inline-size: 100%;
+      min-block-size: 43px;
+      margin-block-start: 10px;
+      border: 1px solid var(--ring);
+      border-radius: 14px;
+      background: var(--paper);
+      color: color-mix(in oklch, var(--accent) 86%, black);
+      font-weight: 850;
+      transition: transform 0.18s ease, border-color 0.18s ease;
+    }
+    .resend-verification:hover { transform: translateY(-1px); border-color: color-mix(in oklch, var(--accent) 42%, var(--ring)); }
+    .resend-verification[hidden] { display: none; }
+    .resend-verification[disabled] { cursor: wait; opacity: 0.72; }
     .spinner {
       display: none;
       inline-size: 16px;
@@ -602,6 +616,7 @@
             <span class="spinner" aria-hidden="true"></span>
             <span>登录</span>
           </button>
+          <button class="resend-verification" id="resendVerification" type="button" hidden>重新发送验证邮件</button>
         </form>
 
         <form class="panel" id="registerPanel" novalidate>
@@ -657,7 +672,7 @@
           </button>
         </form>
 
-        <p class="footnote">注册即获 Free 套餐，每月 500 次请求额度，可调用 5 个免费模型。</p>
+        <p class="footnote">验证邮箱后启用 Free 套餐，每月 500 次请求额度，可调用 5 个免费模型。</p>
       </section>
     </div>
   </main>
@@ -681,7 +696,7 @@
 
     const panelCopy = {
       login: ["欢迎回来", "登录后管理余额、API Key、调用记录和文档。"],
-      register: ["创建账号", "注册后即可充值余额，获取 OpenAchieve Key。"]
+      register: ["创建账号", "注册后先验证邮箱，再获取 OpenAchieve Key。"]
     };
 
     function setTab(name) {

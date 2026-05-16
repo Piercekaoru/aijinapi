@@ -29,6 +29,7 @@ fn test_config_with_keys(
 ) -> Config {
     Config {
         database_url: "postgres://postgres:postgres@localhost/openachieve_test".to_string(),
+        app_base_url: "http://localhost:3000".to_string(),
         admin_emails: vec!["admin@example.com".to_string()],
         opencode_zen_api_keys: zen_keys.into_iter().map(str::to_string).collect(),
         opencode_go_api_keys: go_keys.into_iter().map(str::to_string).collect(),
@@ -43,6 +44,7 @@ fn test_config_with_keys(
         upstream_retry_base_ms: 0,
         upstream_key_cooldown_ms,
         cors_allowed_origins: vec!["http://localhost:3002".to_string()],
+        smtp: None,
     }
 }
 

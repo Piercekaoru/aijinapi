@@ -1,7 +1,7 @@
 use sqlx::PgPool;
 
 use crate::{
-    auth::{generate_session_token, key_prefix},
+    auth::{generate_email_verification_token, generate_session_token, key_prefix},
     keys::{generate_customer_key, hash_key},
     models::{
         ApiKeySummary, IssuedApiKey, SubscriptionSummary, UsageEvent, UsageEventSummary, User,
@@ -94,6 +94,118 @@ pub async fn create_session(pool: &PgPool, user_id: i64) -> Result<String, sqlx:
     .await?;
 
     Ok(token)
+}
+
+pub async fn create_email_verification_token(
+    pool: &PgPool,
+    user_id: i64,
+) -> Result<String, sqlx::Error> {
+    let token = generate_email_verification_token();
+    let token_hash = hash_key(&token);
+
+    sqlx::query(
+        r#"
+        INSERT INTO email_verification_tokens (user_id, token_hash, expires_at)
+        VALUES ($1, $2, now() + interval '24 hours')
+        "#,
+    )
+    .bind(user_id)
+    .bind(token_hash)
+    .execute(pool)
+    .await?;
+
+    Ok(token)
+}
+
+pub async fn consume_email_verification_token(
+    pool: &PgPool,
+    token: &str,
+) -> Result<Option<i64>, sqlx::Error> {
+    let token_hash = hash_key(token);
+    let user_id: Option<i64> = sqlx::query_scalar(
+        r#"
+        SELECT t.user_id
+        FROM email_verification_tokens t
+        JOIN users u ON u.id = t.user_id
+        WHERE t.token_hash = $1
+          AND t.consumed_at IS NULL
+          AND t.expires_at > now()
+          AND u.email_verified_at IS NULL
+        "#,
+    )
+    .bind(token_hash)
+    .fetch_optional(pool)
+    .await?;
+
+    if let Some(user_id) = user_id {
+        sqlx::query("UPDATE users SET email_verified_at = now() WHERE id = $1")
+            .bind(user_id)
+            .execute(pool)
+            .await?;
+        consume_unspent_email_verification_tokens(pool, user_id).await?;
+        Ok(Some(user_id))
+    } else {
+        Ok(None)
+    }
+}
+
+pub async fn consume_unspent_email_verification_tokens(
+    pool: &PgPool,
+    user_id: i64,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        UPDATE email_verification_tokens
+        SET consumed_at = now()
+        WHERE user_id = $1
+          AND consumed_at IS NULL
+        "#,
+    )
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn consume_email_verification_token_by_value(
+    pool: &PgPool,
+    token: &str,
+) -> Result<(), sqlx::Error> {
+    let token_hash = hash_key(token);
+    sqlx::query(
+        r#"
+        UPDATE email_verification_tokens
+        SET consumed_at = now()
+        WHERE token_hash = $1
+          AND consumed_at IS NULL
+        "#,
+    )
+    .bind(token_hash)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn verification_email_sent_recently(
+    pool: &PgPool,
+    user_id: i64,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar(
+        r#"
+        SELECT EXISTS (
+          SELECT 1
+          FROM email_verification_tokens
+          WHERE user_id = $1
+            AND consumed_at IS NULL
+            AND created_at > now() - interval '60 seconds'
+        )
+        "#,
+    )
+    .bind(user_id)
+    .fetch_one(pool)
+    .await
 }
 
 pub async fn create_customer_key_for_user(

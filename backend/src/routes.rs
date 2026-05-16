@@ -1,4 +1,4 @@
-use actix_web::{HttpRequest, HttpResponse, Responder, web};
+use actix_web::{HttpRequest, HttpResponse, Responder, http::header, web};
 use chrono::Utc;
 use rand::{Rng, distr::Alphanumeric};
 use serde_json::{Value, json};
@@ -11,16 +11,20 @@ use crate::{
         verify_password,
     },
     db::{
-        api_key_summaries, create_customer_key_for_user, create_default_customer_key_if_missing,
-        create_session, recent_usage_for_user, record_admin_audit, record_usage,
-        subscription_summary, touch_key,
+        api_key_summaries, consume_email_verification_token,
+        consume_email_verification_token_by_value, consume_unspent_email_verification_tokens,
+        create_customer_key_for_user, create_default_customer_key_if_missing,
+        create_email_verification_token, create_session, recent_usage_for_user, record_admin_audit,
+        record_usage, subscription_summary, touch_key, verification_email_sent_recently,
     },
+    email::VerificationEmail,
     errors::ApiError,
     models::{
         AdminCreateUserRequest, AdminCreateUserResponse, AdminUpdatePlanRequest, AdminUserRow,
         AdminUserStats, AdminUserSummary, AdminUsersResponse, AuthResponse, CreateUserKeyRequest,
-        DashboardResponse, HealthResponse, LoginRequest, PublicUser, RegisterRequest, UsageEvent,
-        User,
+        DashboardResponse, HealthResponse, LoginRequest, PublicUser, RegisterRequest,
+        ResendVerificationRequest, UsageEvent, User, VerificationMessageResponse,
+        VerificationRequiredResponse,
     },
     plans::{FREE_MONTHLY_REQUEST_LIMIT, FREE_PLAN, PLUS_MONTHLY_REQUEST_LIMIT, PLUS_PLAN},
     state::AppState,
@@ -34,6 +38,11 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.route("/health", web::get().to(health))
         .route("/auth/register", web::post().to(register))
         .route("/auth/login", web::post().to(login))
+        .route("/auth/verify-email", web::get().to(verify_email))
+        .route(
+            "/auth/resend-verification",
+            web::post().to(resend_verification),
+        )
         .route("/auth/me", web::get().to(me))
         .route("/dashboard", web::get().to(dashboard))
         .route("/dashboard/api-keys", web::post().to(create_dashboard_key))
@@ -61,7 +70,7 @@ async fn health() -> impl Responder {
 async fn register(
     state: web::Data<AppState>,
     body: web::Json<RegisterRequest>,
-) -> Result<web::Json<AuthResponse>, ApiError> {
+) -> Result<HttpResponse, ApiError> {
     let body = body.into_inner();
     let email = normalize_email(&body.email);
     validate_register_input(&body.name, &email, &body.password)?;
@@ -77,6 +86,7 @@ async fn register(
           name,
           password_hash,
           created_at,
+          email_verified_at,
           plan,
           plan_status,
           monthly_request_limit,
@@ -98,18 +108,19 @@ async fn register(
         }
     })?;
 
-    let session_token = create_session(&state.db, user.id).await?;
-    let api_key = create_default_customer_key_if_missing(
-        &state.db,
-        user.id,
-        user.effective_monthly_request_limit(),
-    )
-    .await?;
+    let token = create_email_verification_token(&state.db, user.id).await?;
+    if send_verification_email(&state, &user, &token)
+        .await
+        .is_err()
+    {
+        consume_email_verification_token_by_value(&state.db, &token).await?;
+        return Err(ApiError::EmailDeliveryFailed);
+    }
 
-    Ok(web::Json(AuthResponse {
-        session_token,
-        user: PublicUser::from_user(&user, &state.config.admin_emails),
-        api_key,
+    Ok(HttpResponse::Accepted().json(VerificationRequiredResponse {
+        verification_required: true,
+        email: user.email,
+        message: "verification email sent".to_string(),
     }))
 }
 
@@ -126,6 +137,7 @@ async fn login(
           name,
           password_hash,
           created_at,
+          email_verified_at,
           plan,
           plan_status,
           monthly_request_limit,
@@ -143,6 +155,10 @@ async fn login(
     if !verify_password(&body.password, &user.password_hash) {
         return Err(ApiError::InvalidCredentials);
     }
+    if !user.email_is_verified() {
+        return Err(ApiError::EmailNotVerified);
+    }
+
     let session_token = create_session(&state.db, user.id).await?;
     let api_key = create_default_customer_key_if_missing(
         &state.db,
@@ -155,6 +171,69 @@ async fn login(
         session_token,
         user: PublicUser::from_user(&user, &state.config.admin_emails),
         api_key,
+    }))
+}
+
+#[derive(serde::Deserialize)]
+struct VerifyEmailQuery {
+    token: Option<String>,
+}
+
+async fn verify_email(
+    state: web::Data<AppState>,
+    query: web::Query<VerifyEmailQuery>,
+) -> Result<HttpResponse, ApiError> {
+    let success = if let Some(token) = query.token.as_deref() {
+        consume_email_verification_token(&state.db, token)
+            .await?
+            .is_some()
+    } else {
+        false
+    };
+
+    let target = if success {
+        login_redirect_url(&state, "verified=1")
+    } else {
+        login_redirect_url(&state, "verification=invalid")
+    };
+
+    Ok(HttpResponse::SeeOther()
+        .insert_header((header::LOCATION, target))
+        .finish())
+}
+
+async fn resend_verification(
+    state: web::Data<AppState>,
+    body: web::Json<ResendVerificationRequest>,
+) -> Result<web::Json<VerificationMessageResponse>, ApiError> {
+    let body = body.into_inner();
+    let email = normalize_email(&body.email);
+    let user = user_by_email(&state.db, &email).await?;
+
+    if !verify_password(&body.password, &user.password_hash) {
+        return Err(ApiError::InvalidCredentials);
+    }
+    if user.email_is_verified() {
+        return Err(ApiError::InvalidRequest("email is already verified".into()));
+    }
+    if verification_email_sent_recently(&state.db, user.id).await? {
+        return Err(ApiError::VerificationEmailRecentlySent);
+    }
+
+    consume_unspent_email_verification_tokens(&state.db, user.id).await?;
+    let token = create_email_verification_token(&state.db, user.id).await?;
+    if send_verification_email(&state, &user, &token)
+        .await
+        .is_err()
+    {
+        consume_email_verification_token_by_value(&state.db, &token).await?;
+        return Err(ApiError::EmailDeliveryFailed);
+    }
+
+    Ok(web::Json(VerificationMessageResponse {
+        verification_required: true,
+        email: user.email,
+        message: "verification email sent".to_string(),
     }))
 }
 
@@ -241,19 +320,21 @@ async fn admin_create_user(
                   email,
                   name,
                   password_hash,
+                  email_verified_at,
                   plan,
                   plan_status,
                   monthly_request_limit,
                   plus_started_at,
                   plus_expires_at
                 )
-                VALUES ($1, $2, $3, 'plus', 'active', $4, now(), now() + ($5::int || ' days')::interval)
+                VALUES ($1, $2, $3, now(), 'plus', 'active', $4, now(), now() + ($5::int || ' days')::interval)
                 RETURNING
                   id,
                   email,
                   name,
                   password_hash,
                   created_at,
+                  email_verified_at,
                   plan,
                   plan_status,
                   monthly_request_limit,
@@ -272,14 +353,15 @@ async fn admin_create_user(
         FREE_PLAN => {
             sqlx::query_as::<_, User>(
                 r#"
-                INSERT INTO users (email, name, password_hash, plan, plan_status, monthly_request_limit)
-                VALUES ($1, $2, $3, 'free', 'active', $4)
+                INSERT INTO users (email, name, password_hash, email_verified_at, plan, plan_status, monthly_request_limit)
+                VALUES ($1, $2, $3, now(), 'free', 'active', $4)
                 RETURNING
                   id,
                   email,
                   name,
                   password_hash,
                   created_at,
+                  email_verified_at,
                   plan,
                   plan_status,
                   monthly_request_limit,
@@ -588,6 +670,7 @@ async fn user_by_id(pool: &sqlx::PgPool, user_id: i64) -> Result<User, ApiError>
           name,
           password_hash,
           created_at,
+          email_verified_at,
           plan,
           plan_status,
           monthly_request_limit,
@@ -601,6 +684,31 @@ async fn user_by_id(pool: &sqlx::PgPool, user_id: i64) -> Result<User, ApiError>
     .fetch_optional(pool)
     .await?
     .ok_or(ApiError::NotFound)
+}
+
+async fn user_by_email(pool: &sqlx::PgPool, email: &str) -> Result<User, ApiError> {
+    sqlx::query_as::<_, User>(
+        r#"
+        SELECT
+          id,
+          email,
+          name,
+          password_hash,
+          created_at,
+          email_verified_at,
+          plan,
+          plan_status,
+          monthly_request_limit,
+          plus_started_at,
+          plus_expires_at
+        FROM users
+        WHERE email = $1
+        "#,
+    )
+    .bind(email)
+    .fetch_optional(pool)
+    .await?
+    .ok_or(ApiError::InvalidCredentials)
 }
 
 fn normalized_admin_plan(plan: &str) -> Result<String, ApiError> {
@@ -620,6 +728,30 @@ fn validated_admin_days(days: Option<i32>) -> Result<i32, ApiError> {
             "days must be between 1 and 365".into(),
         ))
     }
+}
+
+async fn send_verification_email(
+    state: &web::Data<AppState>,
+    user: &User,
+    token: &str,
+) -> Result<(), crate::email::EmailSendError> {
+    let verification_url = format!(
+        "{}/api/backend/auth/verify-email?token={}",
+        state.config.app_base_url, token
+    );
+
+    state
+        .email
+        .send_verification_email(VerificationEmail {
+            to_email: user.email.clone(),
+            to_name: user.name.clone(),
+            verification_url,
+        })
+        .await
+}
+
+fn login_redirect_url(state: &web::Data<AppState>, query: &str) -> String {
+    format!("{}/login?{}", state.config.app_base_url, query)
 }
 
 fn generate_temporary_password() -> String {

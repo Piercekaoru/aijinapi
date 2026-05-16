@@ -1,6 +1,14 @@
+use std::sync::Arc;
+
 use actix_cors::Cors;
 use actix_web::{App, HttpServer, http::header, middleware::Logger, web};
-use openachieve_backend::{config::Config, routes, state::AppState, upstream::UpstreamKeyRing};
+use openachieve_backend::{
+    config::Config,
+    email::{DisabledEmailSender, SharedEmailSender, SmtpEmailSender},
+    routes,
+    state::AppState,
+    upstream::UpstreamKeyRing,
+};
 use reqwest::Client;
 use sqlx::postgres::PgPoolOptions;
 use tracing::info;
@@ -23,6 +31,10 @@ async fn main() -> anyhow::Result<()> {
     let http = Client::builder().build()?;
     let bind_addr = (config.server_host, config.server_port);
     let upstream_keys = UpstreamKeyRing::from_config(&config);
+    let email: SharedEmailSender = match &config.smtp {
+        Some(smtp) => Arc::new(SmtpEmailSender::new(smtp)?),
+        None => Arc::new(DisabledEmailSender),
+    };
 
     info!(host = %bind_addr.0, port = bind_addr.1, "starting openachieve backend");
 
@@ -42,6 +54,7 @@ async fn main() -> anyhow::Result<()> {
                 config: config.clone(),
                 db: db.clone(),
                 http: http.clone(),
+                email: email.clone(),
                 upstream_keys: upstream_keys.clone(),
             }))
             .configure(routes::configure)

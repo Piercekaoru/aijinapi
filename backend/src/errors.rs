@@ -21,6 +21,12 @@ pub enum ApiError {
     InvalidRequest(String),
     #[error("email is already registered")]
     EmailAlreadyRegistered,
+    #[error("email is not verified")]
+    EmailNotVerified,
+    #[error("verification email was sent recently")]
+    VerificationEmailRecentlySent,
+    #[error("could not send verification email")]
+    EmailDeliveryFailed,
     #[error("invalid email or password")]
     InvalidCredentials,
     #[error("invalid or expired session")]
@@ -46,6 +52,9 @@ impl ApiError {
             Self::ModelNotAllowed(_) => "model_not_allowed",
             Self::InvalidRequest(_) => "invalid_request",
             Self::EmailAlreadyRegistered => "email_already_registered",
+            Self::EmailNotVerified => "email_not_verified",
+            Self::VerificationEmailRecentlySent => "verification_email_recently_sent",
+            Self::EmailDeliveryFailed => "email_delivery_failed",
             Self::InvalidCredentials => "invalid_credentials",
             Self::InvalidSession => "invalid_session",
             Self::Forbidden => "forbidden",
@@ -63,14 +72,17 @@ impl ResponseError for ApiError {
             | Self::InvalidApiKey
             | Self::InvalidCredentials
             | Self::InvalidSession => StatusCode::UNAUTHORIZED,
-            Self::DisabledApiKey | Self::Forbidden | Self::ModelNotAllowed(_) => {
-                StatusCode::FORBIDDEN
+            Self::DisabledApiKey
+            | Self::Forbidden
+            | Self::EmailNotVerified
+            | Self::ModelNotAllowed(_) => StatusCode::FORBIDDEN,
+            Self::QuotaExceeded | Self::VerificationEmailRecentlySent => {
+                StatusCode::TOO_MANY_REQUESTS
             }
-            Self::QuotaExceeded => StatusCode::TOO_MANY_REQUESTS,
             Self::UnsupportedModel(_) | Self::InvalidRequest(_) => StatusCode::BAD_REQUEST,
             Self::EmailAlreadyRegistered => StatusCode::CONFLICT,
             Self::NotFound => StatusCode::NOT_FOUND,
-            Self::UpstreamRequest(_) => StatusCode::BAD_GATEWAY,
+            Self::UpstreamRequest(_) | Self::EmailDeliveryFailed => StatusCode::BAD_GATEWAY,
             Self::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }

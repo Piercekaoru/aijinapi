@@ -24,6 +24,14 @@ type AuthResponse = {
   } | null;
 };
 
+type RegisterResponse = {
+  verification_required: boolean;
+  email: string;
+  message: string;
+};
+
+type VerificationResponse = RegisterResponse;
+
 type ErrorResponse = {
   error?: {
     message?: string;
@@ -45,7 +53,7 @@ const copy: Record<string, string> = {
   welcome: "欢迎回来",
   welcomeSub: "登录后管理余额、API Key、调用记录和文档。",
   register: "创建账号",
-  registerSub: "注册后即可充值余额，获取 OpenAchieve Key。",
+  registerSub: "注册后先验证邮箱，再获取 OpenAchieve Key。",
   requestFailed: "请求失败",
   passwordWeak: "弱",
   passwordMedium: "中",
@@ -56,8 +64,14 @@ const copy: Record<string, string> = {
   hidePassword: "隐藏密码",
   loginSuccess: "登录成功，正在进入控制台",
   loginFailed: "登录失败",
+  emailNotVerified: "邮箱尚未验证，请先查收验证邮件",
+  resendVerification: "重新发送验证邮件",
+  resendSuccess: "验证邮件已重新发送，请查收",
+  resendTooSoon: "验证邮件刚刚发送过，请稍后再试",
+  verified: "邮箱已验证，请登录",
+  verificationInvalid: "验证链接无效或已过期，请重新发送验证邮件",
   termsToast: "请先同意服务条款",
-  registerSuccess: "注册成功，API Key 已生成",
+  registerSuccess: "验证邮件已发送，请查收后再登录",
   registerFailed: "注册失败",
 };
 
@@ -86,6 +100,7 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
     const title = root.querySelector<HTMLElement>("#formTitle");
     const subtitle = root.querySelector<HTMLElement>("#formSubtitle");
     const toast = root.querySelector<HTMLElement>("#toast");
+    const resendVerification = root.querySelector<HTMLButtonElement>("#resendVerification");
     const registerPassword = root.querySelector<HTMLInputElement>("#registerPassword");
     const confirmPassword = root.querySelector<HTMLInputElement>("#confirmPassword");
     const strength = root.querySelector<HTMLElement>("#strength");
@@ -151,6 +166,11 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
       button.classList.toggle("loading", busy);
     }
 
+    function setResendVisible(visible: boolean) {
+      if (!resendVerification) return;
+      resendVerification.hidden = !visible;
+    }
+
     function persistSession(payload: AuthResponse) {
       window.localStorage.setItem("openachieve_session_token", payload.session_token);
       window.localStorage.setItem("openachieve_user", JSON.stringify(payload.user));
@@ -178,7 +198,7 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
     }
 
     async function postJson<T>(
-      path: "/auth/login" | "/auth/register",
+      path: "/auth/login" | "/auth/register" | "/auth/resend-verification",
       payload: object,
     ) {
       const response = await fetch(`${backendUrl}${path}`, {
@@ -294,6 +314,7 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
         if (!valid || !email || !password) return;
 
         setButtonBusy(submitter, true);
+        setResendVisible(false);
         try {
           const payload = await postJson<AuthResponse>("/auth/login", {
             email: email.value.trim(),
@@ -305,9 +326,43 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
             window.location.href = "/dashboard";
           }, 350);
         } catch (error) {
-          showToast(error instanceof Error ? error.message : t("auth.loginFailed"));
+          if (error instanceof AuthRequestError && error.code === "email_not_verified") {
+            showToast(t("auth.emailNotVerified"), 3600);
+            setResendVisible(true);
+          } else {
+            showToast(error instanceof Error ? error.message : t("auth.loginFailed"));
+          }
         } finally {
           setButtonBusy(submitter, false);
+        }
+      },
+      { signal },
+    );
+
+    resendVerification?.addEventListener(
+      "click",
+      async () => {
+        const email = root.querySelector<HTMLInputElement>("#loginEmail");
+        const password = root.querySelector<HTMLInputElement>("#loginPassword");
+        const valid = [requireValue(email, "邮箱"), requireValue(password, "密码")].every(Boolean);
+        if (!valid || !email || !password) return;
+
+        setButtonBusy(resendVerification, true);
+        try {
+          await postJson<VerificationResponse>("/auth/resend-verification", {
+            email: email.value.trim(),
+            password: password.value,
+          });
+          showToast(t("auth.resendSuccess"), 3600);
+          setResendVisible(false);
+        } catch (error) {
+          if (error instanceof AuthRequestError && error.code === "verification_email_recently_sent") {
+            showToast(t("auth.resendTooSoon"), 3600);
+          } else {
+            showToast(error instanceof Error ? error.message : t("auth.registerFailed"));
+          }
+        } finally {
+          setButtonBusy(resendVerification, false);
         }
       },
       { signal },
@@ -333,16 +388,17 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
 
         setButtonBusy(submitter, true);
         try {
-          const payload = await postJson<AuthResponse>("/auth/register", {
+          const payload = await postJson<RegisterResponse>("/auth/register", {
             name: name.value.trim(),
             email: email.value.trim(),
             password: registerPassword.value,
           });
-          persistSession(payload);
           showToast(t("auth.registerSuccess"));
-          window.setTimeout(() => {
-            window.location.href = "/dashboard";
-          }, 350);
+          const loginEmail = root.querySelector<HTMLInputElement>("#loginEmail");
+          const loginPassword = root.querySelector<HTMLInputElement>("#loginPassword");
+          if (loginEmail) loginEmail.value = payload.email;
+          if (loginPassword) loginPassword.value = "";
+          setTab("login");
         } catch (error) {
           showToast(error instanceof Error ? error.message : t("auth.registerFailed"));
         } finally {
@@ -355,6 +411,15 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
     updateStrength();
     const params = new URLSearchParams(window.location.search);
     if (params.get("mode") === "register") setTab("register");
+    if (params.get("verified") === "1") {
+      setTab("login");
+      showToast(t("auth.verified"), 3600);
+    }
+    if (params.get("verification") === "invalid") {
+      setTab("login");
+      showToast(t("auth.verificationInvalid"), 4200);
+      setResendVisible(true);
+    }
 
     return () => {
       controller.abort();

@@ -12,6 +12,7 @@ use wiremock::{
 use openachieve_backend::{
     config::Config,
     db::create_customer_key_for_user,
+    email::InMemoryEmailSender,
     plans::{FREE_MONTHLY_REQUEST_LIMIT, PLUS_MONTHLY_REQUEST_LIMIT},
     routes,
     state::AppState,
@@ -354,6 +355,7 @@ fn app_state(
 ) -> AppState {
     let config = Config {
         database_url: "postgres://postgres:postgres@localhost/openachieve_test".to_string(),
+        app_base_url: "http://localhost:3000".to_string(),
         admin_emails: vec!["admin@example.com".to_string()],
         opencode_zen_api_keys: zen_keys.into_iter().map(str::to_string).collect(),
         opencode_go_api_keys: go_keys.into_iter().map(str::to_string).collect(),
@@ -368,6 +370,7 @@ fn app_state(
         upstream_retry_base_ms: 0,
         upstream_key_cooldown_ms: 60_000,
         cors_allowed_origins: vec!["http://localhost:3000".to_string()],
+        smtp: None,
     };
     let upstream_keys = UpstreamKeyRing::from_config(&config);
 
@@ -375,6 +378,7 @@ fn app_state(
         config,
         db: pool,
         http: Client::new(),
+        email: InMemoryEmailSender::shared(),
         upstream_keys,
     }
 }
@@ -406,13 +410,14 @@ async fn insert_user(
           email,
           name,
           password_hash,
+          email_verified_at,
           plan,
           plan_status,
           monthly_request_limit,
           plus_started_at,
           plus_expires_at
         )
-        VALUES ($1, 'Test User', 'hash', $2, $3, $4, now(), $5)
+        VALUES ($1, 'Test User', 'hash', now(), $2, $3, $4, now(), $5)
         RETURNING id
         "#,
     )

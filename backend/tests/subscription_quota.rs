@@ -9,6 +9,7 @@ use openachieve_backend::{
     auth::{ensure_monthly_quota, hash_password},
     config::Config,
     db::{create_customer_key_for_user, subscription_summary},
+    email::{InMemoryEmailSender, SharedEmailSender},
     errors::ApiError,
     models::User,
     plans::{FREE_MONTHLY_REQUEST_LIMIT, PLUS_MONTHLY_REQUEST_LIMIT},
@@ -19,9 +20,13 @@ use openachieve_backend::{
 
 #[sqlx::test(migrations = "./migrations")]
 async fn register_user_defaults_to_free_quota(pool: PgPool) {
+    let email_sender = InMemoryEmailSender::shared();
     let app = test::init_service(
         App::new()
-            .app_data(web::Data::new(app_state(pool.clone())))
+            .app_data(web::Data::new(app_state_with_email(
+                pool.clone(),
+                email_sender.clone(),
+            )))
             .configure(routes::configure),
     )
     .await;
@@ -37,39 +42,286 @@ async fn register_user_defaults_to_free_quota(pool: PgPool) {
         .to_request();
 
     let response = test::call_service(&app, req).await;
-    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.status(), StatusCode::ACCEPTED);
     let body: Value = test::read_body_json(response).await;
+    assert_eq!(body["verification_required"], true);
+    assert_eq!(body["email"], email.as_str());
+    assert_eq!(email_sender.sent().len(), 1);
+    assert_eq!(email_sender.sent()[0].to_email, email);
+
+    let (stored_limit, email_verified_at): (i32, Option<DateTime<Utc>>) = sqlx::query_as(
+        "SELECT monthly_request_limit, email_verified_at FROM users WHERE email = $1",
+    )
+    .bind(&email)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(stored_limit, FREE_MONTHLY_REQUEST_LIMIT);
+    assert!(email_verified_at.is_none());
+
+    let session_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sessions")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(session_count, 0);
+
+    let key_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM api_keys")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(key_count, 0);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn user_can_verify_email_then_login_and_get_default_key(pool: PgPool) {
+    let email_sender = InMemoryEmailSender::shared();
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state_with_email(
+                pool.clone(),
+                email_sender.clone(),
+            )))
+            .configure(routes::configure),
+    )
+    .await;
+
+    let email = format!("{}@example.com", Uuid::new_v4());
+    let password = "password123";
+    let register = test::TestRequest::post()
+        .uri("/auth/register")
+        .set_json(json!({
+            "name": "Verify Tester",
+            "email": email,
+            "password": password
+        }))
+        .to_request();
+    assert_eq!(
+        test::call_service(&app, register).await.status(),
+        StatusCode::ACCEPTED
+    );
+
+    let login_before_verify = test::TestRequest::post()
+        .uri("/auth/login")
+        .set_json(json!({
+            "email": email,
+            "password": password
+        }))
+        .to_request();
+    let login_before_response = test::call_service(&app, login_before_verify).await;
+    assert_eq!(login_before_response.status(), StatusCode::FORBIDDEN);
+    let login_before_body: Value = test::read_body_json(login_before_response).await;
+    assert_eq!(login_before_body["error"]["code"], "email_not_verified");
+
+    let token = verification_token_from_url(&email_sender.sent()[0].verification_url);
+    let verify = test::TestRequest::get()
+        .uri(&format!("/auth/verify-email?token={token}"))
+        .to_request();
+    let verify_response = test::call_service(&app, verify).await;
+    assert_eq!(verify_response.status(), StatusCode::SEE_OTHER);
+    assert_eq!(
+        verify_response.headers().get("location").unwrap(),
+        "http://localhost:3000/login?verified=1"
+    );
+
+    let verified_at: Option<DateTime<Utc>> =
+        sqlx::query_scalar("SELECT email_verified_at FROM users WHERE email = $1")
+            .bind(&email)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(verified_at.is_some());
+
+    let login = test::TestRequest::post()
+        .uri("/auth/login")
+        .set_json(json!({
+            "email": email,
+            "password": password
+        }))
+        .to_request();
+    let body: Value = test::call_and_read_body_json(&app, login).await;
     assert!(
         body["session_token"]
             .as_str()
             .unwrap()
             .starts_with("openachieve_session_")
     );
-    assert_eq!(body["user"]["email"], email.as_str());
     assert_eq!(
         body["api_key"]["monthly_request_limit"],
         FREE_MONTHLY_REQUEST_LIMIT
     );
+}
 
-    let stored_limit: i32 =
-        sqlx::query_scalar("SELECT monthly_request_limit FROM users WHERE email = $1")
+#[sqlx::test(migrations = "./migrations")]
+async fn verification_rejects_expired_reused_and_fake_tokens(pool: PgPool) {
+    let email_sender = InMemoryEmailSender::shared();
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state_with_email(
+                pool.clone(),
+                email_sender.clone(),
+            )))
+            .configure(routes::configure),
+    )
+    .await;
+
+    let email = format!("{}@example.com", Uuid::new_v4());
+    let register = test::TestRequest::post()
+        .uri("/auth/register")
+        .set_json(json!({
+            "name": "Expired Tester",
+            "email": email,
+            "password": "password123"
+        }))
+        .to_request();
+    assert_eq!(
+        test::call_service(&app, register).await.status(),
+        StatusCode::ACCEPTED
+    );
+    let expired_token = verification_token_from_url(&email_sender.sent()[0].verification_url);
+    sqlx::query(
+        "UPDATE email_verification_tokens SET created_at = now() - interval '25 hours', expires_at = now() - interval '1 second'",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let expired = test::TestRequest::get()
+        .uri(&format!("/auth/verify-email?token={expired_token}"))
+        .to_request();
+    let expired_response = test::call_service(&app, expired).await;
+    assert_eq!(expired_response.status(), StatusCode::SEE_OTHER);
+    assert_eq!(
+        expired_response.headers().get("location").unwrap(),
+        "http://localhost:3000/login?verification=invalid"
+    );
+
+    let verified_at: Option<DateTime<Utc>> =
+        sqlx::query_scalar("SELECT email_verified_at FROM users WHERE email = $1")
             .bind(&email)
             .fetch_one(&pool)
             .await
             .unwrap();
-    assert_eq!(stored_limit, FREE_MONTHLY_REQUEST_LIMIT);
+    assert!(verified_at.is_none());
 
-    let session_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sessions")
-        .fetch_one(&pool)
+    let resend = test::TestRequest::post()
+        .uri("/auth/resend-verification")
+        .set_json(json!({
+            "email": email,
+            "password": "password123"
+        }))
+        .to_request();
+    assert_eq!(
+        test::call_service(&app, resend).await.status(),
+        StatusCode::OK
+    );
+    let valid_token = verification_token_from_url(&email_sender.sent()[1].verification_url);
+
+    let valid = test::TestRequest::get()
+        .uri(&format!("/auth/verify-email?token={valid_token}"))
+        .to_request();
+    assert_eq!(
+        test::call_service(&app, valid).await.status(),
+        StatusCode::SEE_OTHER
+    );
+
+    let reused = test::TestRequest::get()
+        .uri(&format!("/auth/verify-email?token={valid_token}"))
+        .to_request();
+    let reused_response = test::call_service(&app, reused).await;
+    assert_eq!(
+        reused_response.headers().get("location").unwrap(),
+        "http://localhost:3000/login?verification=invalid"
+    );
+
+    let fake = test::TestRequest::get()
+        .uri("/auth/verify-email?token=openachieve_verify_fake")
+        .to_request();
+    let fake_response = test::call_service(&app, fake).await;
+    assert_eq!(
+        fake_response.headers().get("location").unwrap(),
+        "http://localhost:3000/login?verification=invalid"
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn resend_verification_requires_password_and_rate_limits(pool: PgPool) {
+    let email_sender = InMemoryEmailSender::shared();
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state_with_email(
+                pool.clone(),
+                email_sender.clone(),
+            )))
+            .configure(routes::configure),
+    )
+    .await;
+
+    let email = format!("{}@example.com", Uuid::new_v4());
+    let register = test::TestRequest::post()
+        .uri("/auth/register")
+        .set_json(json!({
+            "name": "Resend Tester",
+            "email": email,
+            "password": "password123"
+        }))
+        .to_request();
+    assert_eq!(
+        test::call_service(&app, register).await.status(),
+        StatusCode::ACCEPTED
+    );
+
+    let wrong_password = test::TestRequest::post()
+        .uri("/auth/resend-verification")
+        .set_json(json!({
+            "email": email,
+            "password": "wrong-password"
+        }))
+        .to_request();
+    assert_eq!(
+        test::call_service(&app, wrong_password).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+
+    let rate_limited = test::TestRequest::post()
+        .uri("/auth/resend-verification")
+        .set_json(json!({
+            "email": email,
+            "password": "password123"
+        }))
+        .to_request();
+    let rate_limited_response = test::call_service(&app, rate_limited).await;
+    assert_eq!(
+        rate_limited_response.status(),
+        StatusCode::TOO_MANY_REQUESTS
+    );
+    let body: Value = test::read_body_json(rate_limited_response).await;
+    assert_eq!(body["error"]["code"], "verification_email_recently_sent");
+
+    sqlx::query("UPDATE email_verification_tokens SET created_at = now() - interval '61 seconds'")
+        .execute(&pool)
         .await
         .unwrap();
-    assert_eq!(session_count, 1);
 
-    let key_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM api_keys")
-        .fetch_one(&pool)
-        .await
-        .unwrap();
-    assert_eq!(key_count, 1);
+    let resend = test::TestRequest::post()
+        .uri("/auth/resend-verification")
+        .set_json(json!({
+            "email": email,
+            "password": "password123"
+        }))
+        .to_request();
+    assert_eq!(
+        test::call_service(&app, resend).await.status(),
+        StatusCode::OK
+    );
+    assert_eq!(email_sender.sent().len(), 2);
+
+    let active_tokens: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM email_verification_tokens WHERE consumed_at IS NULL",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(active_tokens, 1);
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -86,8 +338,8 @@ async fn registered_user_can_login_and_gets_default_key(pool: PgPool) {
     let password_hash = hash_password(password).unwrap();
     sqlx::query(
         r#"
-        INSERT INTO users (email, name, password_hash, plan, plan_status, monthly_request_limit)
-        VALUES ($1, 'Verified Tester', $2, 'free', 'active', $3)
+        INSERT INTO users (email, name, password_hash, email_verified_at, plan, plan_status, monthly_request_limit)
+        VALUES ($1, 'Verified Tester', $2, now(), 'free', 'active', $3)
         "#,
     )
     .bind(&email)
@@ -244,8 +496,13 @@ async fn expired_plus_user_falls_back_to_free_quota(pool: PgPool) {
 }
 
 fn app_state(pool: PgPool) -> AppState {
+    app_state_with_email(pool, InMemoryEmailSender::shared())
+}
+
+fn app_state_with_email(pool: PgPool, email: SharedEmailSender) -> AppState {
     let config = Config {
         database_url: "postgres://postgres:postgres@localhost/openachieve_test".to_string(),
+        app_base_url: "http://localhost:3000".to_string(),
         admin_emails: vec!["admin@example.com".to_string()],
         opencode_zen_api_keys: vec!["real-zen-key".to_string()],
         opencode_go_api_keys: vec!["real-go-key".to_string()],
@@ -260,6 +517,7 @@ fn app_state(pool: PgPool) -> AppState {
         upstream_retry_base_ms: 0,
         upstream_key_cooldown_ms: 60_000,
         cors_allowed_origins: vec!["http://localhost:3000".to_string()],
+        smtp: None,
     };
     let upstream_keys = UpstreamKeyRing::from_config(&config);
 
@@ -267,6 +525,7 @@ fn app_state(pool: PgPool) -> AppState {
         config,
         db: pool,
         http: Client::new(),
+        email,
         upstream_keys,
     }
 }
@@ -284,13 +543,14 @@ async fn insert_user(
           email,
           name,
           password_hash,
+          email_verified_at,
           plan,
           plan_status,
           monthly_request_limit,
           plus_started_at,
           plus_expires_at
         )
-        VALUES ($1, 'Test User', 'hash', $2, $3, $4, now(), $5)
+        VALUES ($1, 'Test User', 'hash', now(), $2, $3, $4, now(), $5)
         RETURNING id
         "#,
     )
@@ -313,6 +573,7 @@ async fn fetch_user(pool: &PgPool, user_id: i64) -> User {
           name,
           password_hash,
           created_at,
+          email_verified_at,
           plan,
           plan_status,
           monthly_request_limit,
@@ -353,4 +614,11 @@ async fn insert_usage_events(pool: &PgPool, api_key_id: i64, count: i32, model: 
     .execute(pool)
     .await
     .unwrap();
+}
+
+fn verification_token_from_url(url: &str) -> String {
+    url.split("token=")
+        .nth(1)
+        .expect("verification URL should include token")
+        .to_string()
 }

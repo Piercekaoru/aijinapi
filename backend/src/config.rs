@@ -3,6 +3,7 @@ use std::{env, net::IpAddr};
 #[derive(Clone, Debug)]
 pub struct Config {
     pub database_url: String,
+    pub app_base_url: String,
     pub admin_emails: Vec<String>,
     pub opencode_zen_api_keys: Vec<String>,
     pub opencode_go_api_keys: Vec<String>,
@@ -17,6 +18,25 @@ pub struct Config {
     pub upstream_retry_base_ms: u64,
     pub upstream_key_cooldown_ms: u64,
     pub cors_allowed_origins: Vec<String>,
+    pub smtp: Option<SmtpConfig>,
+}
+
+#[derive(Clone, Debug)]
+pub struct SmtpConfig {
+    pub host: String,
+    pub port: u16,
+    pub username: Option<String>,
+    pub password: Option<String>,
+    pub from_email: String,
+    pub from_name: String,
+    pub tls_mode: SmtpTlsMode,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SmtpTlsMode {
+    StartTls,
+    Implicit,
+    None,
 }
 
 impl Config {
@@ -46,6 +66,10 @@ impl Config {
 
         Ok(Self {
             database_url: required("DATABASE_URL")?,
+            app_base_url: env::var("APP_BASE_URL")
+                .unwrap_or_else(|_| "http://localhost:3000".to_string())
+                .trim_end_matches('/')
+                .to_string(),
             admin_emails: admin_emails_from_env(),
             opencode_zen_api_keys,
             opencode_go_api_keys,
@@ -82,6 +106,7 @@ impl Config {
                 .filter(|origin| !origin.is_empty())
                 .map(ToOwned::to_owned)
                 .collect(),
+            smtp: smtp_config_from_env()?,
         })
     }
 }
@@ -107,6 +132,60 @@ fn admin_emails_from_env() -> Vec<String> {
         .map(|value| parse_email_list(&value))
         .filter(|emails| !emails.is_empty())
         .unwrap_or_else(|| vec!["xiaolinyihai@gmail.com".to_string()])
+}
+
+fn smtp_config_from_env() -> anyhow::Result<Option<SmtpConfig>> {
+    let has_smtp_env = [
+        "SMTP_HOST",
+        "SMTP_USERNAME",
+        "SMTP_PASSWORD",
+        "SMTP_FROM_EMAIL",
+    ]
+    .iter()
+    .any(|name| optional(name).is_some());
+
+    if !has_smtp_env {
+        return Ok(None);
+    }
+
+    let username = optional("SMTP_USERNAME");
+    let password = optional("SMTP_PASSWORD");
+    if username.is_some() != password.is_some() {
+        return Err(anyhow::anyhow!(
+            "SMTP_USERNAME and SMTP_PASSWORD must be set together"
+        ));
+    }
+
+    Ok(Some(SmtpConfig {
+        host: required("SMTP_HOST")?,
+        port: env::var("SMTP_PORT")
+            .unwrap_or_else(|_| "587".to_string())
+            .parse()?,
+        username,
+        password,
+        from_email: required("SMTP_FROM_EMAIL")?,
+        from_name: env::var("SMTP_FROM_NAME")
+            .ok()
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| "OpenAchieve".to_string()),
+        tls_mode: smtp_tls_mode_from_env()?,
+    }))
+}
+
+fn smtp_tls_mode_from_env() -> anyhow::Result<SmtpTlsMode> {
+    match env::var("SMTP_TLS_MODE")
+        .unwrap_or_else(|_| "starttls".to_string())
+        .trim()
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "starttls" => Ok(SmtpTlsMode::StartTls),
+        "implicit" => Ok(SmtpTlsMode::Implicit),
+        "none" => Ok(SmtpTlsMode::None),
+        other => Err(anyhow::anyhow!(
+            "SMTP_TLS_MODE must be starttls, implicit, or none; got {other}"
+        )),
+    }
 }
 
 fn parse_key_list(value: &str) -> Vec<String> {

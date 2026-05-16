@@ -9,6 +9,7 @@ use openachieve_backend::{
     auth::hash_password,
     config::Config,
     db::create_session,
+    email::InMemoryEmailSender,
     plans::{FREE_MONTHLY_REQUEST_LIMIT, PLUS_MONTHLY_REQUEST_LIMIT},
     routes,
     state::AppState,
@@ -177,6 +178,7 @@ async fn admin_cannot_delete_or_downgrade_self(pool: PgPool) {
 fn app_state(pool: PgPool) -> AppState {
     let config = Config {
         database_url: "postgres://postgres:postgres@localhost/openachieve_test".to_string(),
+        app_base_url: "http://localhost:3000".to_string(),
         admin_emails: vec!["admin@example.com".to_string()],
         opencode_zen_api_keys: vec!["real-zen-key".to_string()],
         opencode_go_api_keys: vec!["real-go-key".to_string()],
@@ -191,6 +193,7 @@ fn app_state(pool: PgPool) -> AppState {
         upstream_retry_base_ms: 0,
         upstream_key_cooldown_ms: 60_000,
         cors_allowed_origins: vec!["http://localhost:3000".to_string()],
+        smtp: None,
     };
     let upstream_keys = UpstreamKeyRing::from_config(&config);
 
@@ -198,6 +201,7 @@ fn app_state(pool: PgPool) -> AppState {
         config,
         db: pool,
         http: Client::new(),
+        email: InMemoryEmailSender::shared(),
         upstream_keys,
     }
 }
@@ -223,19 +227,21 @@ async fn insert_user(
           email,
           name,
           password_hash,
+          email_verified_at,
           plan,
           plan_status,
           monthly_request_limit,
           plus_started_at,
           plus_expires_at
         )
-        VALUES ($1, $2, $3, $4, 'active', $5, CASE WHEN $4 = 'plus' THEN now() ELSE NULL END, $6)
+        VALUES ($1, $2, $3, now(), $4, 'active', $5, CASE WHEN $4 = 'plus' THEN now() ELSE NULL END, $6)
         RETURNING
           id,
           email,
           name,
           password_hash,
           created_at,
+          email_verified_at,
           plan,
           plan_status,
           monthly_request_limit,

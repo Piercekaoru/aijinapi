@@ -25,6 +25,7 @@ pub struct User {
     #[serde(skip_serializing)]
     pub password_hash: String,
     pub created_at: DateTime<Utc>,
+    pub email_verified_at: Option<DateTime<Utc>>,
     pub plan: String,
     pub plan_status: String,
     pub monthly_request_limit: i32,
@@ -38,6 +39,7 @@ pub struct PublicUser {
     pub email: String,
     pub name: String,
     pub created_at: DateTime<Utc>,
+    pub email_verified_at: Option<DateTime<Utc>>,
     pub plan: String,
     pub plan_status: String,
     pub monthly_request_limit: i32,
@@ -61,6 +63,7 @@ impl PublicUser {
             email: user.email.clone(),
             name: user.name.clone(),
             created_at: user.created_at,
+            email_verified_at: user.email_verified_at,
             plan: effective_plan,
             plan_status: user.plan_status.clone(),
             monthly_request_limit,
@@ -72,6 +75,10 @@ impl PublicUser {
 }
 
 impl User {
+    pub fn email_is_verified(&self) -> bool {
+        self.email_verified_at.is_some()
+    }
+
     pub fn effective_plan(&self) -> &'static str {
         if self.plan == PLUS_PLAN
             && self.plan_status == "active"
@@ -108,6 +115,7 @@ mod tests {
             name: "Test".to_string(),
             password_hash: "hash".to_string(),
             created_at: Utc::now(),
+            email_verified_at: Some(Utc::now()),
             plan: plan.to_string(),
             plan_status: plan_status.to_string(),
             monthly_request_limit: PLUS_MONTHLY_REQUEST_LIMIT,
@@ -225,6 +233,12 @@ pub struct LoginRequest {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct ResendVerificationRequest {
+    pub email: String,
+    pub password: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct CreateUserKeyRequest {
     pub name: Option<String>,
     pub monthly_request_limit: Option<i32>,
@@ -249,6 +263,20 @@ pub struct AuthResponse {
     pub session_token: String,
     pub user: PublicUser,
     pub api_key: Option<IssuedApiKey>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct VerificationRequiredResponse {
+    pub verification_required: bool,
+    pub email: String,
+    pub message: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct VerificationMessageResponse {
+    pub verification_required: bool,
+    pub email: String,
+    pub message: String,
 }
 
 #[derive(Debug, Serialize)]

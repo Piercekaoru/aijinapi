@@ -67,9 +67,10 @@ pub async fn authenticate_session(pool: &PgPool, bearer_token: &str) -> Result<U
           u.id,
           u.email,
           u.name,
-          u.password_hash,
-          u.created_at,
-          u.plan,
+              u.password_hash,
+              u.created_at,
+              u.email_verified_at,
+              u.plan,
           u.plan_status,
           u.monthly_request_limit,
           u.plus_started_at,
@@ -85,7 +86,12 @@ pub async fn authenticate_session(pool: &PgPool, bearer_token: &str) -> Result<U
     .fetch_optional(pool)
     .await?;
 
-    user.ok_or(ApiError::InvalidSession)
+    let user = user.ok_or(ApiError::InvalidSession)?;
+    if !user.email_is_verified() {
+        return Err(ApiError::EmailNotVerified);
+    }
+
+    Ok(user)
 }
 
 pub async fn authenticate_admin_session(
@@ -109,9 +115,10 @@ pub async fn user_for_api_key(pool: &PgPool, api_key: &ApiKey) -> Result<User, A
           id,
           email,
           name,
-          password_hash,
-          created_at,
-          plan,
+              password_hash,
+              created_at,
+              email_verified_at,
+              plan,
           plan_status,
           monthly_request_limit,
           plus_started_at,
@@ -124,7 +131,12 @@ pub async fn user_for_api_key(pool: &PgPool, api_key: &ApiKey) -> Result<User, A
     .fetch_optional(pool)
     .await?;
 
-    user.ok_or(ApiError::InvalidApiKey)
+    let user = user.ok_or(ApiError::InvalidApiKey)?;
+    if !user.email_is_verified() {
+        return Err(ApiError::EmailNotVerified);
+    }
+
+    Ok(user)
 }
 
 pub fn normalize_email(email: &str) -> String {
@@ -176,6 +188,15 @@ pub fn generate_session_token() -> String {
         Uuid::new_v4().simple(),
         suffix
     )
+}
+
+pub fn generate_email_verification_token() -> String {
+    let suffix: String = rand::rng()
+        .sample_iter(&Alphanumeric)
+        .take(48)
+        .map(char::from)
+        .collect();
+    format!("openachieve_verify_{}_{}", Uuid::new_v4().simple(), suffix)
 }
 
 pub fn key_prefix(key: &str) -> String {
