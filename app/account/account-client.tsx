@@ -3,20 +3,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { modelDisplayName } from "@/lib/free-models";
 import { plusMonthlyPriceLabel } from "@/lib/pricing";
 import { SiteFooter } from "../components/SiteFooter";
 import { SiteHeader } from "../components/SiteHeader";
 
 const defaultBackendUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/+$/, "") ?? "/api/backend";
-
-const fallbackFreeModels = [
-  "big-pickle",
-  "deepseek-v4-flash-free",
-  "minimax-m2.5-free",
-  "ring-2.6-1t-free",
-  "nemotron-3-super-free",
-];
 
 const modelDisplayNames: Record<string, string> = {
   "big-pickle": "Big Pickle",
@@ -50,7 +43,7 @@ const copy: Record<string, string> = {
   monthlyDesc: "账号套餐额度",
   modelRange: "模型范围",
   modelRangeDesc: "免费 + Plus 模型池",
-  modelRangeFree: "5 个免费模型",
+  modelRangeFree: "实时免费模型池",
   viewModels: "查看可用模型",
   availableModels: "可用模型",
   close: "关闭",
@@ -59,7 +52,7 @@ const copy: Record<string, string> = {
   thisMonth: "本月额度",
   used: "已用",
   remainingLabel: "剩余",
-  freeNote: "Free 用户每月 500 次，可调用 5 个免费模型。",
+  freeNote: "Free 用户每月 500 次，可调用实时同步的免费模型池。",
   plusExpires: "Plus 到期",
   notSet: "未设置",
   apiKeys: "API Keys",
@@ -146,7 +139,7 @@ export function AccountClient() {
       usagePercent,
       plan,
       planLabel: plan === "plus" ? "Plus" : "Free",
-      allowedModels: dashboard?.subscription.allowed_models ?? fallbackFreeModels,
+    allowedModels: dashboard?.subscription.allowed_models ?? [],
       plusExpiresAt: dashboard?.subscription.plus_expires_at ?? null,
     };
   }, [dashboard]);
@@ -154,7 +147,7 @@ export function AccountClient() {
   const allowedModelItems = useMemo(
     () => summary.allowedModels.map((id) => ({
       id,
-      name: modelDisplayNames[id] ?? id,
+      name: modelDisplayNames[id] ?? modelDisplayName(id),
     })),
     [summary.allowedModels],
   );

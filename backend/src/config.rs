@@ -58,11 +58,11 @@ impl Config {
         }
         let opencode_zen_api_keys =
             api_keys_from_env("OPENCODE_ZEN_API_KEYS", "OPENCODE_ZEN_API_KEY");
-        let opencode_zen_api_keys = if opencode_zen_api_keys.is_empty() {
-            opencode_go_api_keys.clone()
-        } else {
-            opencode_zen_api_keys
-        };
+        if opencode_zen_api_keys.is_empty() {
+            return Err(anyhow::anyhow!(
+                "OPENCODE_ZEN_API_KEYS or OPENCODE_ZEN_API_KEY is required"
+            ));
+        }
 
         Ok(Self {
             database_url: required("DATABASE_URL")?,

@@ -1,4 +1,8 @@
-use actix_web::{App, http::header, test, web};
+use actix_web::{
+    App,
+    http::{StatusCode, header},
+    test, web,
+};
 use chrono::{DateTime, Duration, Utc};
 use reqwest::Client;
 use serde_json::{Value, json};
@@ -13,6 +17,7 @@ use openachieve_backend::{
     config::Config,
     db::create_customer_key_for_user,
     email::InMemoryEmailSender,
+    free_models::FreeModelCatalog,
     plans::{FREE_MONTHLY_REQUEST_LIMIT, PLUS_MONTHLY_REQUEST_LIMIT},
     routes,
     state::AppState,
@@ -136,6 +141,58 @@ async fn models_endpoint_returns_models_for_effective_plan(pool: PgPool) {
     assert!(plus_ids.contains(&"deepseek-v4-pro"));
     assert!(plus_ids.contains(&"big-pickle"));
     assert!(plus_ids.contains(&"nemotron-3-super-free"));
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn models_endpoint_uses_live_free_catalog(pool: PgPool) {
+    let server = MockServer::start().await;
+    let free_key =
+        create_key_for_user(&pool, "free", "active", FREE_MONTHLY_REQUEST_LIMIT, None).await;
+    let app = test_app_with_free_models(
+        pool.clone(),
+        &server,
+        FreeModelCatalog::seeded(["big-pickle", "new-model-free"]),
+    )
+    .await;
+
+    let free_models = get_models(&app, &free_key).await;
+    assert_eq!(
+        model_ids(&free_models),
+        vec!["big-pickle", "new-model-free"]
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn risky_free_model_upstream_status_trips_catalog(pool: PgPool) {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/zen/chat/completions"))
+        .respond_with(ResponseTemplate::new(403).set_body_json(json!({
+            "error": {
+                "message": "model not supported on free tier"
+            }
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let free_key =
+        create_key_for_user(&pool, "free", "active", FREE_MONTHLY_REQUEST_LIMIT, None).await;
+    let catalog = FreeModelCatalog::seeded(["big-pickle"]);
+    let app = test_app_with_free_models(pool.clone(), &server, catalog).await;
+
+    let response = post_chat(&app, &free_key, "big-pickle", false).await;
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+
+    let free_models = get_models(&app, &free_key).await;
+    assert!(model_ids(&free_models).is_empty());
+    assert_usage_count(
+        &pool,
+        1,
+        Some(StatusCode::FORBIDDEN.as_u16().into()),
+        Some(false),
+    )
+    .await;
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -347,11 +404,56 @@ async fn test_app_with_keys(
     .await
 }
 
+async fn test_app_with_free_models(
+    pool: PgPool,
+    server: &MockServer,
+    free_models: FreeModelCatalog,
+) -> impl actix_service::Service<
+    actix_http::Request,
+    Response = actix_web::dev::ServiceResponse,
+    Error = actix_web::Error,
+> {
+    test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state_with_free_models(
+                pool,
+                server,
+                vec!["real-zen-key"],
+                vec!["real-go-key"],
+                free_models,
+            )))
+            .configure(routes::configure),
+    )
+    .await
+}
+
 fn app_state(
     pool: PgPool,
     server: &MockServer,
     zen_keys: Vec<&str>,
     go_keys: Vec<&str>,
+) -> AppState {
+    app_state_with_free_models(
+        pool,
+        server,
+        zen_keys,
+        go_keys,
+        FreeModelCatalog::seeded([
+            "big-pickle",
+            "deepseek-v4-flash-free",
+            "minimax-m2.5-free",
+            "ring-2.6-1t-free",
+            "nemotron-3-super-free",
+        ]),
+    )
+}
+
+fn app_state_with_free_models(
+    pool: PgPool,
+    server: &MockServer,
+    zen_keys: Vec<&str>,
+    go_keys: Vec<&str>,
+    free_models: FreeModelCatalog,
 ) -> AppState {
     let config = Config {
         database_url: "postgres://postgres:postgres@localhost/openachieve_test".to_string(),
@@ -380,6 +482,7 @@ fn app_state(
         http: Client::new(),
         email: InMemoryEmailSender::shared(),
         upstream_keys,
+        free_models,
     }
 }
 

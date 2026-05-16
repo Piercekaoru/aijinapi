@@ -305,7 +305,7 @@ pub struct SubscriptionSummary {
     pub remaining_requests: i64,
     pub plus_started_at: Option<DateTime<Utc>>,
     pub plus_expires_at: Option<DateTime<Utc>>,
-    pub allowed_models: Vec<&'static str>,
+    pub allowed_models: Vec<String>,
 }
 
 #[derive(Debug, FromRow)]

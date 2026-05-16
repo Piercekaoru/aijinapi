@@ -614,7 +614,7 @@
           <div class="hero-copy">
             <p class="eyebrow">Model Plaza / Developer Docs</p>
             <h1 data-od-id="headline">在一个广场里挑模型，在一套 API 里调用。</h1>
-            <p class="lead">OpenAchieve 将 5 个免费模型与 Kimi、GLM、MiMo、Qwen、DeepSeek 等 Plus 模型收束到 OpenAI-compatible 接口。Free 可用免费模型池，Plus 模型统一自动分配通道。</p>
+            <p class="lead">OpenAchieve 将实时同步的免费模型池与 Kimi、GLM、MiMo、Qwen、DeepSeek 等 Plus 模型收束到 OpenAI-compatible 接口。Free 可用免费模型池，Plus 模型统一自动分配通道。</p>
             <div class="hero-actions">
               <a class="btn primary" href="#models">浏览模型</a>
               <a class="btn ghost" href="#docs">查看 base_url</a>
@@ -657,7 +657,7 @@
               <article class="rank-card"><div class="rank-no">01</div><div><h3>Qwen3.6 Plus</h3><p>通用开发默认推荐，适合中文业务问答、工具调用与代码辅助。</p></div><span class="tag">通用首选</span></article>
               <article class="rank-card"><div class="rank-no">02</div><div><h3>DeepSeek V4 Pro</h3><p>偏推理和复杂任务，适合规划、分析和需要更稳回答的业务流程。</p></div><span class="tag">推理增强</span></article>
               <article class="rank-card"><div class="rank-no">03</div><div><h3>Kimi K2.6</h3><p>适合长文本阅读、摘要、知识库问答和多轮上下文场景。</p></div><span class="tag">长文本</span></article>
-              <article class="rank-card"><div class="rank-no">04</div><div><h3>DeepSeek V4 Flash Free</h3><p>Free 用户可用的低延迟免费模型，适合先验证接入链路和轻量实验。</p></div><span class="tag">Free</span></article>
+              <article class="rank-card"><div class="rank-no">04</div><div><h3>实时免费模型池</h3><p data-live-free-models>当前免费模型实时同步 OpenCode Zen，适合先验证接入链路和轻量实验。</p></div><span class="tag">Free</span></article>
             </div>
           </div>
         </div>
@@ -670,7 +670,7 @@
               <p class="eyebrow">Catalog</p>
               <h2>模型卡片带上调用名、套餐权限和套餐范围。</h2>
             </div>
-            <p>Free 每月 {{FREE_MONTHLY_REQUESTS}} 次，可调用 5 个免费模型；Plus {{PLUS_MONTHLY_PRICE_TEXT}}、{{PLUS_MONTHLY_REQUESTS}} 次，并额外开放完整 Plus 模型池。免费模型可能用于改进或试用目的，请避免提交敏感信息。</p>
+            <p>Free 每月 {{FREE_MONTHLY_REQUESTS}} 次，可调用 <span data-live-free-count>实时免费模型池</span>；Plus {{PLUS_MONTHLY_PRICE_TEXT}}、{{PLUS_MONTHLY_REQUESTS}} 次，并额外开放完整 Plus 模型池。免费模型可能用于改进或试用目的，请避免提交敏感信息。</p>
           </div>
 
           <div class="filters" aria-label="模型分类筛选">
@@ -753,7 +753,7 @@
           <div class="faq-grid">
             <article class="faq"><h3>是否需要外卡或海外支付？</h3><p>不需要。OpenAchieve 面向国内开发者，支持支付宝/微信以人民币充值，到账后即可调用。</p></article>
             <article class="faq"><h3>是否兼容 OpenAI SDK？</h3><p>兼容 OpenAI 风格的请求格式。通常只需要替换 base_url、API Key 和模型名。</p></article>
-            <article class="faq"><h3>Plus 价格和额度是什么？</h3><p>Plus 为 {{PLUS_MONTHLY_PRICE_TEXT}}，包含 {{PLUS_MONTHLY_REQUESTS}} 次/月请求额度；Free 是 {{FREE_MONTHLY_REQUESTS}} 次/月，可调用 5 个免费模型。</p></article>
+            <article class="faq"><h3>Plus 价格和额度是什么？</h3><p>Plus 为 {{PLUS_MONTHLY_PRICE_TEXT}}，包含 {{PLUS_MONTHLY_REQUESTS}} 次/月请求额度；Free 是 {{FREE_MONTHLY_REQUESTS}} 次/月，可调用实时同步的免费模型池。</p></article>
             <article class="faq"><h3>可以在同一个项目里切换模型吗？</h3><p>可以。把模型名作为请求参数传入，就能在同一套接口下切换 Kimi、GLM、Qwen、DeepSeek 等模型。</p></article>
           </div>
         </div>

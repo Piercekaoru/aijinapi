@@ -314,13 +314,27 @@ pub async fn subscription_summary(
     pool: &PgPool,
     user: &User,
 ) -> Result<SubscriptionSummary, sqlx::Error> {
+    let plan = user.effective_plan().to_string();
+    let allowed_models = allowed_models_for_plan(&plan)
+        .iter()
+        .map(|model| (*model).to_string())
+        .collect();
+
+    subscription_summary_with_models(pool, user, allowed_models).await
+}
+
+pub async fn subscription_summary_with_models(
+    pool: &PgPool,
+    user: &User,
+    allowed_models: Vec<String>,
+) -> Result<SubscriptionSummary, sqlx::Error> {
     let requests_this_month = monthly_chat_usage_for_user(pool, user.id).await?;
     let monthly_request_limit = user.effective_monthly_request_limit();
     let remaining_requests = (i64::from(monthly_request_limit) - requests_this_month).max(0);
     let plan = user.effective_plan().to_string();
 
     Ok(SubscriptionSummary {
-        allowed_models: allowed_models_for_plan(&plan).to_vec(),
+        allowed_models,
         plan,
         plan_status: user.plan_status.clone(),
         monthly_request_limit,

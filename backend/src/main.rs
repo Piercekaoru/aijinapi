@@ -5,6 +5,7 @@ use actix_web::{App, HttpServer, http::header, middleware::Logger, web};
 use openachieve_backend::{
     config::Config,
     email::{DisabledEmailSender, SharedEmailSender, SmtpEmailSender},
+    free_models::FreeModelCatalog,
     routes,
     state::AppState,
     upstream::UpstreamKeyRing,
@@ -31,6 +32,18 @@ async fn main() -> anyhow::Result<()> {
     let http = Client::builder().build()?;
     let bind_addr = (config.server_host, config.server_port);
     let upstream_keys = UpstreamKeyRing::from_config(&config);
+    let free_models = FreeModelCatalog::new();
+    match free_models.refresh(&http, &config, &upstream_keys).await {
+        Ok(models) => info!(model_count = models.len(), "initialized free model catalog"),
+        Err(error) => {
+            tracing::warn!(%error, "initial free model catalog refresh failed; failing closed")
+        }
+    }
+    free_models.clone().start_background_refresh(
+        http.clone(),
+        config.clone(),
+        upstream_keys.clone(),
+    );
     let email: SharedEmailSender = match &config.smtp {
         Some(smtp) => Arc::new(SmtpEmailSender::new(smtp)?),
         None => Arc::new(DisabledEmailSender),
@@ -56,6 +69,7 @@ async fn main() -> anyhow::Result<()> {
                 http: http.clone(),
                 email: email.clone(),
                 upstream_keys: upstream_keys.clone(),
+                free_models: free_models.clone(),
             }))
             .configure(routes::configure)
     })

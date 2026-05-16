@@ -15,10 +15,12 @@ use crate::{
         consume_email_verification_token_by_value, consume_unspent_email_verification_tokens,
         create_customer_key_for_user, create_default_customer_key_if_missing,
         create_email_verification_token, create_session, recent_usage_for_user, record_admin_audit,
-        record_usage, subscription_summary, touch_key, verification_email_sent_recently,
+        record_usage, subscription_summary_with_models, touch_key,
+        verification_email_sent_recently,
     },
     email::VerificationEmail,
     errors::ApiError,
+    free_models::{is_free_model_candidate, should_trip_free_model},
     models::{
         AdminCreateUserRequest, AdminCreateUserResponse, AdminUpdatePlanRequest, AdminUserRow,
         AdminUserStats, AdminUserSummary, AdminUsersResponse, AuthResponse, CreateUserKeyRequest,
@@ -29,8 +31,8 @@ use crate::{
     plans::{FREE_MONTHLY_REQUEST_LIMIT, FREE_PLAN, PLUS_MONTHLY_REQUEST_LIMIT, PLUS_PLAN},
     state::AppState,
     upstream::{
-        allowed_models_for_plan, bytes_from_static_json, forward_chat, openai_models_payload,
-        request_is_stream, request_model, route_for_model,
+        PLUS_MODELS, UpstreamRoute, bytes_from_static_json, forward_chat, is_plus_model,
+        openai_models_payload, request_is_stream, request_model,
     },
 };
 
@@ -56,6 +58,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             "/admin/users/{user_id}",
             web::delete().to(admin_delete_user),
         )
+        .route("/public/free-models", web::get().to(public_free_models))
         .route("/v1/models", web::get().to(models))
         .route("/v1/chat/completions", web::post().to(chat_completions));
 }
@@ -255,7 +258,8 @@ async fn dashboard(
     let user = authenticate_session(&state.db, extract_bearer(&req)?).await?;
     let api_keys = api_key_summaries(&state.db, user.id).await?;
     let recent_usage = recent_usage_for_user(&state.db, user.id).await?;
-    let subscription = subscription_summary(&state.db, &user).await?;
+    let allowed_models = allowed_models_for_effective_plan(&state, user.effective_plan()).await;
+    let subscription = subscription_summary_with_models(&state.db, &user, allowed_models).await?;
 
     Ok(web::Json(DashboardResponse {
         user: PublicUser::from_user(&user, &state.config.admin_emails),
@@ -774,13 +778,53 @@ async fn models(state: web::Data<AppState>, req: HttpRequest) -> Result<HttpResp
     let api_key = authenticate(&state.db, extract_bearer(&req)?).await?;
     let user = user_for_api_key(&state.db, &api_key).await?;
     let plan = user.effective_plan();
+    let allowed_models = allowed_models_for_effective_plan(&state, plan).await;
 
     touch_key(&state.db, api_key.id).await?;
     Ok(HttpResponse::Ok()
         .content_type("application/json")
         .body(bytes_from_static_json(openai_models_payload(
-            allowed_models_for_plan(plan),
+            &allowed_models
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
         ))))
+}
+
+async fn public_free_models(state: web::Data<AppState>) -> Result<HttpResponse, ApiError> {
+    Ok(HttpResponse::Ok().json(state.free_models.public_snapshot().await))
+}
+
+async fn allowed_models_for_effective_plan(state: &AppState, plan: &str) -> Vec<String> {
+    let mut models = state.free_models.available_models().await;
+    if plan == PLUS_PLAN {
+        models.extend(PLUS_MODELS.iter().map(|model| (*model).to_string()));
+    }
+    models
+}
+
+async fn route_for_model(
+    state: &AppState,
+    plan: &str,
+    model: &str,
+) -> Result<UpstreamRoute, ApiError> {
+    if state.free_models.is_available(model).await {
+        return Ok(UpstreamRoute::Zen);
+    }
+
+    if is_plus_model(model) {
+        return if plan == PLUS_PLAN {
+            Ok(UpstreamRoute::Go)
+        } else {
+            Err(ApiError::ModelNotAllowed(model.to_string()))
+        };
+    }
+
+    if is_free_model_candidate(model) {
+        return Err(ApiError::ModelTemporarilyUnavailable(model.to_string()));
+    }
+
+    Err(ApiError::UnsupportedModel(model.to_string()))
 }
 
 async fn chat_completions(
@@ -796,7 +840,7 @@ async fn chat_completions(
     let model = request_model(&body)?.to_string();
     let is_stream = request_is_stream(&body);
     let plan = user.effective_plan();
-    let route = route_for_model(plan, &model)?;
+    let route = route_for_model(&state, plan, &model).await?;
 
     info!(
         api_key_id = api_key.id,
@@ -815,6 +859,29 @@ async fn chat_completions(
         route,
     )
     .await?;
+    if route == crate::upstream::UpstreamRoute::Zen
+        && is_free_model_candidate(&model)
+        && should_trip_free_model(result.status_code, result.body_text.as_deref())
+    {
+        state
+            .free_models
+            .trip_model(&model, format!("upstream returned {}", result.status_code))
+            .await;
+        record_usage(
+            &state.db,
+            UsageEvent {
+                api_key_id: Some(api_key.id),
+                model: Some(&model),
+                path: "/v1/chat/completions",
+                status_code: result.status_code,
+                is_stream,
+                upstream_latency_ms: Some(result.latency_ms),
+                error_type: Some("model_temporarily_unavailable"),
+            },
+        )
+        .await?;
+        return Err(ApiError::ModelTemporarilyUnavailable(model));
+    }
     touch_key(&state.db, api_key.id).await?;
     record_usage(
         &state.db,
