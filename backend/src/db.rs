@@ -78,6 +78,27 @@ pub async fn touch_key(pool: &PgPool, api_key_id: i64) -> Result<(), sqlx::Error
     Ok(())
 }
 
+pub async fn revoke_api_key_for_user(
+    pool: &PgPool,
+    user_id: i64,
+    api_key_id: i64,
+) -> Result<bool, sqlx::Error> {
+    let result = sqlx::query(
+        r#"
+        UPDATE api_keys
+        SET enabled = false
+        WHERE id = $1
+          AND user_id = $2
+        "#,
+    )
+    .bind(api_key_id)
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+
+    Ok(result.rows_affected() > 0)
+}
+
 pub async fn create_session(pool: &PgPool, user_id: i64) -> Result<String, sqlx::Error> {
     let token = generate_session_token();
     let token_hash = hash_key(&token);

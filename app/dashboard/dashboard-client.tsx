@@ -76,6 +76,9 @@ const copy: Record<string, string> = {
   goLogin: "去登录",
   generated: "新 API Key 已生成，请现在保存",
   copy: "复制",
+  deleteKey: "删除",
+  deletingKey: "删除中...",
+  keyDeleted: "API Key 已删除并立即失效",
   apiKeys: "API 密钥",
   apiKeysSub: "多个 Key 共享账号套餐额度，不再按单个 Key 独立计费。",
   noKeys: "还没有 API Key，点击右上角生成一个。",
@@ -101,6 +104,7 @@ export function DashboardClient() {
   const [status, setStatus] = useState(t("dashboard.loading"));
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [deletingKeyId, setDeletingKeyId] = useState<number | null>(null);
 
   const normalizedBackendUrl = useMemo(
     () => backendUrl.replace(/\/+$/, ""),
@@ -170,6 +174,33 @@ export function DashboardClient() {
     }
   }
 
+  async function deleteKey(key: DashboardResponse["api_keys"][number]) {
+    if (!sessionToken || !key.enabled) return;
+    const confirmed = window.confirm(
+      `确认删除 API Key「${key.name}」？\n\n删除后该 Key 会立即失效，无法恢复；你可以重新创建新 Key。`,
+    );
+    if (!confirmed) return;
+
+    setDeletingKeyId(key.id);
+    setStatus(t("dashboard.deletingKey"));
+
+    try {
+      const response = await fetch(`${normalizedBackendUrl}/dashboard/api-keys/${key.id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${sessionToken}`,
+        },
+      });
+      if (!response.ok) throw new Error(await errorText(response));
+      setStatus(t("dashboard.keyDeleted"));
+      await loadDashboard();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : t("dashboard.failed"));
+    } finally {
+      setDeletingKeyId(null);
+    }
+  }
+
   async function copy(text: string) {
     await navigator.clipboard.writeText(text);
     setStatus(t("dashboard.keyCopied"));
@@ -213,8 +244,8 @@ export function DashboardClient() {
               <div className="panel-head">
                 <div>
                   <p>{t("dashboard.keyLabel")}</p>
-<h2>{t("dashboard.apiKeys")}</h2>
-            <span className="panel-subtitle">{t("dashboard.apiKeysSub")}</span>
+                  <h2>{t("dashboard.apiKeys")}</h2>
+                  <span className="panel-subtitle">{t("dashboard.apiKeysSub")}</span>
                 </div>
                 <Button type="button" onClick={createKey} disabled={creating}>
                   {creating ? t("dashboard.creating") : t("dashboard.createKey")}
@@ -239,9 +270,22 @@ export function DashboardClient() {
                       <strong>{key.name}</strong>
                       <span>{key.key_prefix ? `${key.key_prefix}...` : t("dashboard.oldKeyPrefix")}</span>
                     </div>
-                    <div>
+                    <div className="key-actions">
                       <span>{key.requests_this_month} 次</span>
                       <small>{key.enabled ? t("dashboard.enabled") : t("dashboard.disabled")}</small>
+                      {key.enabled && (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          type="button"
+                          onClick={() => deleteKey(key)}
+                          disabled={deletingKeyId === key.id}
+                        >
+                          {deletingKeyId === key.id
+                            ? t("dashboard.deletingKey")
+                            : t("dashboard.deleteKey")}
+                        </Button>
+                      )}
                     </div>
                   </article>
                 ))}
@@ -429,6 +473,10 @@ export function DashboardClient() {
         .key-row div:last-child,
         .usage-row div:last-child {
           justify-items: end;
+        }
+
+        .key-actions {
+          align-content: center;
         }
 
         .issued-key {

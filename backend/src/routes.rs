@@ -15,7 +15,7 @@ use crate::{
         consume_email_verification_token_by_value, consume_unspent_email_verification_tokens,
         create_customer_key_for_user, create_default_customer_key_if_missing,
         create_email_verification_token, create_session, recent_usage_for_user, record_admin_audit,
-        record_usage, subscription_summary_with_models, touch_key,
+        record_usage, revoke_api_key_for_user, subscription_summary_with_models, touch_key,
         verification_email_sent_recently,
     },
     email::VerificationEmail,
@@ -48,6 +48,10 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .route("/auth/me", web::get().to(me))
         .route("/dashboard", web::get().to(dashboard))
         .route("/dashboard/api-keys", web::post().to(create_dashboard_key))
+        .route(
+            "/dashboard/api-keys/{key_id}",
+            web::delete().to(delete_dashboard_key),
+        )
         .route("/admin/users", web::get().to(admin_users))
         .route("/admin/users", web::post().to(admin_create_user))
         .route(
@@ -283,6 +287,21 @@ async fn create_dashboard_key(
 
     let key = create_customer_key_for_user(&state.db, user.id, name, monthly_limit).await?;
     Ok(web::Json(key))
+}
+
+async fn delete_dashboard_key(
+    state: web::Data<AppState>,
+    req: HttpRequest,
+    path: web::Path<i64>,
+) -> Result<HttpResponse, ApiError> {
+    let user = authenticate_session(&state.db, extract_bearer(&req)?).await?;
+    let key_id = path.into_inner();
+    let revoked = revoke_api_key_for_user(&state.db, user.id, key_id).await?;
+    if !revoked {
+        return Err(ApiError::NotFound);
+    }
+
+    Ok(HttpResponse::NoContent().finish())
 }
 
 async fn admin_users(

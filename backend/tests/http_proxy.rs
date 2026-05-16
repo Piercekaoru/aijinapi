@@ -15,7 +15,7 @@ use wiremock::{
 
 use openachieve_backend::{
     config::Config,
-    db::create_customer_key_for_user,
+    db::{create_customer_key_for_user, create_session},
     email::InMemoryEmailSender,
     free_models::FreeModelCatalog,
     plans::{FREE_MONTHLY_REQUEST_LIMIT, PLUS_MONTHLY_REQUEST_LIMIT},
@@ -160,6 +160,72 @@ async fn models_endpoint_uses_live_free_catalog(pool: PgPool) {
         model_ids(&free_models),
         vec!["big-pickle", "new-model-free"]
     );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn user_can_revoke_own_api_key_and_disabled_key_cannot_authenticate(pool: PgPool) {
+    let server = MockServer::start().await;
+    let user_id = insert_user(&pool, "free", "active", FREE_MONTHLY_REQUEST_LIMIT, None).await;
+    let session_token = create_session(&pool, user_id).await.unwrap();
+    let issued_key =
+        create_customer_key_for_user(&pool, user_id, "revokable", FREE_MONTHLY_REQUEST_LIMIT)
+            .await
+            .unwrap();
+    let app = test_app(pool.clone(), &server).await;
+
+    let first_delete = delete_dashboard_key(&app, &session_token, issued_key.id).await;
+    assert_eq!(first_delete.status(), StatusCode::NO_CONTENT);
+
+    let enabled: bool = sqlx::query_scalar("SELECT enabled FROM api_keys WHERE id = $1")
+        .bind(issued_key.id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert!(!enabled);
+
+    let second_delete = delete_dashboard_key(&app, &session_token, issued_key.id).await;
+    assert_eq!(second_delete.status(), StatusCode::NO_CONTENT);
+
+    let disabled_models_req = test::TestRequest::get()
+        .uri("/v1/models")
+        .insert_header(("authorization", format!("Bearer {}", issued_key.key)))
+        .to_request();
+    let disabled_models_response = test::call_service(&app, disabled_models_req).await;
+    assert_eq!(disabled_models_response.status(), StatusCode::FORBIDDEN);
+    let body: Value = test::read_body_json(disabled_models_response).await;
+    assert_eq!(body["error"]["code"], "disabled_api_key");
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn api_key_revoke_requires_session_and_ownership(pool: PgPool) {
+    let server = MockServer::start().await;
+    let owner_id = insert_user(&pool, "free", "active", FREE_MONTHLY_REQUEST_LIMIT, None).await;
+    let other_id = insert_user(&pool, "free", "active", FREE_MONTHLY_REQUEST_LIMIT, None).await;
+    let owner_session = create_session(&pool, owner_id).await.unwrap();
+    let other_key =
+        create_customer_key_for_user(&pool, other_id, "other-key", FREE_MONTHLY_REQUEST_LIMIT)
+            .await
+            .unwrap();
+    let app = test_app(pool.clone(), &server).await;
+
+    let unauthenticated_delete = test::TestRequest::delete()
+        .uri(&format!("/dashboard/api-keys/{}", other_key.id))
+        .to_request();
+    let unauthenticated_response = test::call_service(&app, unauthenticated_delete).await;
+    assert_eq!(unauthenticated_response.status(), StatusCode::UNAUTHORIZED);
+
+    let foreign_delete = delete_dashboard_key(&app, &owner_session, other_key.id).await;
+    assert_eq!(foreign_delete.status(), StatusCode::NOT_FOUND);
+
+    let still_enabled: bool = sqlx::query_scalar("SELECT enabled FROM api_keys WHERE id = $1")
+        .bind(other_key.id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert!(still_enabled);
+
+    let models = get_models(&app, &other_key.key).await;
+    assert!(model_ids(&models).contains(&"big-pickle"));
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -576,6 +642,26 @@ where
         .to_request();
 
     test::call_and_read_body_json(app, req).await
+}
+
+async fn delete_dashboard_key<S>(
+    app: &S,
+    session_token: &str,
+    key_id: i64,
+) -> actix_web::dev::ServiceResponse
+where
+    S: actix_service::Service<
+            actix_http::Request,
+            Response = actix_web::dev::ServiceResponse,
+            Error = actix_web::Error,
+        >,
+{
+    let req = test::TestRequest::delete()
+        .uri(&format!("/dashboard/api-keys/{key_id}"))
+        .insert_header(("authorization", format!("Bearer {session_token}")))
+        .to_request();
+
+    test::call_service(app, req).await
 }
 
 fn model_ids(value: &Value) -> Vec<&str> {
