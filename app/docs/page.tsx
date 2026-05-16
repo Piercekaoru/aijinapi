@@ -1,11 +1,17 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
-import { loadPublicFreeModels, modelDisplayName } from "@/lib/free-models";
 import { plusMonthlyPriceLabel } from "@/lib/pricing";
 import { SiteFooter } from "../components/SiteFooter";
 import { SiteHeader } from "../components/SiteHeader";
+
+const freeModelIds = [
+  "big-pickle",
+  "deepseek-v4-flash-free",
+  "minimax-m2.5-free",
+  "ring-2.6-1t-free",
+  "nemotron-3-super-free",
+];
 
 const kiloSteps = [
   {
@@ -32,7 +38,7 @@ const kiloSteps = [
   {
     kicker: "Step 4",
     title: "导入 Free 模型",
-    body: "Kilo Code 会从 OpenAchieve 读取模型列表。Free 用户建议先导入当前实时可用的免费模型，然后点击添加模型。",
+    body: "Kilo Code 会从 OpenAchieve 读取模型列表。Free 用户建议先全选 5 个免费模型，然后点击添加模型。",
     image: "/images/docs/kilo-code-import-models.png",
     alt: "Kilo Code 导入 OpenAchieve 模型列表",
   },
@@ -168,79 +174,7 @@ const models = [
   },
 ];
 
-const freeModelMetadata: Record<
-  string,
-  {
-    description: string;
-    image: string;
-    tone: string;
-  }
-> = {
-  "big-pickle": {
-    description: "免费模型入口，适合验证接入链路和轻量探索。",
-    image: "/images/GrHDjXQXYAACVsc.jpg",
-    tone: "light",
-  },
-  "deepseek-v4-flash-free": {
-    description: "免费低延迟推理模型，适合高频问答、代码辅助和快速实验。",
-    image: "/images/HHZ_hQzbIAEw83V.jpg",
-    tone: "dark",
-  },
-  "minimax-m2.5-free": {
-    description: "免费通用对话模型，适合内容生成、润色和轻量业务助手。",
-    image: "/images/HAh3SWLacAAA6By.jpg",
-    tone: "light",
-  },
-  "ring-2.6-1t-free": {
-    description: "免费长上下文入口，适合文档理解、摘要和知识库实验。",
-    image: "/images/HG42ZYwa8AAGBEd.jpg",
-    tone: "dark",
-  },
-  "nemotron-3-super-free": {
-    description: "免费试用型模型，适合非敏感内容验证和能力探索。",
-    image: "/images/GtH_mkRawAA2bJU.jpg",
-    tone: "light",
-  },
-};
-
 export default function DocsPage() {
-  const [freeModelIds, setFreeModelIds] = useState<string[]>([]);
-  const [freeCatalogLoaded, setFreeCatalogLoaded] = useState(false);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    loadPublicFreeModels(controller.signal)
-      .then((catalog) => {
-        setFreeModelIds(catalog.fail_closed ? [] : catalog.data.map((model) => model.id));
-      })
-      .catch(() => setFreeModelIds([]))
-      .finally(() => setFreeCatalogLoaded(true));
-
-    return () => controller.abort();
-  }, []);
-
-  const renderedModels = useMemo(() => {
-    const liveFreeModels = freeModelIds.map((id, index) => {
-      const metadata = freeModelMetadata[id] ?? {
-        description: "当前实时同步的免费模型，适合接入验证和轻量实验。",
-        image: "/images/GrHDjXQXYAACVsc.jpg",
-        tone: index % 2 === 0 ? "light" : "dark",
-      };
-
-      return {
-        id,
-        title: modelDisplayName(id),
-        description: metadata.description,
-        tag: "Free",
-        image: metadata.image,
-        tone: metadata.tone,
-      };
-    });
-    const plusModels = models.filter((model) => model.tag === "Plus");
-
-    return [...liveFreeModels, ...plusModels];
-  }, [freeModelIds]);
-
   return (
     <main className="docs-page">
       <section className="docs-shell">
@@ -310,11 +244,9 @@ export default function DocsPage() {
 
           <div className="free-model-strip">
             <span>Free 用户推荐先导入：</span>
-            {freeModelIds.length > 0 ? (
-              freeModelIds.map((id) => <code key={id}>{id}</code>)
-            ) : (
-              <code>{freeCatalogLoaded ? "当前免费模型池暂不可用" : "正在同步免费模型池"}</code>
-            )}
+            {freeModelIds.map((id) => (
+              <code key={id}>{id}</code>
+            ))}
           </div>
 
           <div className="kilo-steps">
@@ -343,14 +275,11 @@ export default function DocsPage() {
           <div className="section-head">
             <p>支持模型</p>
             <h2>支持模型</h2>
-            <span>
-              Free 可调用实时同步的免费模型池；Plus 为 {plusMonthlyPriceLabel}
-              、1500 次/月，并额外开放完整 Plus 模型池。
-            </span>
+            <span>Free 可调用 5 个免费模型；Plus 为 {plusMonthlyPriceLabel}、1500 次/月，并额外开放完整 Plus 模型池。</span>
             <span>免费模型可能用于服务改进或试用目的，请避免提交个人、商业机密或其他敏感信息。</span>
           </div>
           <div className="model-card-grid">
-            {renderedModels.map((model) => (
+            {models.map((model) => (
               <article className={`model-card ${model.tone === "dark" ? "dark" : ""}`} key={model.id}>
                 <div className="model-copy">
                   <span className="model-tag">{model.tag}</span>

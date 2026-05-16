@@ -3,18 +3,23 @@
 import { X } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { loadPublicFreeModels, modelDisplayName, type PublicFreeModel } from "@/lib/free-models";
 
 const publicPaths = new Set(["/", "/models", "/docs", "/login", "/terms"]);
 
 const sessionStorageKey = "openachieve_free_models_announcement_closed";
 const todayStorageKey = "openachieve_free_models_announcement_closed_date";
 
+const freeModels = [
+  { name: "Big Pickle", id: "big-pickle" },
+  { name: "DeepSeek V4 Flash Free", id: "deepseek-v4-flash-free" },
+  { name: "MiniMax M2.5 Free", id: "minimax-m2.5-free" },
+  { name: "Ring 2.6 1T Free", id: "ring-2.6-1t-free" },
+  { name: "Nemotron 3 Super Free", id: "nemotron-3-super-free" },
+];
+
 export function FreeModelsAnnouncement() {
   const pathname = usePathname();
   const [visible, setVisible] = useState(false);
-  const [freeModels, setFreeModels] = useState<PublicFreeModel[]>([]);
-  const [catalogFailed, setCatalogFailed] = useState(false);
 
   const isPublicPage = useMemo(() => publicPaths.has(pathname), [pathname]);
 
@@ -27,23 +32,6 @@ export function FreeModelsAnnouncement() {
     const hiddenForSession = safeSessionGet(sessionStorageKey) === "1";
     const hiddenToday = safeLocalGet(todayStorageKey) === localDateKey();
     setVisible(!hiddenForSession && !hiddenToday);
-  }, [isPublicPage, pathname]);
-
-  useEffect(() => {
-    if (!isPublicPage) return;
-
-    const controller = new AbortController();
-    loadPublicFreeModels(controller.signal)
-      .then((catalog) => {
-        setFreeModels(catalog.fail_closed ? [] : catalog.data);
-        setCatalogFailed(Boolean(catalog.fail_closed));
-      })
-      .catch(() => {
-        setFreeModels([]);
-        setCatalogFailed(true);
-      });
-
-    return () => controller.abort();
   }, [isPublicPage, pathname]);
 
   useEffect(() => {
@@ -93,9 +81,7 @@ export function FreeModelsAnnouncement() {
         <div className="announcement-visual">
           <div className="announcement-pill">Free Models</div>
           <p className="announcement-caption">
-            {freeModels.length > 0
-              ? `当前 Free 可用：${freeModels.map((model) => modelDisplayName(model.id)).join("、")}`
-              : "当前免费模型池正在同步 OpenCode Zen"}
+            当前 Free 可用：Big Pickle、DeepSeek V4 Flash Free、MiniMax M2.5 Free、Ring 2.6 1T Free、Nemotron 3 Super Free
           </p>
         </div>
 
@@ -105,24 +91,17 @@ export function FreeModelsAnnouncement() {
             <h2 id="free-model-announcement-title">当前可用免费模型</h2>
           </div>
           <p>
-            Free 用户每月 500 次请求额度，可调用实时同步的免费模型池。免费模型适合接入验证、轻量实验和非敏感内容探索。
+            Free 用户每月 500 次请求额度，可直接调用以下 5 个模型。免费模型适合接入验证、轻量实验和非敏感内容探索。
           </p>
         </div>
 
         <div className="model-list" aria-label="免费模型列表">
-          {freeModels.length > 0 ? (
-            freeModels.map((model) => (
-              <div className="model-item" key={model.id}>
-                <strong>{modelDisplayName(model.id)}</strong>
-                <code>{model.id}</code>
-              </div>
-            ))
-          ) : (
-            <div className="model-item">
-              <strong>{catalogFailed ? "暂时不可用" : "正在同步"}</strong>
-              <code>{catalogFailed ? "fail-closed" : "syncing"}</code>
+          {freeModels.map((model) => (
+            <div className="model-item" key={model.id}>
+              <strong>{model.name}</strong>
+              <code>{model.id}</code>
             </div>
-          )}
+          ))}
         </div>
 
         <div className="announcement-actions">

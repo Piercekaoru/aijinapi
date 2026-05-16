@@ -11,7 +11,6 @@ use openachieve_backend::{
     db::{create_customer_key_for_user, subscription_summary},
     email::{InMemoryEmailSender, SharedEmailSender},
     errors::ApiError,
-    free_models::FreeModelCatalog,
     models::User,
     plans::{FREE_MONTHLY_REQUEST_LIMIT, PLUS_MONTHLY_REQUEST_LIMIT},
     routes,
@@ -392,24 +391,9 @@ async fn subscription_summary_reports_plus_1500_and_remaining_quota(pool: PgPool
     assert_eq!(summary.monthly_request_limit, PLUS_MONTHLY_REQUEST_LIMIT);
     assert_eq!(summary.requests_this_month, 10);
     assert_eq!(summary.remaining_requests, 1490);
-    assert!(
-        summary
-            .allowed_models
-            .iter()
-            .any(|model| model == "qwen3.6-plus")
-    );
-    assert!(
-        summary
-            .allowed_models
-            .iter()
-            .any(|model| model == "big-pickle")
-    );
-    assert!(
-        summary
-            .allowed_models
-            .iter()
-            .any(|model| model == "deepseek-v4-flash-free")
-    );
+    assert!(summary.allowed_models.contains(&"qwen3.6-plus"));
+    assert!(summary.allowed_models.contains(&"big-pickle"));
+    assert!(summary.allowed_models.contains(&"deepseek-v4-flash-free"));
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -543,13 +527,6 @@ fn app_state_with_email(pool: PgPool, email: SharedEmailSender) -> AppState {
         http: Client::new(),
         email,
         upstream_keys,
-        free_models: FreeModelCatalog::seeded([
-            "big-pickle",
-            "deepseek-v4-flash-free",
-            "minimax-m2.5-free",
-            "ring-2.6-1t-free",
-            "nemotron-3-super-free",
-        ]),
     }
 }
 

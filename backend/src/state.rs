@@ -1,10 +1,7 @@
 use reqwest::Client;
 use sqlx::PgPool;
 
-use crate::{
-    config::Config, email::SharedEmailSender, free_models::FreeModelCatalog,
-    upstream::UpstreamKeyRing,
-};
+use crate::{config::Config, email::SharedEmailSender, upstream::UpstreamKeyRing};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -13,5 +10,4 @@ pub struct AppState {
     pub http: Client,
     pub email: SharedEmailSender,
     pub upstream_keys: UpstreamKeyRing,
-    pub free_models: FreeModelCatalog,
 }

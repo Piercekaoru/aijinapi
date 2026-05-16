@@ -56,11 +56,11 @@ cp .env.example .env
 
 ```bash
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/openachieve
-OPENCODE_ZEN_API_KEYS=你的_OpenCode_Zen_Key_1,你的_OpenCode_Zen_Key_2
-OPENCODE_GO_API_KEYS=你的_OpenCode_Go_Key_1,你的_OpenCode_Go_Key_2
+OPENCODE_GO_API_KEY=你的_OpenCode_Go_API_Key
+OPENCODE_ZEN_API_KEY=你的_OpenCode_Zen_API_Key    # 可选，未设置则复用 Go Key
 ```
 
-> Zen 和 Go key 建议分开配置；后端启动时要求 Zen key 存在，避免 Free 流量静默复用 Go 余额。
+> 多 Key 轮转模式：使用 `OPENCODE_GO_API_KEYS` / `OPENCODE_ZEN_API_KEYS`（逗号分隔），优先级高于单 Key 模式。
 
 ### 2. 运行数据库迁移
 
@@ -110,17 +110,16 @@ docker compose --env-file .env.docker up --build
 | 变量 | 说明 | 示例 |
 |---|---|---|
 | `DATABASE_URL` | PostgreSQL 连接串 | `postgres://user:pass@host:5432/openachieve` |
-| `OPENCODE_ZEN_API_KEYS` | OpenCode Zen 上游 API Key 列表 | `zen_key_1,zen_key_2` |
-| `OPENCODE_GO_API_KEYS` | OpenCode Go 上游 API Key 列表 | `go_key_1,go_key_2` |
+| `OPENCODE_GO_API_KEY` | OpenCode Go 上游 API Key | `opencode_go_xxx` |
 
-> Zen key 是必需的，不再默认复用 Go key；这样 Free 流量可以独立设置 OpenCode 支出上限。
+> 也可使用 `OPENCODE_GO_API_KEYS`（逗号分隔多个 Key）替代 `OPENCODE_GO_API_KEY`，优先级更高。
 
 ### 可选变量
 
 | 变量 | 说明 | 默认值 |
 |---|---|---|
-| `OPENCODE_ZEN_API_KEY` | Zen 单 Key 兼容变量 | 无 |
-| `OPENCODE_GO_API_KEY` | Go 单 Key 兼容变量 | 无 |
+| `OPENCODE_ZEN_API_KEY` | OpenCode Zen 上游 API Key | 未设置时复用 Go Key |
+| `OPENCODE_ZEN_API_KEYS` | Zen 多 Key 轮转（逗号分隔） | 同 Zen 单 Key |
 | `SERVER_HOST` | Rust 后端监听地址 | `127.0.0.1` |
 | `SERVER_PORT` | Rust 后端监听端口 | `8080` |
 | `APP_PORT` | Docker 对外端口 | `3000` |

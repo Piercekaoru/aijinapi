@@ -79,7 +79,6 @@ pub struct UpstreamResult {
     pub response: HttpResponse,
     pub status_code: u16,
     pub latency_ms: i32,
-    pub body_text: Option<String>,
 }
 
 impl UpstreamKeyRing {
@@ -165,10 +164,6 @@ pub fn is_supported_chat_model(model: &str) -> bool {
     FREE_MODELS.contains(&model) || PLUS_MODELS.contains(&model)
 }
 
-pub fn is_plus_model(model: &str) -> bool {
-    PLUS_MODELS.contains(&model)
-}
-
 pub fn allowed_models_for_plan(plan: &str) -> &'static [&'static str] {
     if plan == "plus" {
         PLUS_ALLOWED_MODELS
@@ -217,30 +212,6 @@ pub async fn forward_models(
     .await?;
 
     response_from_upstream(upstream, started, false).await
-}
-
-pub async fn fetch_models_json(
-    client: &Client,
-    config: &Config,
-    key_ring: &UpstreamKeyRing,
-    route: UpstreamRoute,
-) -> Result<Value, ApiError> {
-    let url = model_url(config, route);
-    let upstream = send_with_key_failover(config, key_ring, "models", route, url, |api_key| {
-        client.get(url).bearer_auth(api_key)
-    })
-    .await?;
-    let status = upstream.status();
-    let value = upstream.json::<Value>().await?;
-
-    if !status.is_success() {
-        return Err(ApiError::UpstreamStatus {
-            status_code: status.as_u16(),
-            body: value.to_string(),
-        });
-    }
-
-    Ok(value)
 }
 
 pub async fn forward_chat(
@@ -406,7 +377,6 @@ async fn response_from_upstream(
             response,
             status_code,
             latency_ms,
-            body_text: None,
         });
     }
 
@@ -417,16 +387,14 @@ async fn response_from_upstream(
         .unwrap_or("application/json")
         .to_string();
     let bytes = upstream.bytes().await?;
-    let body_text = String::from_utf8_lossy(&bytes).to_string();
     let response = HttpResponse::build(to_actix_status(status))
         .insert_header((header::CONTENT_TYPE, content_type))
-        .body(bytes.clone());
+        .body(bytes);
 
     Ok(UpstreamResult {
         response,
         status_code,
         latency_ms,
-        body_text: Some(body_text),
     })
 }
 
