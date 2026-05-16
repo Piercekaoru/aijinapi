@@ -3,6 +3,7 @@ use std::{env, net::IpAddr};
 use openachieve_backend::{
     config::Config,
     errors::ApiError,
+    free_models::FreeModelCatalog,
     upstream::{UpstreamKeyRing, UpstreamRoute, forward_chat, forward_models},
 };
 use reqwest::Client;
@@ -119,6 +120,80 @@ async fn forwards_go_models_with_go_authorization() {
         .unwrap();
 
     assert_eq!(result.status_code, 200);
+}
+
+#[actix_rt::test]
+async fn free_model_catalog_refresh_adds_probe_verified_candidates() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/zen/models"))
+        .and(header("authorization", "Bearer real-zen-key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "object": "list",
+            "data": [
+                { "id": "new-model-free" },
+                { "id": "qwen3.6-plus" }
+            ]
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/zen/chat/completions"))
+        .and(header("authorization", "Bearer real-zen-key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "id": "probe",
+            "object": "chat.completion"
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let config = test_config(&server);
+    let key_ring = UpstreamKeyRing::from_config(&config);
+    let catalog = FreeModelCatalog::new();
+
+    let models = catalog
+        .refresh(&Client::new(), &config, &key_ring)
+        .await
+        .unwrap();
+
+    assert_eq!(models, vec!["new-model-free"]);
+    assert_eq!(catalog.available_models().await, vec!["new-model-free"]);
+}
+
+#[actix_rt::test]
+async fn free_model_catalog_refresh_rejects_probe_failures() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/zen/models"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "object": "list",
+            "data": [{ "id": "new-model-free" }]
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/zen/chat/completions"))
+        .respond_with(ResponseTemplate::new(403).set_body_json(json!({
+            "error": "payment required"
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let config = test_config(&server);
+    let key_ring = UpstreamKeyRing::from_config(&config);
+    let catalog = FreeModelCatalog::new();
+
+    let models = catalog
+        .refresh(&Client::new(), &config, &key_ring)
+        .await
+        .unwrap();
+    assert!(models.is_empty());
+    assert!(catalog.available_models().await.is_empty());
+    assert!(catalog.public_snapshot().await.degraded);
 }
 
 #[actix_rt::test]

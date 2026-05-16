@@ -10,6 +10,7 @@ use openachieve_backend::{
     config::Config,
     db::create_session,
     email::InMemoryEmailSender,
+    free_models::FreeModelCatalog,
     plans::{FREE_MONTHLY_REQUEST_LIMIT, PLUS_MONTHLY_REQUEST_LIMIT},
     routes,
     state::AppState,
@@ -203,6 +204,13 @@ fn app_state(pool: PgPool) -> AppState {
         http: Client::new(),
         email: InMemoryEmailSender::shared(),
         upstream_keys,
+        free_models: FreeModelCatalog::seeded([
+            "big-pickle",
+            "deepseek-v4-flash-free",
+            "minimax-m2.5-free",
+            "ring-2.6-1t-free",
+            "nemotron-3-super-free",
+        ]),
     }
 }
 
