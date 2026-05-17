@@ -95,7 +95,7 @@ export function FreeModelsAnnouncement() {
           <p className="announcement-caption">
             {freeModels.length > 0
               ? `当前 Free 可用：${freeModels.map((model) => modelDisplayName(model.id)).join("、")}`
-              : "当前免费模型池正在同步 OpenCode Zen"}
+              : "当前免费模型池正在同步"}
           </p>
         </div>
 

@@ -24,7 +24,7 @@ export function HomePageClient({ style, html }: HomePageClientProps) {
         const modelText =
           models.length > 0
             ? models.map((model) => modelDisplayName(model.id)).join("、")
-            : "当前免费模型池正在同步 OpenCode Zen";
+            : "当前免费模型池正在同步";
         root.querySelectorAll<HTMLElement>("[data-live-free-models]").forEach((element) => {
           element.textContent = modelText;
         });

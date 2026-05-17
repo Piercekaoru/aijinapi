@@ -239,6 +239,17 @@ pub struct ResendVerificationRequest {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct PasswordResetRequest {
+    pub email: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PasswordResetConfirmRequest {
+    pub token: String,
+    pub password: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct CreateUserKeyRequest {
     pub name: Option<String>,
     pub monthly_request_limit: Option<i32>,
@@ -276,6 +287,11 @@ pub struct VerificationRequiredResponse {
 pub struct VerificationMessageResponse {
     pub verification_required: bool,
     pub email: String,
+    pub message: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PasswordResetMessageResponse {
     pub message: String,
 }
 

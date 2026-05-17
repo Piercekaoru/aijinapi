@@ -103,7 +103,7 @@ export function ModelsPageClient({ style, html }: ModelsPageClientProps) {
         const modelText =
           freeModels.length > 0
             ? freeModels.map((model) => modelDisplayName(model.id)).join("、")
-            : "当前免费模型池正在同步 OpenCode Zen";
+            : "当前免费模型池正在同步";
 
         root.querySelectorAll<HTMLElement>("[data-live-free-count]").forEach((element) => {
           element.textContent =

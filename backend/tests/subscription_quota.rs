@@ -12,6 +12,7 @@ use openachieve_backend::{
     email::{InMemoryEmailSender, SharedEmailSender},
     errors::ApiError,
     free_models::FreeModelCatalog,
+    keys::hash_key,
     models::User,
     plans::{FREE_MONTHLY_REQUEST_LIMIT, PLUS_MONTHLY_REQUEST_LIMIT},
     routes,
@@ -326,6 +327,279 @@ async fn resend_verification_requires_password_and_rate_limits(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "./migrations")]
+async fn password_reset_request_sends_email_and_hides_unknown_accounts(pool: PgPool) {
+    let email_sender = InMemoryEmailSender::shared();
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state_with_email(
+                pool.clone(),
+                email_sender.clone(),
+            )))
+            .configure(routes::configure),
+    )
+    .await;
+
+    let email = format!("{}@example.com", Uuid::new_v4());
+    insert_verified_user(&pool, &email, "password123").await;
+
+    let reset = test::TestRequest::post()
+        .uri("/auth/password-reset/request")
+        .set_json(json!({ "email": email }))
+        .to_request();
+    assert_eq!(
+        test::call_service(&app, reset).await.status(),
+        StatusCode::ACCEPTED
+    );
+    assert_eq!(email_sender.password_resets().len(), 1);
+    assert_eq!(email_sender.password_resets()[0].to_email, email);
+
+    let token = reset_token_from_url(&email_sender.password_resets()[0].reset_url);
+    let stored_hash: String =
+        sqlx::query_scalar("SELECT token_hash FROM password_reset_tokens WHERE user_id = $1")
+            .bind(user_id_by_email(&pool, &email).await)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_ne!(stored_hash, token);
+    assert_eq!(stored_hash, hash_key(&token));
+
+    let unknown = test::TestRequest::post()
+        .uri("/auth/password-reset/request")
+        .set_json(json!({ "email": "missing@example.com" }))
+        .to_request();
+    assert_eq!(
+        test::call_service(&app, unknown).await.status(),
+        StatusCode::ACCEPTED
+    );
+    assert_eq!(email_sender.password_resets().len(), 1);
+
+    let unverified_email = format!("{}@example.com", Uuid::new_v4());
+    sqlx::query(
+        r#"
+        INSERT INTO users (email, name, password_hash, plan, plan_status, monthly_request_limit)
+        VALUES ($1, 'Unverified', $2, 'free', 'active', $3)
+        "#,
+    )
+    .bind(&unverified_email)
+    .bind(hash_password("password123").unwrap())
+    .bind(FREE_MONTHLY_REQUEST_LIMIT)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let unverified = test::TestRequest::post()
+        .uri("/auth/password-reset/request")
+        .set_json(json!({ "email": unverified_email }))
+        .to_request();
+    assert_eq!(
+        test::call_service(&app, unverified).await.status(),
+        StatusCode::ACCEPTED
+    );
+    assert_eq!(email_sender.password_resets().len(), 1);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn password_reset_confirm_updates_password_and_revokes_sessions(pool: PgPool) {
+    let email_sender = InMemoryEmailSender::shared();
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state_with_email(
+                pool.clone(),
+                email_sender.clone(),
+            )))
+            .configure(routes::configure),
+    )
+    .await;
+
+    let email = format!("{}@example.com", Uuid::new_v4());
+    let old_password = "password123";
+    let new_password = "new-password-456";
+    insert_verified_user(&pool, &email, old_password).await;
+
+    let login = test::TestRequest::post()
+        .uri("/auth/login")
+        .set_json(json!({
+            "email": email,
+            "password": old_password
+        }))
+        .to_request();
+    let login_body: Value = test::call_and_read_body_json(&app, login).await;
+    let old_session = login_body["session_token"].as_str().unwrap().to_string();
+
+    let reset = test::TestRequest::post()
+        .uri("/auth/password-reset/request")
+        .set_json(json!({ "email": email }))
+        .to_request();
+    assert_eq!(
+        test::call_service(&app, reset).await.status(),
+        StatusCode::ACCEPTED
+    );
+    let token = reset_token_from_url(&email_sender.password_resets()[0].reset_url);
+
+    let weak_password = test::TestRequest::post()
+        .uri("/auth/password-reset/confirm")
+        .set_json(json!({
+            "token": token,
+            "password": "short"
+        }))
+        .to_request();
+    let weak_response = test::call_service(&app, weak_password).await;
+    assert_eq!(weak_response.status(), StatusCode::BAD_REQUEST);
+    let weak_body: Value = test::read_body_json(weak_response).await;
+    assert_eq!(weak_body["error"]["code"], "invalid_request");
+
+    let confirm = test::TestRequest::post()
+        .uri("/auth/password-reset/confirm")
+        .set_json(json!({
+            "token": token,
+            "password": new_password
+        }))
+        .to_request();
+    assert_eq!(
+        test::call_service(&app, confirm).await.status(),
+        StatusCode::OK
+    );
+
+    let old_login = test::TestRequest::post()
+        .uri("/auth/login")
+        .set_json(json!({
+            "email": email,
+            "password": old_password
+        }))
+        .to_request();
+    assert_eq!(
+        test::call_service(&app, old_login).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+
+    let new_login = test::TestRequest::post()
+        .uri("/auth/login")
+        .set_json(json!({
+            "email": email,
+            "password": new_password
+        }))
+        .to_request();
+    let new_login_body: Value = test::call_and_read_body_json(&app, new_login).await;
+    assert!(
+        new_login_body["session_token"]
+            .as_str()
+            .unwrap()
+            .starts_with("openachieve_session_")
+    );
+
+    let old_session_me = test::TestRequest::get()
+        .uri("/auth/me")
+        .insert_header(("authorization", format!("Bearer {old_session}")))
+        .to_request();
+    assert_eq!(
+        test::call_service(&app, old_session_me).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+
+    let reused = test::TestRequest::post()
+        .uri("/auth/password-reset/confirm")
+        .set_json(json!({
+            "token": token,
+            "password": "another-password-789"
+        }))
+        .to_request();
+    assert_eq!(
+        test::call_service(&app, reused).await.status(),
+        StatusCode::BAD_REQUEST
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn password_reset_rejects_expired_fake_and_superseded_tokens(pool: PgPool) {
+    let email_sender = InMemoryEmailSender::shared();
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state_with_email(
+                pool.clone(),
+                email_sender.clone(),
+            )))
+            .configure(routes::configure),
+    )
+    .await;
+
+    let email = format!("{}@example.com", Uuid::new_v4());
+    let user_id = insert_verified_user(&pool, &email, "password123").await;
+
+    let first_reset = test::TestRequest::post()
+        .uri("/auth/password-reset/request")
+        .set_json(json!({ "email": email }))
+        .to_request();
+    assert_eq!(
+        test::call_service(&app, first_reset).await.status(),
+        StatusCode::ACCEPTED
+    );
+    let first_token = reset_token_from_url(&email_sender.password_resets()[0].reset_url);
+
+    let second_reset = test::TestRequest::post()
+        .uri("/auth/password-reset/request")
+        .set_json(json!({ "email": email }))
+        .to_request();
+    assert_eq!(
+        test::call_service(&app, second_reset).await.status(),
+        StatusCode::ACCEPTED
+    );
+    let second_token = reset_token_from_url(&email_sender.password_resets()[1].reset_url);
+
+    let active_tokens: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM password_reset_tokens WHERE user_id = $1 AND consumed_at IS NULL",
+    )
+    .bind(user_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(active_tokens, 1);
+
+    let superseded = test::TestRequest::post()
+        .uri("/auth/password-reset/confirm")
+        .set_json(json!({
+            "token": first_token,
+            "password": "new-password-456"
+        }))
+        .to_request();
+    assert_eq!(
+        test::call_service(&app, superseded).await.status(),
+        StatusCode::BAD_REQUEST
+    );
+
+    sqlx::query(
+        "UPDATE password_reset_tokens SET expires_at = now() - interval '1 second' WHERE user_id = $1 AND consumed_at IS NULL",
+    )
+    .bind(user_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let expired = test::TestRequest::post()
+        .uri("/auth/password-reset/confirm")
+        .set_json(json!({
+            "token": second_token,
+            "password": "new-password-456"
+        }))
+        .to_request();
+    assert_eq!(
+        test::call_service(&app, expired).await.status(),
+        StatusCode::BAD_REQUEST
+    );
+
+    let fake = test::TestRequest::post()
+        .uri("/auth/password-reset/confirm")
+        .set_json(json!({
+            "token": "openachieve_reset_fake",
+            "password": "new-password-456"
+        }))
+        .to_request();
+    assert_eq!(
+        test::call_service(&app, fake).await.status(),
+        StatusCode::BAD_REQUEST
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn registered_user_can_login_and_gets_default_key(pool: PgPool) {
     let app = test::init_service(
         App::new()
@@ -588,6 +862,31 @@ async fn insert_user(
     .unwrap()
 }
 
+async fn insert_verified_user(pool: &PgPool, email: &str, password: &str) -> i64 {
+    let password_hash = hash_password(password).unwrap();
+    sqlx::query_scalar(
+        r#"
+        INSERT INTO users (email, name, password_hash, email_verified_at, plan, plan_status, monthly_request_limit)
+        VALUES ($1, 'Verified Tester', $2, now(), 'free', 'active', $3)
+        RETURNING id
+        "#,
+    )
+    .bind(email)
+    .bind(password_hash)
+    .bind(FREE_MONTHLY_REQUEST_LIMIT)
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+async fn user_id_by_email(pool: &PgPool, email: &str) -> i64 {
+    sqlx::query_scalar("SELECT id FROM users WHERE email = $1")
+        .bind(email)
+        .fetch_one(pool)
+        .await
+        .unwrap()
+}
+
 async fn fetch_user(pool: &PgPool, user_id: i64) -> User {
     sqlx::query_as::<_, User>(
         r#"
@@ -644,5 +943,12 @@ fn verification_token_from_url(url: &str) -> String {
     url.split("token=")
         .nth(1)
         .expect("verification URL should include token")
+        .to_string()
+}
+
+fn reset_token_from_url(url: &str) -> String {
+    url.split("reset_token=")
+        .nth(1)
+        .expect("reset URL should include reset_token")
         .to_string()
 }

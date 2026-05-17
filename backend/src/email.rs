@@ -19,10 +19,22 @@ pub struct VerificationEmail {
     pub verification_url: String,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PasswordResetEmail {
+    pub to_email: String,
+    pub to_name: String,
+    pub reset_url: String,
+}
+
 #[async_trait]
 pub trait EmailSender: Send + Sync {
     async fn send_verification_email(&self, email: VerificationEmail)
     -> Result<(), EmailSendError>;
+
+    async fn send_password_reset_email(
+        &self,
+        email: PasswordResetEmail,
+    ) -> Result<(), EmailSendError>;
 }
 
 #[derive(Debug, Error)]
@@ -44,6 +56,13 @@ impl EmailSender for DisabledEmailSender {
     async fn send_verification_email(
         &self,
         _email: VerificationEmail,
+    ) -> Result<(), EmailSendError> {
+        Err(EmailSendError::NotConfigured)
+    }
+
+    async fn send_password_reset_email(
+        &self,
+        _email: PasswordResetEmail,
     ) -> Result<(), EmailSendError> {
         Err(EmailSendError::NotConfigured)
     }
@@ -96,11 +115,29 @@ impl EmailSender for SmtpEmailSender {
         self.mailer.send(message).await?;
         Ok(())
     }
+
+    async fn send_password_reset_email(
+        &self,
+        email: PasswordResetEmail,
+    ) -> Result<(), EmailSendError> {
+        let to = Mailbox::new(Some(email.to_name.clone()), email.to_email.parse()?);
+        let body = password_reset_email_body(&email.reset_url);
+        let message = Message::builder()
+            .from(self.from.clone())
+            .to(to)
+            .subject("重置你的 OpenAchieve 密码")
+            .header(ContentType::TEXT_PLAIN)
+            .body(body)?;
+
+        self.mailer.send(message).await?;
+        Ok(())
+    }
 }
 
 #[derive(Default)]
 pub struct InMemoryEmailSender {
     sent: Mutex<Vec<VerificationEmail>>,
+    password_resets: Mutex<Vec<PasswordResetEmail>>,
 }
 
 impl InMemoryEmailSender {
@@ -110,6 +147,13 @@ impl InMemoryEmailSender {
 
     pub fn sent(&self) -> Vec<VerificationEmail> {
         self.sent
+            .lock()
+            .expect("email sender mutex poisoned")
+            .clone()
+    }
+
+    pub fn password_resets(&self) -> Vec<PasswordResetEmail> {
+        self.password_resets
             .lock()
             .expect("email sender mutex poisoned")
             .clone()
@@ -128,10 +172,27 @@ impl EmailSender for InMemoryEmailSender {
             .push(email);
         Ok(())
     }
+
+    async fn send_password_reset_email(
+        &self,
+        email: PasswordResetEmail,
+    ) -> Result<(), EmailSendError> {
+        self.password_resets
+            .lock()
+            .expect("email sender mutex poisoned")
+            .push(email);
+        Ok(())
+    }
 }
 
 fn verification_email_body(verification_url: &str) -> String {
     format!(
         "欢迎使用 OpenAchieve。\n\n请点击下面的链接验证邮箱：\n{verification_url}\n\n此链接将在 24 小时后失效。如果这不是你本人操作，可以忽略这封邮件。"
+    )
+}
+
+fn password_reset_email_body(reset_url: &str) -> String {
+    format!(
+        "你正在重置 OpenAchieve 登录密码。\n\n请点击下面的链接设置新密码：\n{reset_url}\n\n此链接将在 1 小时后失效。如果这不是你本人操作，可以忽略这封邮件。"
     )
 }

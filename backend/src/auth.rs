@@ -152,6 +152,10 @@ pub fn validate_register_input(name: &str, email: &str, password: &str) -> Resul
     if !email.contains('@') || email.trim().len() < 5 {
         return Err(ApiError::InvalidRequest("valid email is required".into()));
     }
+    validate_password(password)
+}
+
+pub fn validate_password(password: &str) -> Result<(), ApiError> {
     if password.len() < 8 {
         return Err(ApiError::InvalidRequest(
             "password must be at least 8 characters".into(),
@@ -197,6 +201,15 @@ pub fn generate_email_verification_token() -> String {
         .map(char::from)
         .collect();
     format!("openachieve_verify_{}_{}", Uuid::new_v4().simple(), suffix)
+}
+
+pub fn generate_password_reset_token() -> String {
+    let suffix: String = rand::rng()
+        .sample_iter(&Alphanumeric)
+        .take(48)
+        .map(char::from)
+        .collect();
+    format!("openachieve_reset_{}_{}", Uuid::new_v4().simple(), suffix)
 }
 
 pub fn key_prefix(key: &str) -> String {

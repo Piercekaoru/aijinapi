@@ -32,6 +32,10 @@ type RegisterResponse = {
 
 type VerificationResponse = RegisterResponse;
 
+type PasswordResetResponse = {
+  message: string;
+};
+
 type ErrorResponse = {
   error?: {
     message?: string;
@@ -70,6 +74,13 @@ const copy: Record<string, string> = {
   resendTooSoon: "验证邮件刚刚发送过，请稍后再试",
   verified: "邮箱已验证，请登录",
   verificationInvalid: "验证链接无效或已过期，请重新发送验证邮件",
+  resetRequestTitle: "找回密码",
+  resetRequestSub: "输入注册邮箱，查收重置链接后设置新密码。",
+  resetConfirmTitle: "设置新密码",
+  resetConfirmSub: "更新后旧登录状态会失效，请使用新密码重新登录。",
+  resetRequestSuccess: "如果该邮箱存在，重置邮件会发送到你的邮箱",
+  resetSuccess: "密码已更新，请重新登录",
+  resetInvalid: "重置链接无效或已过期，请重新申请",
   termsToast: "请先同意服务条款",
   registerSuccess: "验证邮件已发送，请查收后再登录",
   registerFailed: "注册失败",
@@ -93,20 +104,32 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
 
     const tabs = Array.from(root.querySelectorAll<HTMLButtonElement>(".tab"));
     const tabsWrap = root.querySelector<HTMLElement>(".tabs");
-    const panels = {
+    type AuthView = "login" | "register" | "resetRequest" | "resetConfirm";
+    const panels: Record<AuthView, HTMLElement | null> = {
       login: root.querySelector<HTMLElement>("#loginPanel"),
       register: root.querySelector<HTMLElement>("#registerPanel"),
+      resetRequest: root.querySelector<HTMLElement>("#resetRequestPanel"),
+      resetConfirm: root.querySelector<HTMLElement>("#resetConfirmPanel"),
     };
     const title = root.querySelector<HTMLElement>("#formTitle");
     const subtitle = root.querySelector<HTMLElement>("#formSubtitle");
     const toast = root.querySelector<HTMLElement>("#toast");
+    const forgotPassword = root.querySelector<HTMLButtonElement>("#forgotPassword");
     const resendVerification = root.querySelector<HTMLButtonElement>("#resendVerification");
+    const backToLoginFromReset = root.querySelector<HTMLButtonElement>("#backToLoginFromReset");
+    const backToLoginFromConfirm = root.querySelector<HTMLButtonElement>("#backToLoginFromConfirm");
     const registerPassword = root.querySelector<HTMLInputElement>("#registerPassword");
     const confirmPassword = root.querySelector<HTMLInputElement>("#confirmPassword");
+    const resetEmail = root.querySelector<HTMLInputElement>("#resetEmail");
+    const resetPassword = root.querySelector<HTMLInputElement>("#resetPassword");
+    const resetConfirmPassword = root.querySelector<HTMLInputElement>("#resetConfirmPassword");
     const strength = root.querySelector<HTMLElement>("#strength");
     const strengthLabel = strength?.querySelector<HTMLElement>(".strength-label");
+    const resetStrength = root.querySelector<HTMLElement>("#resetStrength");
+    const resetStrengthLabel = resetStrength?.querySelector<HTMLElement>(".strength-label");
+    let resetToken = "";
 
-    const copy = {
+    const viewCopy: Record<AuthView, { title: string; subtitle: string }> = {
       login: {
         title: t("auth.welcome"),
         subtitle: t("auth.welcomeSub"),
@@ -115,21 +138,37 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
         title: t("auth.register"),
         subtitle: t("auth.registerSub"),
       },
+      resetRequest: {
+        title: t("auth.resetRequestTitle"),
+        subtitle: t("auth.resetRequestSub"),
+      },
+      resetConfirm: {
+        title: t("auth.resetConfirmTitle"),
+        subtitle: t("auth.resetConfirmSub"),
+      },
     };
 
-    function setTab(next: "login" | "register") {
+    function setAuthView(next: AuthView) {
       if (!tabsWrap || !title || !subtitle) return;
 
-      tabsWrap.dataset.active = next;
+      const tabView = next === "login" || next === "register";
+      tabsWrap.hidden = !tabView;
+      if (tabView) tabsWrap.dataset.active = next;
       tabs.forEach((tab) => {
-        const active = tab.dataset.tab === next;
+        const active = tabView && tab.dataset.tab === next;
         tab.classList.toggle("active", active);
         tab.setAttribute("aria-selected", String(active));
       });
-      panels.login?.classList.toggle("active", next === "login");
-      panels.register?.classList.toggle("active", next === "register");
-      title.textContent = copy[next].title;
-      subtitle.textContent = copy[next].subtitle;
+      Object.entries(panels).forEach(([view, panel]) => {
+        panel?.classList.toggle("active", view === next);
+      });
+      title.textContent = viewCopy[next].title;
+      subtitle.textContent = viewCopy[next].subtitle;
+
+      if (next === "resetRequest" && resetEmail && !resetEmail.value) {
+        const loginEmail = rootRef.current?.querySelector<HTMLInputElement>("#loginEmail");
+        resetEmail.value = loginEmail?.value.trim() ?? "";
+      }
     }
 
     function fieldFor(input: HTMLInputElement) {
@@ -198,7 +237,12 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
     }
 
     async function postJson<T>(
-      path: "/auth/login" | "/auth/register" | "/auth/resend-verification",
+      path:
+        | "/auth/login"
+        | "/auth/register"
+        | "/auth/resend-verification"
+        | "/auth/password-reset/request"
+        | "/auth/password-reset/confirm",
       payload: object,
     ) {
       const response = await fetch(`${backendUrl}${path}`, {
@@ -230,29 +274,53 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
       return "strong";
     }
 
-    function updateStrength() {
-      if (!registerPassword || !strength || !strengthLabel) return;
+    function updatePasswordStrength(
+      input: HTMLInputElement | null,
+      target: HTMLElement | null | undefined,
+      label: HTMLElement | null | undefined,
+    ) {
+      if (!input || !target || !label) return;
 
-      const level = passwordLevel(registerPassword.value);
+      const level = passwordLevel(input.value);
       const labelMap: Record<string, string> = {
         weak: t("auth.passwordWeak"),
         medium: t("auth.passwordMedium"),
         strong: t("auth.passwordStrong"),
         "": "-",
       };
-      strength.dataset.level = level;
-      strengthLabel.textContent = labelMap[level];
+      target.dataset.level = level;
+      label.textContent = labelMap[level];
+    }
+
+    function updateStrength() {
+      updatePasswordStrength(registerPassword, strength, strengthLabel);
+    }
+
+    function updateResetStrength() {
+      updatePasswordStrength(resetPassword, resetStrength, resetStrengthLabel);
+    }
+
+    function validatePasswordPair(
+      passwordInput: HTMLInputElement | null,
+      confirmInput: HTMLInputElement | null,
+      live = false,
+    ) {
+      if (!passwordInput || !confirmInput) return false;
+      if (!confirmInput.value.trim()) {
+        if (!live) setError(confirmInput, t("auth.confirmAgain"));
+        return false;
+      }
+      const ok = passwordInput.value === confirmInput.value;
+      setError(confirmInput, ok ? "" : t("auth.passwordMismatch"));
+      return ok;
     }
 
     function validatePasswordMatch(live = false) {
-      if (!registerPassword || !confirmPassword) return false;
-      if (!confirmPassword.value.trim()) {
-        if (!live) setError(confirmPassword, t("auth.confirmAgain"));
-        return false;
-      }
-      const ok = registerPassword.value === confirmPassword.value;
-      setError(confirmPassword, ok ? "" : t("auth.passwordMismatch"));
-      return ok;
+      return validatePasswordPair(registerPassword, confirmPassword, live);
+    }
+
+    function validateResetPasswordMatch(live = false) {
+      return validatePasswordPair(resetPassword, resetConfirmPassword, live);
     }
 
     tabs.forEach((tab) => {
@@ -260,12 +328,24 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
         "click",
         () => {
           if (tab.dataset.tab === "login" || tab.dataset.tab === "register") {
-            setTab(tab.dataset.tab);
+            setAuthView(tab.dataset.tab);
           }
         },
         { signal },
       );
     });
+
+    forgotPassword?.addEventListener("click", () => setAuthView("resetRequest"), { signal });
+    backToLoginFromReset?.addEventListener("click", () => setAuthView("login"), { signal });
+    backToLoginFromConfirm?.addEventListener(
+      "click",
+      () => {
+        resetToken = "";
+        window.history.replaceState({}, "", "/login");
+        setAuthView("login");
+      },
+      { signal },
+    );
 
     root.querySelectorAll<HTMLButtonElement>(".toggle-password").forEach((button) => {
       button.addEventListener(
@@ -302,6 +382,15 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
       { signal },
     );
     confirmPassword?.addEventListener("input", () => validatePasswordMatch(true), { signal });
+    resetPassword?.addEventListener(
+      "input",
+      () => {
+        updateResetStrength();
+        if (resetConfirmPassword?.value) validateResetPasswordMatch(true);
+      },
+      { signal },
+    );
+    resetConfirmPassword?.addEventListener("input", () => validateResetPasswordMatch(true), { signal });
 
     panels.login?.addEventListener(
       "submit",
@@ -368,6 +457,66 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
       { signal },
     );
 
+    panels.resetRequest?.addEventListener(
+      "submit",
+      async (event) => {
+        event.preventDefault();
+        const valid = requireValue(resetEmail, "邮箱");
+        const submitter = (event as SubmitEvent).submitter as HTMLButtonElement | null;
+        if (!valid || !resetEmail) return;
+
+        setButtonBusy(submitter, true);
+        try {
+          await postJson<PasswordResetResponse>("/auth/password-reset/request", {
+            email: resetEmail.value.trim(),
+          });
+          showToast(t("auth.resetRequestSuccess"), 4200);
+          setAuthView("login");
+        } catch (error) {
+          showToast(error instanceof Error ? error.message : t("auth.requestFailed"));
+        } finally {
+          setButtonBusy(submitter, false);
+        }
+      },
+      { signal },
+    );
+
+    panels.resetConfirm?.addEventListener(
+      "submit",
+      async (event) => {
+        event.preventDefault();
+        const valid = [
+          requireValue(resetPassword, "新密码"),
+          validateResetPasswordMatch(false),
+        ].every(Boolean);
+        const submitter = (event as SubmitEvent).submitter as HTMLButtonElement | null;
+        if (!valid || !resetToken || !resetPassword) {
+          if (!resetToken) showToast(t("auth.resetInvalid"), 3600);
+          return;
+        }
+
+        setButtonBusy(submitter, true);
+        try {
+          await postJson<PasswordResetResponse>("/auth/password-reset/confirm", {
+            token: resetToken,
+            password: resetPassword.value,
+          });
+          resetToken = "";
+          resetPassword.value = "";
+          if (resetConfirmPassword) resetConfirmPassword.value = "";
+          updateResetStrength();
+          window.history.replaceState({}, "", "/login");
+          showToast(t("auth.resetSuccess"), 4200);
+          setAuthView("login");
+        } catch (error) {
+          showToast(error instanceof Error ? error.message : t("auth.resetInvalid"), 4200);
+        } finally {
+          setButtonBusy(submitter, false);
+        }
+      },
+      { signal },
+    );
+
     panels.register?.addEventListener(
       "submit",
       async (event) => {
@@ -398,7 +547,7 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
           const loginPassword = root.querySelector<HTMLInputElement>("#loginPassword");
           if (loginEmail) loginEmail.value = payload.email;
           if (loginPassword) loginPassword.value = "";
-          setTab("login");
+          setAuthView("login");
         } catch (error) {
           showToast(error instanceof Error ? error.message : t("auth.registerFailed"));
         } finally {
@@ -409,14 +558,20 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
     );
 
     updateStrength();
+    updateResetStrength();
     const params = new URLSearchParams(window.location.search);
-    if (params.get("mode") === "register") setTab("register");
+    resetToken = params.get("reset_token") ?? "";
+    if (resetToken) {
+      setAuthView("resetConfirm");
+    } else if (params.get("mode") === "register") {
+      setAuthView("register");
+    }
     if (params.get("verified") === "1") {
-      setTab("login");
+      setAuthView("login");
       showToast(t("auth.verified"), 3600);
     }
     if (params.get("verification") === "invalid") {
-      setTab("login");
+      setAuthView("login");
       showToast(t("auth.verificationInvalid"), 4200);
       setResendVisible(true);
     }

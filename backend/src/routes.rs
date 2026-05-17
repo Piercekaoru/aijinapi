@@ -4,25 +4,26 @@ use actix_web::{HttpRequest, HttpResponse, Responder, http::header, web};
 use chrono::{DateTime, Duration, TimeZone, Utc};
 use rand::{Rng, distr::Alphanumeric};
 use serde_json::{Value, json};
-use tracing::info;
+use tracing::{info, warn};
 use uuid::Uuid;
 
 use crate::{
     auth::{
         authenticate, authenticate_admin_session, authenticate_session, ensure_monthly_quota,
-        extract_bearer, hash_password, normalize_email, user_for_api_key, validate_register_input,
-        verify_password,
+        extract_bearer, hash_password, normalize_email, user_for_api_key, validate_password,
+        validate_register_input, verify_password,
     },
     db::{
         api_key_summaries, billing_order_for_user_by_ref, consume_email_verification_token,
-        consume_email_verification_token_by_value, consume_unspent_email_verification_tokens,
-        create_customer_key_for_user, create_default_customer_key_if_missing,
-        create_email_verification_token, create_session, insert_billing_order,
+        consume_email_verification_token_by_value, consume_password_reset_token_by_value,
+        consume_unspent_email_verification_tokens, create_customer_key_for_user,
+        create_default_customer_key_if_missing, create_email_verification_token,
+        create_password_reset_token, create_session, insert_billing_order,
         mark_billing_order_failed, recent_usage_for_user, record_admin_audit, record_usage,
-        revoke_api_key_for_user, subscription_summary_with_models, touch_key,
-        update_billing_order_payment, verification_email_sent_recently,
+        reset_password_with_token, revoke_api_key_for_user, subscription_summary_with_models,
+        touch_key, update_billing_order_payment, verification_email_sent_recently,
     },
-    email::VerificationEmail,
+    email::{PasswordResetEmail, VerificationEmail},
     errors::ApiError,
     fovpay::{
         CreateOrderResponse, SIGN_TYPE_MD5, STATUS_PAID, cents_to_amount, sign_md5,
@@ -34,7 +35,8 @@ use crate::{
         AdminUpdatePlanRequest, AdminUserRow, AdminUserStats, AdminUserSummary, AdminUsersResponse,
         AuthResponse, BillingConfigSummary, BillingOrder, BillingOrderSummary,
         CreateFovPayCheckoutRequest, CreateFovPayCheckoutResponse, CreateUserKeyRequest,
-        DashboardResponse, HealthResponse, LoginRequest, PublicUser, RegisterRequest,
+        DashboardResponse, HealthResponse, LoginRequest, PasswordResetConfirmRequest,
+        PasswordResetMessageResponse, PasswordResetRequest, PublicUser, RegisterRequest,
         ResendVerificationRequest, UsageEvent, User, VerificationMessageResponse,
         VerificationRequiredResponse,
     },
@@ -54,6 +56,14 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .route(
             "/auth/resend-verification",
             web::post().to(resend_verification),
+        )
+        .route(
+            "/auth/password-reset/request",
+            web::post().to(request_password_reset),
+        )
+        .route(
+            "/auth/password-reset/confirm",
+            web::post().to(confirm_password_reset),
         )
         .route("/auth/me", web::get().to(me))
         .route("/dashboard", web::get().to(dashboard))
@@ -261,6 +271,71 @@ async fn resend_verification(
         verification_required: true,
         email: user.email,
         message: "verification email sent".to_string(),
+    }))
+}
+
+async fn request_password_reset(
+    state: web::Data<AppState>,
+    body: web::Json<PasswordResetRequest>,
+) -> Result<HttpResponse, ApiError> {
+    let body = body.into_inner();
+    let email = normalize_email(&body.email);
+    let generic_response = || {
+        HttpResponse::Accepted().json(PasswordResetMessageResponse {
+            message: "if the email exists, a password reset link will be sent".to_string(),
+        })
+    };
+
+    if !email.contains('@') || email.len() < 5 {
+        return Ok(generic_response());
+    }
+
+    let user = match user_by_email(&state.db, &email).await {
+        Ok(user) => user,
+        Err(ApiError::NotFound) => return Ok(generic_response()),
+        Err(err) => return Err(err),
+    };
+
+    if !user.email_is_verified() {
+        return Ok(generic_response());
+    }
+
+    let token = create_password_reset_token(&state.db, user.id).await?;
+    if let Err(err) = send_password_reset_email(&state, &user, &token).await {
+        warn!(
+            email = %user.email,
+            error = %err,
+            "failed to send password reset email"
+        );
+        consume_password_reset_token_by_value(&state.db, &token).await?;
+    }
+
+    Ok(generic_response())
+}
+
+async fn confirm_password_reset(
+    state: web::Data<AppState>,
+    body: web::Json<PasswordResetConfirmRequest>,
+) -> Result<web::Json<PasswordResetMessageResponse>, ApiError> {
+    let body = body.into_inner();
+    let token = body.token.trim();
+    if token.is_empty() {
+        return Err(ApiError::InvalidRequest(
+            "password reset token is required".into(),
+        ));
+    }
+    validate_password(&body.password)?;
+
+    let password_hash = hash_password(&body.password)?;
+    let reset = reset_password_with_token(&state.db, token, password_hash).await?;
+    if !reset {
+        return Err(ApiError::InvalidRequest(
+            "password reset link is invalid or expired".into(),
+        ));
+    }
+
+    Ok(web::Json(PasswordResetMessageResponse {
+        message: "password reset".to_string(),
     }))
 }
 
@@ -1246,6 +1321,23 @@ async fn send_verification_email(
             to_email: user.email.clone(),
             to_name: user.name.clone(),
             verification_url,
+        })
+        .await
+}
+
+async fn send_password_reset_email(
+    state: &web::Data<AppState>,
+    user: &User,
+    token: &str,
+) -> Result<(), crate::email::EmailSendError> {
+    let reset_url = format!("{}/login?reset_token={}", state.config.app_base_url, token);
+
+    state
+        .email
+        .send_password_reset_email(PasswordResetEmail {
+            to_email: user.email.clone(),
+            to_name: user.name.clone(),
+            reset_url,
         })
         .await
 }

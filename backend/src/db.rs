@@ -1,7 +1,10 @@
 use sqlx::PgPool;
 
 use crate::{
-    auth::{generate_email_verification_token, generate_session_token, key_prefix},
+    auth::{
+        generate_email_verification_token, generate_password_reset_token, generate_session_token,
+        key_prefix,
+    },
     keys::{generate_customer_key, hash_key},
     models::{
         ApiKeySummary, BillingOrder, IssuedApiKey, SubscriptionSummary, UsageEvent,
@@ -228,6 +231,129 @@ pub async fn verification_email_sent_recently(
     .bind(user_id)
     .fetch_one(pool)
     .await
+}
+
+pub async fn create_password_reset_token(
+    pool: &PgPool,
+    user_id: i64,
+) -> Result<String, sqlx::Error> {
+    consume_unspent_password_reset_tokens(pool, user_id).await?;
+
+    let token = generate_password_reset_token();
+    let token_hash = hash_key(&token);
+
+    sqlx::query(
+        r#"
+        INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
+        VALUES ($1, $2, now() + interval '1 hour')
+        "#,
+    )
+    .bind(user_id)
+    .bind(token_hash)
+    .execute(pool)
+    .await?;
+
+    Ok(token)
+}
+
+pub async fn consume_unspent_password_reset_tokens(
+    pool: &PgPool,
+    user_id: i64,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        UPDATE password_reset_tokens
+        SET consumed_at = now()
+        WHERE user_id = $1
+          AND consumed_at IS NULL
+        "#,
+    )
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn consume_password_reset_token_by_value(
+    pool: &PgPool,
+    token: &str,
+) -> Result<(), sqlx::Error> {
+    let token_hash = hash_key(token);
+    sqlx::query(
+        r#"
+        UPDATE password_reset_tokens
+        SET consumed_at = now()
+        WHERE token_hash = $1
+          AND consumed_at IS NULL
+        "#,
+    )
+    .bind(token_hash)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn reset_password_with_token(
+    pool: &PgPool,
+    token: &str,
+    password_hash: String,
+) -> Result<bool, sqlx::Error> {
+    let token_hash = hash_key(token);
+    let mut tx = pool.begin().await?;
+
+    let user_id: Option<i64> = sqlx::query_scalar(
+        r#"
+        SELECT user_id
+        FROM password_reset_tokens
+        WHERE token_hash = $1
+          AND consumed_at IS NULL
+          AND expires_at > now()
+        FOR UPDATE
+        "#,
+    )
+    .bind(token_hash)
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    let Some(user_id) = user_id else {
+        tx.commit().await?;
+        return Ok(false);
+    };
+
+    sqlx::query("UPDATE users SET password_hash = $1 WHERE id = $2")
+        .bind(password_hash)
+        .bind(user_id)
+        .execute(&mut *tx)
+        .await?;
+
+    sqlx::query(
+        r#"
+        UPDATE password_reset_tokens
+        SET consumed_at = now()
+        WHERE user_id = $1
+          AND consumed_at IS NULL
+        "#,
+    )
+    .bind(user_id)
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::query(
+        r#"
+        UPDATE sessions
+        SET revoked_at = now()
+        WHERE user_id = $1
+          AND revoked_at IS NULL
+        "#,
+    )
+    .bind(user_id)
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(true)
 }
 
 pub async fn create_customer_key_for_user(
