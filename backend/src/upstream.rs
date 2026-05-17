@@ -10,7 +10,7 @@ use actix_web::{HttpResponse, http::header};
 use bytes::Bytes;
 use futures_util::StreamExt;
 use reqwest::{Client, RequestBuilder, StatusCode};
-use serde_json::Value;
+use serde_json::{Value, json};
 use tokio::time::{Duration, sleep};
 use tracing::warn;
 
@@ -80,6 +80,7 @@ pub struct UpstreamResult {
     pub status_code: u16,
     pub latency_ms: i32,
     pub body_text: Option<String>,
+    pub error_type: Option<&'static str>,
 }
 
 impl UpstreamKeyRing {
@@ -443,6 +444,29 @@ async fn response_from_upstream(
     let status_code = status.as_u16();
     let latency_ms = started.elapsed().as_millis().min(i32::MAX as u128) as i32;
 
+    if !status.is_success() {
+        let bytes = upstream.bytes().await?;
+        let body_text = String::from_utf8_lossy(&bytes).to_string();
+        let (response_status, code, message) = sanitized_upstream_error(status);
+        let response = HttpResponse::build(response_status)
+            .insert_header((header::CONTENT_TYPE, "application/json"))
+            .body(bytes_from_static_json(json!({
+                "error": {
+                    "code": code,
+                    "message": message,
+                    "type": "openachieve_error"
+                }
+            })));
+
+        return Ok(UpstreamResult {
+            response,
+            status_code,
+            latency_ms,
+            body_text: Some(body_text),
+            error_type: Some(code),
+        });
+    }
+
     if is_stream {
         let content_type = upstream
             .headers()
@@ -465,6 +489,7 @@ async fn response_from_upstream(
             status_code,
             latency_ms,
             body_text: None,
+            error_type: None,
         });
     }
 
@@ -485,12 +510,50 @@ async fn response_from_upstream(
         status_code,
         latency_ms,
         body_text: Some(body_text),
+        error_type: None,
     })
 }
 
 fn to_actix_status(status: StatusCode) -> actix_web::http::StatusCode {
     actix_web::http::StatusCode::from_u16(status.as_u16())
         .unwrap_or(actix_web::http::StatusCode::BAD_GATEWAY)
+}
+
+fn sanitized_upstream_error(
+    status: StatusCode,
+) -> (actix_web::http::StatusCode, &'static str, &'static str) {
+    match status {
+        StatusCode::BAD_REQUEST | StatusCode::UNPROCESSABLE_ENTITY => (
+            actix_web::http::StatusCode::BAD_REQUEST,
+            "upstream_rejected_request",
+            "The upstream provider rejected the request.",
+        ),
+        StatusCode::TOO_MANY_REQUESTS => (
+            actix_web::http::StatusCode::TOO_MANY_REQUESTS,
+            "upstream_rate_limited",
+            "The upstream provider is rate limited. Please try again later.",
+        ),
+        StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => (
+            actix_web::http::StatusCode::BAD_GATEWAY,
+            "upstream_unavailable",
+            "The upstream provider is temporarily unavailable.",
+        ),
+        status if status.is_server_error() => (
+            actix_web::http::StatusCode::BAD_GATEWAY,
+            "upstream_unavailable",
+            "The upstream provider is temporarily unavailable.",
+        ),
+        status if status.is_client_error() => (
+            actix_web::http::StatusCode::BAD_REQUEST,
+            "upstream_rejected_request",
+            "The upstream provider rejected the request.",
+        ),
+        _ => (
+            actix_web::http::StatusCode::BAD_GATEWAY,
+            "upstream_unavailable",
+            "The upstream provider is temporarily unavailable.",
+        ),
+    }
 }
 
 fn now_millis() -> u64 {

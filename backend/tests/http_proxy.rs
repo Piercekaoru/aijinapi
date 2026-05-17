@@ -310,6 +310,74 @@ async fn plan_model_errors_return_expected_status_codes(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "./migrations")]
+async fn free_ai_requests_are_rate_limited_by_ip(pool: PgPool) {
+    let server = MockServer::start().await;
+    let ip = "203.0.113.10";
+    insert_free_ai_window(&pool, ip, 60).await;
+
+    let api_key =
+        create_key_for_user(&pool, "free", "active", FREE_MONTHLY_REQUEST_LIMIT, None).await;
+    let app = test_app(pool.clone(), &server).await;
+    let response = post_chat_from_ip(&app, &api_key, "big-pickle", false, ip).await;
+
+    assert_eq!(response.status(), 429);
+    let body: Value = test::read_body_json(response).await;
+    assert_eq!(body["error"]["code"], "rate_limited");
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn plus_go_models_skip_local_ai_ip_rate_limit(pool: PgPool) {
+    let server = MockServer::start().await;
+    let ip = "203.0.113.11";
+    insert_free_ai_window(&pool, ip, 60).await;
+    Mock::given(method("POST"))
+        .and(path("/go/chat/completions"))
+        .and(wire_header("authorization", "Bearer real-go-key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "id": "plus_ok",
+            "object": "chat.completion"
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let api_key = create_key_for_user(
+        &pool,
+        "plus",
+        "active",
+        PLUS_MONTHLY_REQUEST_LIMIT,
+        Some(Utc::now() + Duration::days(30)),
+    )
+    .await;
+    let app = test_app(pool.clone(), &server).await;
+    let response = post_chat_from_ip(&app, &api_key, "qwen3.6-plus", false, ip).await;
+
+    assert_eq!(response.status(), 200);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn plus_free_models_still_use_ai_ip_rate_limit(pool: PgPool) {
+    let server = MockServer::start().await;
+    let ip = "203.0.113.12";
+    insert_free_ai_window(&pool, ip, 60).await;
+
+    let api_key = create_key_for_user(
+        &pool,
+        "plus",
+        "active",
+        PLUS_MONTHLY_REQUEST_LIMIT,
+        Some(Utc::now() + Duration::days(30)),
+    )
+    .await;
+    let app = test_app(pool.clone(), &server).await;
+    let response = post_chat_from_ip(&app, &api_key, "big-pickle", false, ip).await;
+
+    assert_eq!(response.status(), 429);
+    let body: Value = test::read_body_json(response).await;
+    assert_eq!(body["error"]["code"], "rate_limited");
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn upstream_http_failure_is_returned_and_recorded_without_prompt_body(pool: PgPool) {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
@@ -333,7 +401,14 @@ async fn upstream_http_failure_is_returned_and_recorded_without_prompt_body(pool
     let app = test_app(pool.clone(), &server).await;
     let response = post_chat(&app, &api_key, "qwen3.6-plus", false).await;
 
-    assert_eq!(response.status(), 500);
+    assert_eq!(response.status(), 502);
+    let body: Value = test::read_body_json(response).await;
+    assert_eq!(body["error"]["code"], "upstream_unavailable");
+    assert!(
+        !body
+            .to_string()
+            .contains("upstream temporarily unavailable")
+    );
     let row: (String, String, i32, Option<String>) =
         sqlx::query_as("SELECT model, path, status_code, error_type FROM usage_events LIMIT 1")
             .fetch_one(&pool)
@@ -342,7 +417,38 @@ async fn upstream_http_failure_is_returned_and_recorded_without_prompt_body(pool
     assert_eq!(row.0, "qwen3.6-plus");
     assert_eq!(row.1, "/v1/chat/completions");
     assert_eq!(row.2, 500);
-    assert_eq!(row.3, None);
+    assert_eq!(row.3, Some("upstream_unavailable".to_string()));
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn streaming_upstream_errors_are_sanitized(pool: PgPool) {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/go/chat/completions"))
+        .and(wire_header("authorization", "Bearer real-go-key"))
+        .respond_with(
+            ResponseTemplate::new(500)
+                .set_body_raw("data: OpenCode internal failure\n\n", "text/event-stream"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let api_key = create_key_for_user(
+        &pool,
+        "plus",
+        "active",
+        PLUS_MONTHLY_REQUEST_LIMIT,
+        Some(Utc::now() + Duration::days(30)),
+    )
+    .await;
+    let app = test_app(pool.clone(), &server).await;
+    let response = post_chat(&app, &api_key, "qwen3.6-plus", true).await;
+
+    assert_eq!(response.status(), 502);
+    let body: Value = test::read_body_json(response).await;
+    assert_eq!(body["error"]["code"], "upstream_unavailable");
+    assert!(!body.to_string().contains("OpenCode internal failure"));
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -653,6 +759,62 @@ where
         .to_request();
 
     test::call_service(app, req).await
+}
+
+async fn post_chat_from_ip<S>(
+    app: &S,
+    api_key: &str,
+    model: &str,
+    stream: bool,
+    ip: &str,
+) -> actix_web::dev::ServiceResponse
+where
+    S: actix_service::Service<
+            actix_http::Request,
+            Response = actix_web::dev::ServiceResponse,
+            Error = actix_web::Error,
+        >,
+{
+    let req = test::TestRequest::post()
+        .uri("/v1/chat/completions")
+        .insert_header(("authorization", format!("Bearer {api_key}")))
+        .insert_header(("x-real-ip", ip))
+        .set_json(json!({
+            "model": model,
+            "stream": stream,
+            "messages": [
+                { "role": "user", "content": "do not store this prompt" }
+            ]
+        }))
+        .to_request();
+
+    test::call_service(app, req).await
+}
+
+async fn insert_free_ai_window(pool: &PgPool, ip: &str, count: i32) {
+    sqlx::query(
+        r#"
+        INSERT INTO ip_rate_limit_windows (
+          scope,
+          ip,
+          window_start,
+          window_seconds,
+          request_count
+        )
+        VALUES (
+          'free_ai',
+          $1,
+          to_timestamp(floor(extract(epoch FROM now()) / 60) * 60),
+          60,
+          $2
+        )
+        "#,
+    )
+    .bind(ip)
+    .bind(count)
+    .execute(pool)
+    .await
+    .unwrap();
 }
 
 async fn get_models<S>(app: &S, api_key: &str) -> Value
