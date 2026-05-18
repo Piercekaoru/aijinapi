@@ -74,13 +74,7 @@ pub async fn authenticate_session(pool: &PgPool, bearer_token: &str) -> Result<U
           u.plan_status,
           u.monthly_request_limit,
           u.plus_started_at,
-          u.plus_expires_at,
-          u.status,
-          u.banned_at,
-          u.banned_reason,
-          u.registration_ip,
-          u.last_seen_ip,
-          u.last_seen_at
+          u.plus_expires_at
         FROM sessions s
         JOIN users u ON u.id = s.user_id
         WHERE s.token_hash = $1
@@ -95,9 +89,6 @@ pub async fn authenticate_session(pool: &PgPool, bearer_token: &str) -> Result<U
     let user = user.ok_or(ApiError::InvalidSession)?;
     if !user.email_is_verified() {
         return Err(ApiError::EmailNotVerified);
-    }
-    if user.is_banned() {
-        return Err(ApiError::AccountBanned);
     }
 
     Ok(user)
@@ -131,13 +122,7 @@ pub async fn user_for_api_key(pool: &PgPool, api_key: &ApiKey) -> Result<User, A
           plan_status,
           monthly_request_limit,
           plus_started_at,
-          plus_expires_at,
-          status,
-          banned_at,
-          banned_reason,
-          registration_ip,
-          last_seen_ip,
-          last_seen_at
+          plus_expires_at
         FROM users
         WHERE id = $1
         "#,
@@ -149,9 +134,6 @@ pub async fn user_for_api_key(pool: &PgPool, api_key: &ApiKey) -> Result<User, A
     let user = user.ok_or(ApiError::InvalidApiKey)?;
     if !user.email_is_verified() {
         return Err(ApiError::EmailNotVerified);
-    }
-    if user.is_banned() {
-        return Err(ApiError::AccountBanned);
     }
 
     Ok(user)

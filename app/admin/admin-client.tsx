@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { Ban, Eye, Network, ShieldCheck, ShieldX } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { SiteFooter } from "../components/SiteFooter";
@@ -26,14 +25,6 @@ type AdminUser = {
   api_key_count: number;
   last_used_at: string | null;
   is_admin: boolean;
-  status: string;
-  banned_at: string | null;
-  banned_reason: string | null;
-  registration_ip: string | null;
-  last_seen_ip: string | null;
-  last_seen_at: string | null;
-  recent_rate_limit_count: number;
-  active_ip_ban_count: number;
 };
 
 type AdminUsersResponse = {
@@ -60,57 +51,6 @@ type AdminCreateUserResponse = {
 type AdminQuotaResetResponse = {
   effective_at: string;
   users_affected: number;
-};
-
-type IpBanSummary = {
-  id: number;
-  ip: string;
-  reason: string;
-  banned_by_user_id: number | null;
-  created_at: string;
-  expires_at: string | null;
-  lifted_at: string | null;
-};
-
-type SecurityIpSummary = {
-  ip: string;
-  registered_user_count: number;
-  seen_user_count: number;
-  free_ai_request_count: number;
-  rate_limited_count: number;
-  active_ban_id: number | null;
-  active_ban_reason: string | null;
-  active_ban_expires_at: string | null;
-  last_seen_at: string | null;
-};
-
-type SecurityIpDetail = {
-  ip: string;
-  stats: {
-    registered_user_count: number;
-    seen_user_count: number;
-    free_ai_request_count: number;
-    rate_limited_count: number;
-  };
-  active_ban: IpBanSummary | null;
-  users: Array<{
-    id: number;
-    email: string;
-    name: string;
-    status: string;
-    plan: string;
-    created_at: string;
-    registration_ip: string | null;
-    last_seen_ip: string | null;
-    last_seen_at: string | null;
-  }>;
-  recent_events: Array<{
-    id: number;
-    event_type: string;
-    route: string | null;
-    user_id: number | null;
-    created_at: string;
-  }>;
 };
 
 type AddUserForm = {
@@ -153,12 +93,6 @@ export function AdminClient() {
   const [planTarget, setPlanTarget] = useState<PlanAction | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
-  const [banTarget, setBanTarget] = useState<AdminUser | null>(null);
-  const [banReason, setBanReason] = useState("abusive registration or free AI usage");
-  const [securityIps, setSecurityIps] = useState<SecurityIpSummary[]>([]);
-  const [showSecurityPanel, setShowSecurityPanel] = useState(false);
-  const [ipDetail, setIpDetail] = useState<SecurityIpDetail | null>(null);
-  const [ipBanReason, setIpBanReason] = useState("abusive registrations or free AI usage");
   const [showQuotaReset, setShowQuotaReset] = useState(false);
   const [quotaResetConfirmation, setQuotaResetConfirmation] = useState("");
   const [busyAction, setBusyAction] = useState("");
@@ -200,48 +134,6 @@ export function AdminClient() {
       setStatus(error instanceof Error ? error.message : "管理后台读取失败");
     }
   }, [normalizedBackendUrl]);
-
-  const loadSecurityIps = useCallback(async (token: string) => {
-    if (!token) return;
-    setStatus("正在读取 IP 风控...");
-
-    try {
-      const response = await fetch(`${normalizedBackendUrl}/admin/security/ips`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (!response.ok) throw new Error(await errorText(response));
-      const payload = (await response.json()) as { ips: SecurityIpSummary[] };
-      setSecurityIps(payload.ips);
-      setShowSecurityPanel(true);
-      setStatus("IP 风控已更新");
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "IP 风控读取失败");
-    }
-  }, [normalizedBackendUrl]);
-
-  const openIpDetail = useCallback(async (ip: string) => {
-    if (!sessionToken) return;
-    setStatus(`正在读取 ${ip}...`);
-
-    try {
-      const response = await fetch(
-        `${normalizedBackendUrl}/admin/security/ip-detail?ip=${encodeURIComponent(ip)}`,
-        {
-          headers: {
-            Authorization: `Bearer ${sessionToken}`,
-          },
-        },
-      );
-      if (!response.ok) throw new Error(await errorText(response));
-      setIpDetail((await response.json()) as SecurityIpDetail);
-      setIpBanReason("abusive registrations or free AI usage");
-      setStatus("IP 明细已读取");
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "IP 明细读取失败");
-    }
-  }, [normalizedBackendUrl, sessionToken]);
 
   useEffect(() => {
     const token = window.localStorage.getItem("openachieve_session_token") ?? "";
@@ -333,101 +225,6 @@ export function AdminClient() {
       await loadUsers(sessionToken);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "套餐更新失败");
-    } finally {
-      setBusyAction("");
-    }
-  }
-
-  async function banUserNow() {
-    if (!sessionToken || !banTarget) return;
-    setBusyAction(`ban-${banTarget.id}`);
-    setStatus("正在冻结账号...");
-
-    try {
-      const response = await fetch(`${normalizedBackendUrl}/admin/users/${banTarget.id}/ban`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${sessionToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ reason: banReason }),
-      });
-      if (!response.ok) throw new Error(await errorText(response));
-      setBanTarget(null);
-      setStatus("账号已冻结");
-      await loadUsers(sessionToken);
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "冻结账号失败");
-    } finally {
-      setBusyAction("");
-    }
-  }
-
-  async function unbanUserNow(user: AdminUser) {
-    if (!sessionToken) return;
-    setBusyAction(`unban-${user.id}`);
-    setStatus("正在解封账号...");
-
-    try {
-      const response = await fetch(`${normalizedBackendUrl}/admin/users/${user.id}/unban`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${sessionToken}`,
-        },
-      });
-      if (!response.ok) throw new Error(await errorText(response));
-      setStatus("账号已解封");
-      await loadUsers(sessionToken);
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "解封账号失败");
-    } finally {
-      setBusyAction("");
-    }
-  }
-
-  async function banIp(ip: string) {
-    if (!sessionToken) return;
-    setBusyAction(`ban-ip-${ip}`);
-    setStatus("正在封禁 IP...");
-
-    try {
-      const response = await fetch(`${normalizedBackendUrl}/admin/security/ip-bans`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${sessionToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ ip, reason: ipBanReason }),
-      });
-      if (!response.ok) throw new Error(await errorText(response));
-      setStatus("IP 已封禁");
-      await loadSecurityIps(sessionToken);
-      await openIpDetail(ip);
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "封禁 IP 失败");
-    } finally {
-      setBusyAction("");
-    }
-  }
-
-  async function unbanIp(banId: number, ip: string) {
-    if (!sessionToken) return;
-    setBusyAction(`unban-ip-${banId}`);
-    setStatus("正在解封 IP...");
-
-    try {
-      const response = await fetch(`${normalizedBackendUrl}/admin/security/ip-bans/${banId}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${sessionToken}`,
-        },
-      });
-      if (!response.ok) throw new Error(await errorText(response));
-      setStatus("IP 已解封");
-      await loadSecurityIps(sessionToken);
-      await openIpDetail(ip);
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "解封 IP 失败");
     } finally {
       setBusyAction("");
     }
@@ -578,10 +375,6 @@ export function AdminClient() {
               <Button type="button" onClick={() => setShowAddUser(true)}>
                 添加用户
               </Button>
-              <Button variant="secondary" type="button" onClick={() => loadSecurityIps(sessionToken)}>
-                <Network data-icon="inline-start" />
-                IP 风控
-              </Button>
               <Button
                 variant="destructive"
                 type="button"
@@ -597,67 +390,6 @@ export function AdminClient() {
               </Button>
             </section>
 
-            {showSecurityPanel && (
-              <section className="security-panel">
-                <div className="panel-head">
-                  <div>
-                    <p>Security</p>
-                    <h2>IP 风控</h2>
-                  </div>
-                  <Button variant="secondary" size="sm" type="button" onClick={() => loadSecurityIps(sessionToken)}>
-                    刷新 IP
-                  </Button>
-                </div>
-                <div className="ip-grid">
-                  {securityIps.map((item) => (
-                    <article className="ip-row" key={item.ip}>
-                      <div>
-                        <strong>{item.ip}</strong>
-                        <span>
-                          注册 {item.registered_user_count} · 关联 {item.seen_user_count} · Free/Zen 请求{" "}
-                          {item.free_ai_request_count}
-                        </span>
-                        <small>
-                          限流 {item.rate_limited_count}
-                          {item.active_ban_id ? ` · 已封禁：${item.active_ban_reason}` : ""}
-                        </small>
-                      </div>
-                      <div className="actions-cell">
-                        <Button size="sm" variant="secondary" type="button" onClick={() => openIpDetail(item.ip)}>
-                          <Eye data-icon="inline-start" />
-                          明细
-                        </Button>
-                        {item.active_ban_id ? (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            type="button"
-                            disabled={busyAction === `unban-ip-${item.active_ban_id}`}
-                            onClick={() => unbanIp(item.active_ban_id!, item.ip)}
-                          >
-                            <ShieldCheck data-icon="inline-start" />
-                            解封 IP
-                          </Button>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            type="button"
-                            disabled={busyAction === `ban-ip-${item.ip}`}
-                            onClick={() => banIp(item.ip)}
-                          >
-                            <ShieldX data-icon="inline-start" />
-                            封 IP
-                          </Button>
-                        )}
-                      </div>
-                    </article>
-                  ))}
-                  {securityIps.length === 0 && <p className="empty-row">暂无 IP 风控记录。</p>}
-                </div>
-              </section>
-            )}
-
             <section className="user-table">
               <div className="table-head">
                 <span>用户</span>
@@ -672,24 +404,9 @@ export function AdminClient() {
                 return (
                   <article className="table-row" key={user.id}>
                     <div className="identity-cell">
-                      <div className="identity-title">
-                        <strong>{user.name}</strong>
-                        <StatusBadge user={user} />
-                      </div>
+                      <strong>{user.name}</strong>
                       <span>{user.email}</span>
                       <small>{user.is_admin ? "管理员" : `注册于 ${formatDate(user.created_at)}`}</small>
-                      <div className="ip-links">
-                        {user.registration_ip && (
-                          <button type="button" onClick={() => openIpDetail(user.registration_ip!)}>
-                            注册 IP {user.registration_ip}
-                          </button>
-                        )}
-                        {user.last_seen_ip && user.last_seen_ip !== user.registration_ip && (
-                          <button type="button" onClick={() => openIpDetail(user.last_seen_ip!)}>
-                            最后 IP {user.last_seen_ip}
-                          </button>
-                        )}
-                      </div>
                     </div>
                     <div>
                       <PlanBadge user={user} />
@@ -707,11 +424,6 @@ export function AdminClient() {
                     </div>
                     <div>
                       <span>{user.last_used_at ? formatDate(user.last_used_at) : "暂无调用"}</span>
-                      {(user.recent_rate_limit_count > 0 || user.active_ip_ban_count > 0) && (
-                        <small>
-                          限流 {user.recent_rate_limit_count} · IP 封禁 {user.active_ip_ban_count}
-                        </small>
-                      )}
                     </div>
                     <div className="actions-cell">
                       <Button
@@ -731,31 +443,6 @@ export function AdminClient() {
                       >
                         降级 Free
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        type="button"
-                        disabled={isSelf || user.status === "banned"}
-                        onClick={() => {
-                          setBanTarget(user);
-                          setBanReason("abusive registration or free AI usage");
-                        }}
-                      >
-                        <Ban data-icon="inline-start" />
-                        封号
-                      </Button>
-                      {user.status === "banned" && (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          type="button"
-                          disabled={busyAction === `unban-${user.id}`}
-                          onClick={() => unbanUserNow(user)}
-                        >
-                          <ShieldCheck data-icon="inline-start" />
-                          解封
-                        </Button>
-                      )}
                       <Button
                         size="sm"
                         variant="secondary"
@@ -877,115 +564,6 @@ export function AdminClient() {
                     ? "确认升级"
                     : "确认降级"}
               </Button>
-            </div>
-          </section>
-        </div>
-      )}
-
-      {banTarget && (
-        <div className="modal-backdrop" role="presentation">
-          <section className="modal danger" role="dialog" aria-modal="true" aria-labelledby="ban-user-title">
-            <div className="modal-head">
-              <div>
-                <p>Ban</p>
-                <h2 id="ban-user-title">冻结账号</h2>
-              </div>
-              <button type="button" onClick={() => setBanTarget(null)} aria-label="关闭">
-                ×
-              </button>
-            </div>
-            <p className="danger-copy">
-              冻结后会撤销当前会话，并拒绝登录、控制台和 API Key 鉴权；用户、Key 和审计记录会保留。目标：{banTarget.email}
-            </p>
-            <label>
-              原因
-              <input value={banReason} onChange={(event) => setBanReason(event.target.value)} />
-            </label>
-            <div className="modal-actions">
-              <Button variant="secondary" type="button" onClick={() => setBanTarget(null)}>
-                取消
-              </Button>
-              <Button
-                variant="destructive"
-                type="button"
-                disabled={busyAction === `ban-${banTarget.id}`}
-                onClick={banUserNow}
-              >
-                {busyAction === `ban-${banTarget.id}` ? "冻结中..." : "确认冻结"}
-              </Button>
-            </div>
-          </section>
-        </div>
-      )}
-
-      {ipDetail && (
-        <div className="modal-backdrop" role="presentation">
-          <section className="modal ip-modal" role="dialog" aria-modal="true" aria-labelledby="ip-detail-title">
-            <div className="modal-head">
-              <div>
-                <p>IP Detail</p>
-                <h2 id="ip-detail-title">{ipDetail.ip}</h2>
-              </div>
-              <button type="button" onClick={() => setIpDetail(null)} aria-label="关闭">
-                ×
-              </button>
-            </div>
-            <div className="detail-stats">
-              <StatBlock label="注册账号" value={ipDetail.stats.registered_user_count} />
-              <StatBlock label="关联账号" value={ipDetail.stats.seen_user_count} />
-              <StatBlock label="Free/Zen 请求" value={ipDetail.stats.free_ai_request_count} />
-              <StatBlock label="近7天限流" value={ipDetail.stats.rate_limited_count} />
-            </div>
-            <label>
-              IP 封禁原因
-              <input value={ipBanReason} onChange={(event) => setIpBanReason(event.target.value)} />
-            </label>
-            <div className="modal-actions">
-              {ipDetail.active_ban ? (
-                <Button
-                  variant="secondary"
-                  type="button"
-                  disabled={busyAction === `unban-ip-${ipDetail.active_ban.id}`}
-                  onClick={() => unbanIp(ipDetail.active_ban!.id, ipDetail.ip)}
-                >
-                  <ShieldCheck data-icon="inline-start" />
-                  解封 IP
-                </Button>
-              ) : (
-                <Button
-                  variant="destructive"
-                  type="button"
-                  disabled={busyAction === `ban-ip-${ipDetail.ip}`}
-                  onClick={() => banIp(ipDetail.ip)}
-                >
-                  <ShieldX data-icon="inline-start" />
-                  封禁 IP
-                </Button>
-              )}
-            </div>
-            <div className="detail-list">
-              <h3>关联账号</h3>
-              {ipDetail.users.map((user) => (
-                <article key={user.id}>
-                  <strong>{user.email}</strong>
-                  <span>
-                    {user.name} · {user.plan} · {user.status}
-                  </span>
-                  <small>注册 {formatDate(user.created_at)}</small>
-                </article>
-              ))}
-              {ipDetail.users.length === 0 && <p className="empty-row">暂无关联账号。</p>}
-            </div>
-            <div className="detail-list">
-              <h3>最近事件</h3>
-              {ipDetail.recent_events.map((event) => (
-                <article key={event.id}>
-                  <strong>{event.event_type}</strong>
-                  <span>{event.route ?? "system"}</span>
-                  <small>{formatDate(event.created_at)}</small>
-                </article>
-              ))}
-              {ipDetail.recent_events.length === 0 && <p className="empty-row">暂无事件。</p>}
             </div>
           </section>
         </div>
@@ -1121,7 +699,6 @@ export function AdminClient() {
 
         .hero-band p,
         .issued-panel p,
-        .security-panel p,
         .modal-head p {
           margin: 0 0 8px;
           color: #c96442;
@@ -1182,7 +759,6 @@ export function AdminClient() {
 
         :global(.stat-block),
         .issued-panel,
-        .security-panel,
         .toolbar,
         .user-table,
         .empty-state,
@@ -1253,7 +829,7 @@ export function AdminClient() {
 
         .toolbar {
           display: grid;
-          grid-template-columns: minmax(220px, 1fr) auto auto auto auto auto;
+          grid-template-columns: minmax(220px, 1fr) auto auto auto auto;
           gap: 12px;
           align-items: center;
           margin-bottom: 18px;
@@ -1287,39 +863,6 @@ export function AdminClient() {
 
         .user-table {
           overflow: hidden;
-        }
-
-        .security-panel {
-          display: grid;
-          gap: 14px;
-          margin-bottom: 18px;
-          padding: 16px;
-        }
-
-        .panel-head,
-        .ip-row {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 14px;
-        }
-
-        .ip-grid {
-          display: grid;
-          gap: 10px;
-        }
-
-        .ip-row {
-          border: 1px solid #e8e6dc;
-          border-radius: 8px;
-          padding: 12px;
-          background: #fffdf8;
-        }
-
-        .ip-row > div:first-child {
-          min-width: 0;
-          display: grid;
-          gap: 4px;
         }
 
         .table-head,
@@ -1357,26 +900,6 @@ export function AdminClient() {
           white-space: nowrap;
         }
 
-        .identity-title,
-        .ip-links {
-          display: flex;
-          min-width: 0;
-          flex-wrap: wrap;
-          align-items: center;
-          gap: 8px;
-        }
-
-        .ip-links button {
-          border: 0;
-          padding: 0;
-          color: #8b3f2b;
-          background: transparent;
-          font: inherit;
-          font-size: 12px;
-          font-weight: 800;
-          text-align: left;
-        }
-
         :global(.plan-badge) {
           width: fit-content;
           border-radius: 999px;
@@ -1393,21 +916,6 @@ export function AdminClient() {
         }
 
         :global(.plan-badge.expired) {
-          color: #8b3f2b;
-          background: #f1d7ca;
-        }
-
-        :global(.status-badge) {
-          width: fit-content;
-          border-radius: 999px;
-          padding: 4px 8px;
-          color: #23533a;
-          background: #d9eadf;
-          font-size: 11px;
-          font-weight: 900;
-        }
-
-        :global(.status-badge.banned) {
           color: #8b3f2b;
           background: #f1d7ca;
         }
@@ -1448,37 +956,6 @@ export function AdminClient() {
           padding: 18px;
         }
 
-        .ip-modal {
-          width: min(760px, 100%);
-          max-height: min(86vh, 900px);
-          overflow: auto;
-        }
-
-        .detail-stats {
-          display: grid;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
-          gap: 10px;
-        }
-
-        .detail-list {
-          display: grid;
-          gap: 8px;
-        }
-
-        .detail-list h3 {
-          margin: 0;
-          font-size: 14px;
-        }
-
-        .detail-list article {
-          display: grid;
-          gap: 3px;
-          border: 1px solid #e8e6dc;
-          border-radius: 8px;
-          padding: 10px;
-          background: #fffdf8;
-        }
-
         .modal form {
           display: grid;
           gap: 14px;
@@ -1513,7 +990,6 @@ export function AdminClient() {
 
         @media (max-width: 1100px) {
           .stats-grid,
-          .detail-stats,
           .issued-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
           }
@@ -1543,7 +1019,6 @@ export function AdminClient() {
 
           .hero-band,
           .stats-grid,
-          .detail-stats,
           .issued-grid,
           .table-row {
             grid-template-columns: 1fr;
@@ -1595,11 +1070,6 @@ function PlanBadge({ user }: { user: AdminUser }) {
   const label = expiredPlus ? "Plus 过期" : user.plan === "plus" ? "Plus" : "Free";
 
   return <strong className={className}>{label}</strong>;
-}
-
-function StatusBadge({ user }: { user: AdminUser }) {
-  const banned = user.status === "banned";
-  return <span className={`status-badge ${banned ? "banned" : ""}`}>{banned ? "封禁" : "正常"}</span>;
 }
 
 function formatDate(value: string) {

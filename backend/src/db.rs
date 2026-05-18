@@ -56,10 +56,9 @@ pub async fn record_usage(pool: &PgPool, event: UsageEvent<'_>) -> Result<(), sq
           status_code,
           is_stream,
           upstream_latency_ms,
-          error_type,
-          client_ip
+          error_type
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
         "#,
     )
     .bind(event.api_key_id)
@@ -69,7 +68,6 @@ pub async fn record_usage(pool: &PgPool, event: UsageEvent<'_>) -> Result<(), sq
     .bind(event.is_stream)
     .bind(event.upstream_latency_ms)
     .bind(event.error_type)
-    .bind(event.client_ip)
     .execute(pool)
     .await?;
 

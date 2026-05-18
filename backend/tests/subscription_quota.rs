@@ -75,57 +75,6 @@ async fn register_user_defaults_to_free_quota(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "./migrations")]
-async fn registration_is_rate_limited_by_ip(pool: PgPool) {
-    let email_sender = InMemoryEmailSender::shared();
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_with_email(
-                pool.clone(),
-                email_sender.clone(),
-            )))
-            .configure(routes::configure),
-    )
-    .await;
-    let ip = "203.0.113.20";
-
-    for index in 0..3 {
-        let req = test::TestRequest::post()
-            .uri("/auth/register")
-            .insert_header(("x-real-ip", ip))
-            .set_json(json!({
-                "name": "Batch Tester",
-                "email": format!("batch-{index}@example.com"),
-                "password": "password123"
-            }))
-            .to_request();
-        assert_eq!(
-            test::call_service(&app, req).await.status(),
-            StatusCode::ACCEPTED
-        );
-    }
-
-    let blocked = test::TestRequest::post()
-        .uri("/auth/register")
-        .insert_header(("x-real-ip", ip))
-        .set_json(json!({
-            "name": "Batch Tester",
-            "email": "batch-blocked@example.com",
-            "password": "password123"
-        }))
-        .to_request();
-    let blocked_response = test::call_service(&app, blocked).await;
-    assert_eq!(blocked_response.status(), StatusCode::TOO_MANY_REQUESTS);
-    let body: Value = test::read_body_json(blocked_response).await;
-    assert_eq!(body["error"]["code"], "rate_limited");
-
-    let registered_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users")
-        .fetch_one(&pool)
-        .await
-        .unwrap();
-    assert_eq!(registered_count, 3);
-}
-
-#[sqlx::test(migrations = "./migrations")]
 async fn user_can_verify_email_then_login_and_get_default_key(pool: PgPool) {
     let email_sender = InMemoryEmailSender::shared();
     let app = test::init_service(
@@ -952,13 +901,7 @@ async fn fetch_user(pool: &PgPool, user_id: i64) -> User {
           plan_status,
           monthly_request_limit,
           plus_started_at,
-          plus_expires_at,
-          status,
-          banned_at,
-          banned_reason,
-          registration_ip,
-          last_seen_ip,
-          last_seen_at
+          plus_expires_at
         FROM users
         WHERE id = $1
         "#,

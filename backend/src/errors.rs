@@ -13,12 +13,6 @@ pub enum ApiError {
     DisabledApiKey,
     #[error("monthly request limit exceeded")]
     QuotaExceeded,
-    #[error("too many requests")]
-    RateLimited { retry_after_seconds: u64 },
-    #[error("IP address is banned")]
-    IpBanned,
-    #[error("account is banned")]
-    AccountBanned,
     #[error("unsupported model: {0}")]
     UnsupportedModel(String),
     #[error("model is not available on your current plan: {0}")]
@@ -43,9 +37,9 @@ pub enum ApiError {
     Forbidden,
     #[error("resource not found")]
     NotFound,
-    #[error("The upstream provider is temporarily unavailable.")]
+    #[error("upstream request failed")]
     UpstreamRequest(#[from] reqwest::Error),
-    #[error("upstream returned status {status_code}")]
+    #[error("upstream returned status {status_code}: {body}")]
     UpstreamStatus { status_code: u16, body: String },
     #[error("database error")]
     Database(#[from] sqlx::Error),
@@ -58,9 +52,6 @@ impl ApiError {
             Self::InvalidApiKey => "invalid_api_key",
             Self::DisabledApiKey => "disabled_api_key",
             Self::QuotaExceeded => "quota_exceeded",
-            Self::RateLimited { .. } => "rate_limited",
-            Self::IpBanned => "ip_banned",
-            Self::AccountBanned => "account_banned",
             Self::UnsupportedModel(_) => "unsupported_model",
             Self::ModelNotAllowed(_) => "model_not_allowed",
             Self::ModelTemporarilyUnavailable(_) => "model_temporarily_unavailable",
@@ -73,8 +64,8 @@ impl ApiError {
             Self::InvalidSession => "invalid_session",
             Self::Forbidden => "forbidden",
             Self::NotFound => "not_found",
-            Self::UpstreamRequest(_) => "upstream_unavailable",
-            Self::UpstreamStatus { .. } => "upstream_unavailable",
+            Self::UpstreamRequest(_) => "upstream_error",
+            Self::UpstreamStatus { .. } => "upstream_error",
             Self::Database(_) => "database_error",
         }
     }
@@ -90,13 +81,11 @@ impl ResponseError for ApiError {
             Self::DisabledApiKey
             | Self::Forbidden
             | Self::EmailNotVerified
-            | Self::ModelNotAllowed(_)
-            | Self::IpBanned
-            | Self::AccountBanned => StatusCode::FORBIDDEN,
+            | Self::ModelNotAllowed(_) => StatusCode::FORBIDDEN,
             Self::ModelTemporarilyUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
-            Self::QuotaExceeded
-            | Self::VerificationEmailRecentlySent
-            | Self::RateLimited { .. } => StatusCode::TOO_MANY_REQUESTS,
+            Self::QuotaExceeded | Self::VerificationEmailRecentlySent => {
+                StatusCode::TOO_MANY_REQUESTS
+            }
             Self::UnsupportedModel(_) | Self::InvalidRequest(_) => StatusCode::BAD_REQUEST,
             Self::EmailAlreadyRegistered => StatusCode::CONFLICT,
             Self::NotFound => StatusCode::NOT_FOUND,
@@ -116,14 +105,6 @@ impl ResponseError for ApiError {
             },
         };
 
-        let mut response = HttpResponse::build(self.status_code());
-        if let Self::RateLimited {
-            retry_after_seconds,
-        } = self
-        {
-            response.insert_header(("Retry-After", retry_after_seconds.to_string()));
-        }
-
-        response.json(body)
+        HttpResponse::build(self.status_code()).json(body)
     }
 }

@@ -278,80 +278,6 @@ async fn admin_cannot_delete_or_downgrade_self(pool: PgPool) {
     assert_eq!(delete_response.status(), StatusCode::FORBIDDEN);
 }
 
-#[sqlx::test(migrations = "./migrations")]
-async fn admin_can_ban_users_and_ips(pool: PgPool) {
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state(pool.clone())))
-            .configure(routes::configure),
-    )
-    .await;
-
-    let admin = insert_user(&pool, "admin@example.com", "Admin", "plus", Some(30)).await;
-    let admin_token = create_session(&pool, admin.id).await.unwrap();
-    let auth_header = ("authorization", format!("Bearer {admin_token}"));
-    let customer = insert_user(&pool, "customer@example.com", "Customer", "free", None).await;
-    let api_key =
-        create_customer_key_for_user(&pool, customer.id, "default", FREE_MONTHLY_REQUEST_LIMIT)
-            .await
-            .unwrap();
-
-    let ban_user = test::TestRequest::post()
-        .uri(&format!("/admin/users/{}/ban", customer.id))
-        .insert_header(auth_header.clone())
-        .set_json(json!({ "reason": "test abuse" }))
-        .to_request();
-    let ban_body: Value = test::call_and_read_body_json(&app, ban_user).await;
-    assert_eq!(ban_body["status"], "banned");
-
-    let models_with_banned_user = test::TestRequest::get()
-        .uri("/v1/models")
-        .insert_header(("authorization", format!("Bearer {}", api_key.key)))
-        .to_request();
-    let banned_response = test::call_service(&app, models_with_banned_user).await;
-    assert_eq!(banned_response.status(), StatusCode::FORBIDDEN);
-    let banned_body: Value = test::read_body_json(banned_response).await;
-    assert_eq!(banned_body["error"]["code"], "account_banned");
-
-    let unban_user = test::TestRequest::post()
-        .uri(&format!("/admin/users/{}/unban", customer.id))
-        .insert_header(auth_header.clone())
-        .to_request();
-    let unban_body: Value = test::call_and_read_body_json(&app, unban_user).await;
-    assert_eq!(unban_body["status"], "active");
-
-    let ip = "203.0.113.30";
-    let ban_ip = test::TestRequest::post()
-        .uri("/admin/security/ip-bans")
-        .insert_header(auth_header.clone())
-        .set_json(json!({ "ip": ip, "reason": "test IP abuse" }))
-        .to_request();
-    let ban_ip_body: Value = test::call_and_read_body_json(&app, ban_ip).await;
-    assert_eq!(ban_ip_body["ip"], ip);
-    let ban_id = ban_ip_body["id"].as_i64().unwrap();
-
-    let blocked_register = test::TestRequest::post()
-        .uri("/auth/register")
-        .insert_header(("x-real-ip", ip))
-        .set_json(json!({
-            "name": "Blocked",
-            "email": "blocked@example.com",
-            "password": "password123"
-        }))
-        .to_request();
-    let blocked_response = test::call_service(&app, blocked_register).await;
-    assert_eq!(blocked_response.status(), StatusCode::FORBIDDEN);
-    let blocked_body: Value = test::read_body_json(blocked_response).await;
-    assert_eq!(blocked_body["error"]["code"], "ip_banned");
-
-    let unban_ip = test::TestRequest::delete()
-        .uri(&format!("/admin/security/ip-bans/{ban_id}"))
-        .insert_header(auth_header)
-        .to_request();
-    let unban_ip_body: Value = test::call_and_read_body_json(&app, unban_ip).await;
-    assert_eq!(unban_ip_body["lifted_at"].is_string(), true);
-}
-
 fn app_state(pool: PgPool) -> AppState {
     let config = Config {
         database_url: "postgres://postgres:postgres@localhost/openachieve_test".to_string(),
@@ -431,13 +357,7 @@ async fn insert_user(
           plan_status,
           monthly_request_limit,
           plus_started_at,
-          plus_expires_at,
-          status,
-          banned_at,
-          banned_reason,
-          registration_ip,
-          last_seen_ip,
-          last_seen_at
+          plus_expires_at
         "#,
     )
     .bind(email)

@@ -31,12 +31,6 @@ pub struct User {
     pub monthly_request_limit: i32,
     pub plus_started_at: Option<DateTime<Utc>>,
     pub plus_expires_at: Option<DateTime<Utc>>,
-    pub status: String,
-    pub banned_at: Option<DateTime<Utc>>,
-    pub banned_reason: Option<String>,
-    pub registration_ip: Option<String>,
-    pub last_seen_ip: Option<String>,
-    pub last_seen_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -51,9 +45,6 @@ pub struct PublicUser {
     pub monthly_request_limit: i32,
     pub plus_started_at: Option<DateTime<Utc>>,
     pub plus_expires_at: Option<DateTime<Utc>>,
-    pub status: String,
-    pub banned_at: Option<DateTime<Utc>>,
-    pub banned_reason: Option<String>,
     pub is_admin: bool,
 }
 
@@ -78,9 +69,6 @@ impl PublicUser {
             monthly_request_limit,
             plus_started_at: user.plus_started_at,
             plus_expires_at: user.plus_expires_at,
-            status: user.status.clone(),
-            banned_at: user.banned_at,
-            banned_reason: user.banned_reason.clone(),
             is_admin: admin_emails.contains(&user.email),
         }
     }
@@ -89,10 +77,6 @@ impl PublicUser {
 impl User {
     pub fn email_is_verified(&self) -> bool {
         self.email_verified_at.is_some()
-    }
-
-    pub fn is_banned(&self) -> bool {
-        self.status == "banned"
     }
 
     pub fn effective_plan(&self) -> &'static str {
@@ -137,12 +121,6 @@ mod tests {
             monthly_request_limit: PLUS_MONTHLY_REQUEST_LIMIT,
             plus_started_at: None,
             plus_expires_at: expires_at,
-            status: "active".to_string(),
-            banned_at: None,
-            banned_reason: None,
-            registration_ip: None,
-            last_seen_ip: None,
-            last_seen_at: None,
         }
     }
 
@@ -214,7 +192,6 @@ pub struct UsageEvent<'a> {
     pub is_stream: bool,
     pub upstream_latency_ms: Option<i32>,
     pub error_type: Option<&'a str>,
-    pub client_ip: Option<&'a str>,
 }
 
 #[derive(Debug, Serialize)]
@@ -370,14 +347,6 @@ pub struct AdminUserRow {
     pub api_key_count: i64,
     pub requests_this_month: i64,
     pub last_used_at: Option<DateTime<Utc>>,
-    pub status: String,
-    pub banned_at: Option<DateTime<Utc>>,
-    pub banned_reason: Option<String>,
-    pub registration_ip: Option<String>,
-    pub last_seen_ip: Option<String>,
-    pub last_seen_at: Option<DateTime<Utc>>,
-    pub recent_rate_limit_count: i64,
-    pub active_ip_ban_count: i64,
 }
 
 #[derive(Debug, Serialize)]
@@ -397,14 +366,6 @@ pub struct AdminUserSummary {
     pub api_key_count: i64,
     pub last_used_at: Option<DateTime<Utc>>,
     pub is_admin: bool,
-    pub status: String,
-    pub banned_at: Option<DateTime<Utc>>,
-    pub banned_reason: Option<String>,
-    pub registration_ip: Option<String>,
-    pub last_seen_ip: Option<String>,
-    pub last_seen_at: Option<DateTime<Utc>>,
-    pub recent_rate_limit_count: i64,
-    pub active_ip_ban_count: i64,
 }
 
 #[derive(Debug, Serialize)]
@@ -425,89 +386,6 @@ pub struct AdminQuotaResetResponse {
 pub struct AdminUsersResponse {
     pub stats: AdminUserStats,
     pub users: Vec<AdminUserSummary>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct AdminBanUserRequest {
-    pub reason: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct AdminIpBanRequest {
-    pub ip: String,
-    pub reason: Option<String>,
-    pub expires_in_hours: Option<i32>,
-}
-
-#[derive(Debug, Serialize, FromRow, Clone)]
-pub struct IpBanSummary {
-    pub id: i64,
-    pub ip: String,
-    pub reason: String,
-    pub banned_by_user_id: Option<i64>,
-    pub created_at: DateTime<Utc>,
-    pub expires_at: Option<DateTime<Utc>>,
-    pub lifted_at: Option<DateTime<Utc>>,
-}
-
-#[derive(Debug, Serialize, FromRow)]
-pub struct SecurityIpSummary {
-    pub ip: String,
-    pub registered_user_count: i64,
-    pub seen_user_count: i64,
-    pub free_ai_request_count: i64,
-    pub rate_limited_count: i64,
-    pub active_ban_id: Option<i64>,
-    pub active_ban_reason: Option<String>,
-    pub active_ban_expires_at: Option<DateTime<Utc>>,
-    pub last_seen_at: Option<DateTime<Utc>>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct SecurityIpsResponse {
-    pub ips: Vec<SecurityIpSummary>,
-}
-
-#[derive(Debug, Serialize, FromRow)]
-pub struct SecurityIpUser {
-    pub id: i64,
-    pub email: String,
-    pub name: String,
-    pub status: String,
-    pub plan: String,
-    pub created_at: DateTime<Utc>,
-    pub registration_ip: Option<String>,
-    pub last_seen_ip: Option<String>,
-    pub last_seen_at: Option<DateTime<Utc>>,
-}
-
-#[derive(Debug, Serialize, FromRow)]
-pub struct SecurityEventSummary {
-    pub id: i64,
-    pub event_type: String,
-    pub ip: Option<String>,
-    pub user_id: Option<i64>,
-    pub api_key_id: Option<i64>,
-    pub route: Option<String>,
-    pub details: serde_json::Value,
-    pub created_at: DateTime<Utc>,
-}
-
-#[derive(Debug, Serialize, FromRow)]
-pub struct SecurityIpStats {
-    pub registered_user_count: i64,
-    pub seen_user_count: i64,
-    pub free_ai_request_count: i64,
-    pub rate_limited_count: i64,
-}
-
-#[derive(Debug, Serialize)]
-pub struct SecurityIpDetailResponse {
-    pub ip: String,
-    pub stats: SecurityIpStats,
-    pub active_ban: Option<IpBanSummary>,
-    pub users: Vec<SecurityIpUser>,
-    pub recent_events: Vec<SecurityEventSummary>,
 }
 
 #[derive(Debug, Serialize)]
