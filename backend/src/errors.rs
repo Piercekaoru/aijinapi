@@ -13,6 +13,14 @@ pub enum ApiError {
     DisabledApiKey,
     #[error("monthly request limit exceeded")]
     QuotaExceeded,
+    #[error("too many requests")]
+    RateLimited { retry_after_seconds: u64 },
+    #[error("could not determine real client IP")]
+    InvalidClientIp,
+    #[error("IP address is banned")]
+    IpBanned,
+    #[error("account is banned")]
+    AccountBanned,
     #[error("unsupported model: {0}")]
     UnsupportedModel(String),
     #[error("model is not available on your current plan: {0}")]
@@ -52,6 +60,10 @@ impl ApiError {
             Self::InvalidApiKey => "invalid_api_key",
             Self::DisabledApiKey => "disabled_api_key",
             Self::QuotaExceeded => "quota_exceeded",
+            Self::RateLimited { .. } => "rate_limited",
+            Self::InvalidClientIp => "invalid_client_ip",
+            Self::IpBanned => "ip_banned",
+            Self::AccountBanned => "account_banned",
             Self::UnsupportedModel(_) => "unsupported_model",
             Self::ModelNotAllowed(_) => "model_not_allowed",
             Self::ModelTemporarilyUnavailable(_) => "model_temporarily_unavailable",
@@ -81,12 +93,16 @@ impl ResponseError for ApiError {
             Self::DisabledApiKey
             | Self::Forbidden
             | Self::EmailNotVerified
-            | Self::ModelNotAllowed(_) => StatusCode::FORBIDDEN,
+            | Self::ModelNotAllowed(_)
+            | Self::IpBanned
+            | Self::AccountBanned => StatusCode::FORBIDDEN,
             Self::ModelTemporarilyUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
-            Self::QuotaExceeded | Self::VerificationEmailRecentlySent => {
-                StatusCode::TOO_MANY_REQUESTS
+            Self::QuotaExceeded
+            | Self::VerificationEmailRecentlySent
+            | Self::RateLimited { .. } => StatusCode::TOO_MANY_REQUESTS,
+            Self::UnsupportedModel(_) | Self::InvalidRequest(_) | Self::InvalidClientIp => {
+                StatusCode::BAD_REQUEST
             }
-            Self::UnsupportedModel(_) | Self::InvalidRequest(_) => StatusCode::BAD_REQUEST,
             Self::EmailAlreadyRegistered => StatusCode::CONFLICT,
             Self::NotFound => StatusCode::NOT_FOUND,
             Self::UpstreamRequest(_) | Self::UpstreamStatus { .. } | Self::EmailDeliveryFailed => {
@@ -105,6 +121,14 @@ impl ResponseError for ApiError {
             },
         };
 
-        HttpResponse::build(self.status_code()).json(body)
+        let mut response = HttpResponse::build(self.status_code());
+        if let Self::RateLimited {
+            retry_after_seconds,
+        } = self
+        {
+            response.insert_header(("Retry-After", retry_after_seconds.to_string()));
+        }
+
+        response.json(body)
     }
 }

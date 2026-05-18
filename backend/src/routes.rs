@@ -31,16 +31,25 @@ use crate::{
     },
     free_models::{is_free_model_candidate, should_trip_free_model},
     models::{
-        AdminCreateUserRequest, AdminCreateUserResponse, AdminQuotaResetResponse,
-        AdminUpdatePlanRequest, AdminUserRow, AdminUserStats, AdminUserSummary, AdminUsersResponse,
-        AuthResponse, BillingConfigSummary, BillingOrder, BillingOrderSummary,
-        CreateFovPayCheckoutRequest, CreateFovPayCheckoutResponse, CreateUserKeyRequest,
-        DashboardResponse, HealthResponse, LoginRequest, PasswordResetConfirmRequest,
-        PasswordResetMessageResponse, PasswordResetRequest, PublicUser, RegisterRequest,
-        ResendVerificationRequest, UsageEvent, User, VerificationMessageResponse,
-        VerificationRequiredResponse,
+        AdminBanUserRequest, AdminCreateIpBanRequest, AdminCreateUserRequest,
+        AdminCreateUserResponse, AdminIpDetailsResponse, AdminIpUserSummary, AdminLiftIpBanRequest,
+        AdminQuotaResetResponse, AdminSecurityEventSummary, AdminUpdatePlanRequest, AdminUserRow,
+        AdminUserStats, AdminUserSummary, AdminUsersResponse, AuthResponse, BillingConfigSummary,
+        BillingOrder, BillingOrderSummary, CreateFovPayCheckoutRequest,
+        CreateFovPayCheckoutResponse, CreateUserKeyRequest, DashboardResponse, HealthResponse,
+        LoginRequest, PasswordResetConfirmRequest, PasswordResetMessageResponse,
+        PasswordResetRequest, PublicUser, RegisterRequest, ResendVerificationRequest, UsageEvent,
+        User, VerificationMessageResponse, VerificationRequiredResponse,
     },
     plans::{FREE_MONTHLY_REQUEST_LIMIT, FREE_PLAN, PLUS_MONTHLY_REQUEST_LIMIT, PLUS_PLAN},
+    security::{
+        FREE_AI_HOURLY_LIMIT, FREE_AI_HOURLY_WINDOW_SECONDS, FREE_AI_SCOPE, FREE_AI_SHORT_LIMIT,
+        FREE_AI_SHORT_WINDOW_SECONDS, REGISTER_HOURLY_LIMIT, REGISTER_HOURLY_WINDOW_SECONDS,
+        REGISTER_SCOPE, REGISTER_SHORT_LIMIT, REGISTER_SHORT_WINDOW_SECONDS, RateLimitRule,
+        active_ip_ban, ban_user, best_effort_client_ip, client_ip_for_security, create_ip_ban,
+        enforce_ip_rate_limits, ensure_ip_not_banned, ensure_user_active, lift_ip_ban,
+        record_registration_created, record_security_event, touch_user_ip, unban_user, validate_ip,
+    },
     state::AppState,
     upstream::{
         PLUS_MODELS, UpstreamRoute, bytes_from_static_json, forward_chat, is_plus_model,
@@ -87,9 +96,20 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             "/admin/users/{user_id}/plan",
             web::patch().to(admin_update_user_plan),
         )
+        .route("/admin/users/{user_id}/ban", web::post().to(admin_ban_user))
+        .route(
+            "/admin/users/{user_id}/unban",
+            web::post().to(admin_unban_user),
+        )
         .route(
             "/admin/users/{user_id}",
             web::delete().to(admin_delete_user),
+        )
+        .route("/admin/ip-details", web::get().to(admin_ip_details))
+        .route("/admin/ip-bans", web::post().to(admin_create_ip_ban))
+        .route(
+            "/admin/ip-bans/{ban_id}/lift",
+            web::post().to(admin_lift_ip_ban),
         )
         .route("/admin/quota-resets", web::post().to(admin_reset_all_quota))
         .route("/public/free-models", web::get().to(public_free_models))
@@ -106,8 +126,34 @@ async fn health() -> impl Responder {
 
 async fn register(
     state: web::Data<AppState>,
+    req: HttpRequest,
     body: web::Json<RegisterRequest>,
 ) -> Result<HttpResponse, ApiError> {
+    let ip = client_ip_for_security(&req, &state.config)?;
+    ensure_ip_not_banned(&state.db, &ip).await?;
+    enforce_ip_rate_limits(
+        &state.db,
+        &ip,
+        &[
+            RateLimitRule {
+                scope: REGISTER_SCOPE,
+                limit: REGISTER_SHORT_LIMIT,
+                window_seconds: REGISTER_SHORT_WINDOW_SECONDS,
+                auto_ban_on_repeat: true,
+            },
+            RateLimitRule {
+                scope: REGISTER_SCOPE,
+                limit: REGISTER_HOURLY_LIMIT,
+                window_seconds: REGISTER_HOURLY_WINDOW_SECONDS,
+                auto_ban_on_repeat: true,
+            },
+        ],
+        "/auth/register",
+        None,
+        None,
+    )
+    .await?;
+
     let body = body.into_inner();
     let email = normalize_email(&body.email);
     validate_register_input(&body.name, &email, &body.password)?;
@@ -115,8 +161,18 @@ async fn register(
     let password_hash = hash_password(&body.password)?;
     let user = sqlx::query_as::<_, User>(
         r#"
-        INSERT INTO users (email, name, password_hash, plan, plan_status, monthly_request_limit)
-        VALUES ($1, $2, $3, 'free', 'active', $4)
+        INSERT INTO users (
+          email,
+          name,
+          password_hash,
+          plan,
+          plan_status,
+          monthly_request_limit,
+          registration_ip,
+          last_seen_ip,
+          last_seen_at
+        )
+        VALUES ($1, $2, $3, 'free', 'active', $4, $5, $5, now())
         RETURNING
           id,
           email,
@@ -135,6 +191,7 @@ async fn register(
     .bind(body.name.trim())
     .bind(password_hash)
     .bind(FREE_MONTHLY_REQUEST_LIMIT)
+    .bind(&ip.ip)
     .fetch_one(&state.db)
     .await
     .map_err(|err| {
@@ -144,6 +201,7 @@ async fn register(
             ApiError::Database(err)
         }
     })?;
+    record_registration_created(&state.db, &ip, user.id).await?;
 
     let token = create_email_verification_token(&state.db, user.id).await?;
     if send_verification_email(&state, &user, &token)
@@ -163,8 +221,11 @@ async fn register(
 
 async fn login(
     state: web::Data<AppState>,
+    req: HttpRequest,
     body: web::Json<LoginRequest>,
 ) -> Result<web::Json<AuthResponse>, ApiError> {
+    let ip = client_ip_for_security(&req, &state.config)?;
+    ensure_ip_not_banned(&state.db, &ip).await?;
     let email = normalize_email(&body.email);
     let user = sqlx::query_as::<_, User>(
         r#"
@@ -195,8 +256,10 @@ async fn login(
     if !user.email_is_verified() {
         return Err(ApiError::EmailNotVerified);
     }
+    ensure_user_active(&state.db, user.id).await?;
 
     let session_token = create_session(&state.db, user.id).await?;
+    touch_user_ip(&state.db, user.id, &ip).await?;
     let api_key = create_default_customer_key_if_missing(
         &state.db,
         user.id,
@@ -292,7 +355,7 @@ async fn request_password_reset(
 
     let user = match user_by_email(&state.db, &email).await {
         Ok(user) => user,
-        Err(ApiError::NotFound) => return Ok(generic_response()),
+        Err(ApiError::NotFound | ApiError::InvalidCredentials) => return Ok(generic_response()),
         Err(err) => return Err(err),
     };
 
@@ -447,7 +510,7 @@ async fn create_fovpay_checkout(
         ("notify_url".to_string(), notify_url),
         ("return_url".to_string(), return_url),
         ("attach".to_string(), user.id.to_string()),
-        ("client_ip".to_string(), client_ip(&req)),
+        ("client_ip".to_string(), best_effort_client_ip(&req)),
         ("timestamp".to_string(), timestamp),
     ];
     let sign = sign_md5(&params, &config.secret_key);
@@ -774,6 +837,99 @@ async fn admin_update_user_plan(
         .ok_or(ApiError::NotFound)
 }
 
+async fn admin_ban_user(
+    state: web::Data<AppState>,
+    req: HttpRequest,
+    path: web::Path<i64>,
+    body: web::Json<AdminBanUserRequest>,
+) -> Result<web::Json<AdminUserSummary>, ApiError> {
+    let admin =
+        authenticate_admin_session(&state.db, extract_bearer(&req)?, &state.config.admin_emails)
+            .await?;
+    let user_id = path.into_inner();
+    let target = user_by_id(&state.db, user_id).await?;
+    if target.id == admin.id {
+        return Err(ApiError::Forbidden);
+    }
+
+    let reason = body
+        .reason
+        .as_deref()
+        .map(str::trim)
+        .filter(|reason| !reason.is_empty())
+        .unwrap_or("manual admin ban");
+    let banned = ban_user(&state.db, target.id, reason).await?;
+    if !banned {
+        return Err(ApiError::NotFound);
+    }
+
+    record_admin_audit(
+        &state.db,
+        &admin,
+        Some(target.id),
+        &target.email,
+        "ban_user",
+        json!({ "reason": reason }),
+    )
+    .await?;
+    record_security_event(
+        &state.db,
+        "user_banned",
+        None,
+        Some(target.id),
+        None,
+        Some("/admin/users/ban"),
+        json!({ "reason": reason, "actor_user_id": admin.id }),
+    )
+    .await?;
+
+    admin_user_summary_by_id(&state.db, target.id, &state.config.admin_emails)
+        .await?
+        .map(web::Json)
+        .ok_or(ApiError::NotFound)
+}
+
+async fn admin_unban_user(
+    state: web::Data<AppState>,
+    req: HttpRequest,
+    path: web::Path<i64>,
+) -> Result<web::Json<AdminUserSummary>, ApiError> {
+    let admin =
+        authenticate_admin_session(&state.db, extract_bearer(&req)?, &state.config.admin_emails)
+            .await?;
+    let user_id = path.into_inner();
+    let target = user_by_id(&state.db, user_id).await?;
+    let unbanned = unban_user(&state.db, target.id).await?;
+    if !unbanned {
+        return Err(ApiError::NotFound);
+    }
+
+    record_admin_audit(
+        &state.db,
+        &admin,
+        Some(target.id),
+        &target.email,
+        "unban_user",
+        json!({}),
+    )
+    .await?;
+    record_security_event(
+        &state.db,
+        "user_unbanned",
+        None,
+        Some(target.id),
+        None,
+        Some("/admin/users/unban"),
+        json!({ "actor_user_id": admin.id }),
+    )
+    .await?;
+
+    admin_user_summary_by_id(&state.db, target.id, &state.config.admin_emails)
+        .await?
+        .map(web::Json)
+        .ok_or(ApiError::NotFound)
+}
+
 async fn admin_delete_user(
     state: web::Data<AppState>,
     req: HttpRequest,
@@ -851,6 +1007,172 @@ async fn admin_reset_all_quota(
     }))
 }
 
+#[derive(serde::Deserialize)]
+struct AdminIpDetailsQuery {
+    ip: String,
+}
+
+async fn admin_ip_details(
+    state: web::Data<AppState>,
+    req: HttpRequest,
+    query: web::Query<AdminIpDetailsQuery>,
+) -> Result<web::Json<AdminIpDetailsResponse>, ApiError> {
+    let _admin =
+        authenticate_admin_session(&state.db, extract_bearer(&req)?, &state.config.admin_emails)
+            .await?;
+    let ip = validate_ip(&query.ip)?;
+    let active_ban = active_ip_ban(&state.db, &ip).await?;
+    let associated_users = sqlx::query_as::<_, AdminIpUserSummary>(
+        r#"
+        SELECT
+          id,
+          email,
+          name,
+          status,
+          plan,
+          registration_ip,
+          last_seen_ip,
+          created_at
+        FROM users
+        WHERE registration_ip = $1 OR last_seen_ip = $1
+        ORDER BY created_at DESC
+        LIMIT 100
+        "#,
+    )
+    .bind(&ip)
+    .fetch_all(&state.db)
+    .await?;
+    let registration_count_1h: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)
+        FROM security_events
+        WHERE event_type = 'registration_created'
+          AND ip = $1
+          AND created_at > now() - interval '1 hour'
+        "#,
+    )
+    .bind(&ip)
+    .fetch_one(&state.db)
+    .await?;
+    let free_ai_request_count_1h: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)
+        FROM security_events
+        WHERE event_type = 'free_ai_request'
+          AND ip = $1
+          AND created_at > now() - interval '1 hour'
+        "#,
+    )
+    .bind(&ip)
+    .fetch_one(&state.db)
+    .await?;
+    let rate_limit_event_count_24h: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)
+        FROM security_events
+        WHERE event_type = 'rate_limited'
+          AND ip = $1
+          AND created_at > now() - interval '24 hours'
+        "#,
+    )
+    .bind(&ip)
+    .fetch_one(&state.db)
+    .await?;
+    let recent_events = sqlx::query_as::<_, AdminSecurityEventSummary>(
+        r#"
+        SELECT
+          id,
+          event_type,
+          ip,
+          ip_source,
+          user_id,
+          api_key_id,
+          route,
+          details,
+          created_at
+        FROM security_events
+        WHERE ip = $1
+        ORDER BY created_at DESC
+        LIMIT 50
+        "#,
+    )
+    .bind(&ip)
+    .fetch_all(&state.db)
+    .await?;
+
+    Ok(web::Json(AdminIpDetailsResponse {
+        ip,
+        active_ban,
+        associated_users,
+        registration_count_1h,
+        free_ai_request_count_1h,
+        rate_limit_event_count_24h,
+        recent_events,
+    }))
+}
+
+async fn admin_create_ip_ban(
+    state: web::Data<AppState>,
+    req: HttpRequest,
+    body: web::Json<AdminCreateIpBanRequest>,
+) -> Result<web::Json<crate::security::IpBanSummary>, ApiError> {
+    let admin =
+        authenticate_admin_session(&state.db, extract_bearer(&req)?, &state.config.admin_emails)
+            .await?;
+    let ip = validate_ip(&body.ip)?;
+    let reason = body
+        .reason
+        .as_deref()
+        .map(str::trim)
+        .filter(|reason| !reason.is_empty())
+        .unwrap_or("manual admin IP ban");
+    let expires_at = body
+        .hours
+        .filter(|hours| *hours > 0)
+        .map(|hours| Utc::now() + Duration::hours(i64::from(hours)));
+    let ban = create_ip_ban(&state.db, &ip, reason, Some(admin.id), expires_at).await?;
+    record_admin_audit(
+        &state.db,
+        &admin,
+        None,
+        &ip,
+        "ban_ip",
+        json!({ "reason": reason, "hours": body.hours }),
+    )
+    .await?;
+    Ok(web::Json(ban))
+}
+
+async fn admin_lift_ip_ban(
+    state: web::Data<AppState>,
+    req: HttpRequest,
+    path: web::Path<i64>,
+    body: web::Json<AdminLiftIpBanRequest>,
+) -> Result<web::Json<crate::security::IpBanSummary>, ApiError> {
+    let admin =
+        authenticate_admin_session(&state.db, extract_bearer(&req)?, &state.config.admin_emails)
+            .await?;
+    let reason = body
+        .reason
+        .as_deref()
+        .map(str::trim)
+        .filter(|reason| !reason.is_empty())
+        .unwrap_or("manual admin IP unban");
+    let ban = lift_ip_ban(&state.db, path.into_inner(), admin.id, reason)
+        .await?
+        .ok_or(ApiError::NotFound)?;
+    record_admin_audit(
+        &state.db,
+        &admin,
+        None,
+        &ban.ip,
+        "unban_ip",
+        json!({ "reason": reason, "ban_id": ban.id }),
+    )
+    .await?;
+    Ok(web::Json(ban))
+}
+
 async fn admin_user_rows(pool: &sqlx::PgPool) -> Result<Vec<AdminUserRow>, sqlx::Error> {
     sqlx::query_as::<_, AdminUserRow>(
         r#"
@@ -873,6 +1195,12 @@ async fn admin_user_rows(pool: &sqlx::PgPool) -> Result<Vec<AdminUserRow>, sqlx:
           u.monthly_request_limit,
           u.plus_started_at,
           u.plus_expires_at,
+          u.status,
+          u.banned_at,
+          u.banned_reason,
+          u.registration_ip,
+          u.last_seen_ip,
+          u.last_seen_at,
           COUNT(DISTINCT k.id) AS api_key_count,
           COUNT(e.id) FILTER (
             WHERE e.created_at >= q.usage_start
@@ -917,6 +1245,12 @@ async fn admin_user_summary_by_id(
           u.monthly_request_limit,
           u.plus_started_at,
           u.plus_expires_at,
+          u.status,
+          u.banned_at,
+          u.banned_reason,
+          u.registration_ip,
+          u.last_seen_ip,
+          u.last_seen_at,
           COUNT(DISTINCT k.id) AS api_key_count,
           COUNT(e.id) FILTER (
             WHERE e.created_at >= q.usage_start
@@ -976,6 +1310,12 @@ fn admin_user_summary(row: AdminUserRow, admin_emails: &[String]) -> AdminUserSu
         remaining_requests,
         plus_started_at: row.plus_started_at,
         plus_expires_at: row.plus_expires_at,
+        status: row.status,
+        banned_at: row.banned_at,
+        banned_reason: row.banned_reason,
+        registration_ip: row.registration_ip,
+        last_seen_ip: row.last_seen_ip,
+        last_seen_at: row.last_seen_at,
         api_key_count: row.api_key_count,
         last_used_at: row.last_used_at,
         is_admin,
@@ -1098,25 +1438,6 @@ fn fovpay_pairs(params: &HashMap<String, String>) -> Vec<(String, String)> {
         .iter()
         .map(|(key, value)| (key.clone(), value.clone()))
         .collect()
-}
-
-fn client_ip(req: &HttpRequest) -> String {
-    for header_name in ["cf-connecting-ip", "x-real-ip", "x-forwarded-for"] {
-        if let Some(value) = req
-            .headers()
-            .get(header_name)
-            .and_then(|value| value.to_str().ok())
-            .and_then(|value| value.split(',').next())
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-        {
-            return value.to_string();
-        }
-    }
-
-    req.peer_addr()
-        .map(|addr| addr.ip().to_string())
-        .unwrap_or_else(|| "127.0.0.1".to_string())
 }
 
 fn required_fovpay_param<'a>(
@@ -1363,8 +1684,11 @@ fn is_unique_violation(err: &sqlx::Error) -> bool {
 }
 
 async fn models(state: web::Data<AppState>, req: HttpRequest) -> Result<HttpResponse, ApiError> {
+    let ip = client_ip_for_security(&req, &state.config)?;
+    ensure_ip_not_banned(&state.db, &ip).await?;
     let api_key = authenticate(&state.db, extract_bearer(&req)?).await?;
     let user = user_for_api_key(&state.db, &api_key).await?;
+    touch_user_ip(&state.db, user.id, &ip).await?;
     let plan = user.effective_plan();
     let allowed_models = allowed_models_for_effective_plan(&state, plan).await;
 
@@ -1420,6 +1744,8 @@ async fn chat_completions(
     req: HttpRequest,
     body: web::Json<Value>,
 ) -> Result<HttpResponse, ApiError> {
+    let ip = client_ip_for_security(&req, &state.config)?;
+    ensure_ip_not_banned(&state.db, &ip).await?;
     let api_key = authenticate(&state.db, extract_bearer(&req)?).await?;
     let user = user_for_api_key(&state.db, &api_key).await?;
     ensure_monthly_quota(&state.db, &user).await?;
@@ -1429,6 +1755,44 @@ async fn chat_completions(
     let is_stream = request_is_stream(&body);
     let plan = user.effective_plan();
     let route = route_for_model(&state, plan, &model).await?;
+    if route == UpstreamRoute::Zen {
+        enforce_ip_rate_limits(
+            &state.db,
+            &ip,
+            &[
+                RateLimitRule {
+                    scope: FREE_AI_SCOPE,
+                    limit: FREE_AI_SHORT_LIMIT,
+                    window_seconds: FREE_AI_SHORT_WINDOW_SECONDS,
+                    auto_ban_on_repeat: true,
+                },
+                RateLimitRule {
+                    scope: FREE_AI_SCOPE,
+                    limit: FREE_AI_HOURLY_LIMIT,
+                    window_seconds: FREE_AI_HOURLY_WINDOW_SECONDS,
+                    auto_ban_on_repeat: true,
+                },
+            ],
+            "/v1/chat/completions",
+            Some(user.id),
+            Some(api_key.id),
+        )
+        .await?;
+        record_security_event(
+            &state.db,
+            "free_ai_request",
+            Some(&ip),
+            Some(user.id),
+            Some(api_key.id),
+            Some("/v1/chat/completions"),
+            json!({
+                "plan": plan,
+                "model": model,
+                "route": "zen",
+            }),
+        )
+        .await?;
+    }
 
     info!(
         api_key_id = api_key.id,
@@ -1465,12 +1829,14 @@ async fn chat_completions(
                 is_stream,
                 upstream_latency_ms: Some(result.latency_ms),
                 error_type: Some("model_temporarily_unavailable"),
+                client_ip: Some(&ip.ip),
             },
         )
         .await?;
         return Err(ApiError::ModelTemporarilyUnavailable(model));
     }
     touch_key(&state.db, api_key.id).await?;
+    touch_user_ip(&state.db, user.id, &ip).await?;
     record_usage(
         &state.db,
         UsageEvent {
@@ -1481,6 +1847,7 @@ async fn chat_completions(
             is_stream,
             upstream_latency_ms: Some(result.latency_ms),
             error_type: None,
+            client_ip: Some(&ip.ip),
         },
     )
     .await?;

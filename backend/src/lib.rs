@@ -9,5 +9,6 @@ pub mod keys;
 pub mod models;
 pub mod plans;
 pub mod routes;
+pub mod security;
 pub mod state;
 pub mod upstream;

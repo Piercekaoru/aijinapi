@@ -130,8 +130,8 @@ async fn models_endpoint_returns_models_for_effective_plan(pool: PgPool) {
             "big-pickle",
             "deepseek-v4-flash-free",
             "minimax-m2.5-free",
-            "ring-2.6-1t-free",
-            "nemotron-3-super-free"
+            "nemotron-3-super-free",
+            "ring-2.6-1t-free"
         ]
     );
 
@@ -306,7 +306,7 @@ async fn plan_model_errors_return_expected_status_codes(pool: PgPool) {
     assert_eq!(free_response.status(), 403);
 
     let plus_response = post_chat(&app, &plus_key, "qwen3.6-plus-free", false).await;
-    assert_eq!(plus_response.status(), 400);
+    assert_eq!(plus_response.status(), 503);
 }
 
 #[sqlx::test(migrations = "./migrations")]

@@ -192,6 +192,7 @@ pub struct UsageEvent<'a> {
     pub is_stream: bool,
     pub upstream_latency_ms: Option<i32>,
     pub error_type: Option<&'a str>,
+    pub client_ip: Option<&'a str>,
 }
 
 #[derive(Debug, Serialize)]
@@ -344,6 +345,12 @@ pub struct AdminUserRow {
     pub monthly_request_limit: i32,
     pub plus_started_at: Option<DateTime<Utc>>,
     pub plus_expires_at: Option<DateTime<Utc>>,
+    pub status: String,
+    pub banned_at: Option<DateTime<Utc>>,
+    pub banned_reason: Option<String>,
+    pub registration_ip: Option<String>,
+    pub last_seen_ip: Option<String>,
+    pub last_seen_at: Option<DateTime<Utc>>,
     pub api_key_count: i64,
     pub requests_this_month: i64,
     pub last_used_at: Option<DateTime<Utc>>,
@@ -363,6 +370,12 @@ pub struct AdminUserSummary {
     pub remaining_requests: i64,
     pub plus_started_at: Option<DateTime<Utc>>,
     pub plus_expires_at: Option<DateTime<Utc>>,
+    pub status: String,
+    pub banned_at: Option<DateTime<Utc>>,
+    pub banned_reason: Option<String>,
+    pub registration_ip: Option<String>,
+    pub last_seen_ip: Option<String>,
+    pub last_seen_at: Option<DateTime<Utc>>,
     pub api_key_count: i64,
     pub last_used_at: Option<DateTime<Utc>>,
     pub is_admin: bool,
@@ -393,6 +406,59 @@ pub struct AdminCreateUserResponse {
     pub user: AdminUserSummary,
     pub temporary_password: String,
     pub api_key: IssuedApiKey,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AdminBanUserRequest {
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AdminCreateIpBanRequest {
+    pub ip: String,
+    pub reason: Option<String>,
+    pub hours: Option<i32>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AdminLiftIpBanRequest {
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct AdminIpUserSummary {
+    pub id: i64,
+    pub email: String,
+    pub name: String,
+    pub status: String,
+    pub plan: String,
+    pub registration_ip: Option<String>,
+    pub last_seen_ip: Option<String>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct AdminSecurityEventSummary {
+    pub id: i64,
+    pub event_type: String,
+    pub ip: Option<String>,
+    pub ip_source: Option<String>,
+    pub user_id: Option<i64>,
+    pub api_key_id: Option<i64>,
+    pub route: Option<String>,
+    pub details: serde_json::Value,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AdminIpDetailsResponse {
+    pub ip: String,
+    pub active_ban: Option<crate::security::IpBanSummary>,
+    pub associated_users: Vec<AdminIpUserSummary>,
+    pub registration_count_1h: i64,
+    pub free_ai_request_count_1h: i64,
+    pub rate_limit_event_count_24h: i64,
+    pub recent_events: Vec<AdminSecurityEventSummary>,
 }
 
 #[derive(Debug, Deserialize)]
