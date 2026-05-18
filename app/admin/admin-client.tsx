@@ -22,6 +22,12 @@ type AdminUser = {
   remaining_requests: number;
   plus_started_at: string | null;
   plus_expires_at: string | null;
+  status: string;
+  banned_at: string | null;
+  banned_reason: string | null;
+  registration_ip: string | null;
+  last_seen_ip: string | null;
+  last_seen_at: string | null;
   api_key_count: number;
   last_used_at: string | null;
   is_admin: boolean;
@@ -53,6 +59,41 @@ type AdminQuotaResetResponse = {
   users_affected: number;
 };
 
+type IpBan = {
+  id: number;
+  ip: string;
+  reason: string;
+  banned_by_user_id: number | null;
+  created_at: string;
+  expires_at: string | null;
+  lifted_at: string | null;
+};
+
+type IpDetails = {
+  ip: string;
+  active_ban: IpBan | null;
+  associated_users: Array<{
+    id: number;
+    email: string;
+    name: string;
+    status: string;
+    plan: string;
+    registration_ip: string | null;
+    last_seen_ip: string | null;
+    created_at: string;
+  }>;
+  registration_count_1h: number;
+  free_ai_request_count_1h: number;
+  rate_limit_event_count_24h: number;
+  recent_events: Array<{
+    id: number;
+    event_type: string;
+    ip: string | null;
+    route: string | null;
+    created_at: string;
+  }>;
+};
+
 type AddUserForm = {
   name: string;
   email: string;
@@ -63,6 +104,7 @@ type AddUserForm = {
 type AccessState = "loading" | "allowed" | "forbidden" | "unauthenticated" | "error";
 type UserFilter = "all" | "free" | "plus" | "inactive_plus";
 type PlanAction = { user: AdminUser; plan: "free" | "plus" };
+type BanAction = { user: AdminUser; action: "ban" | "unban" };
 
 const initialAddUserForm: AddUserForm = {
   name: "",
@@ -91,10 +133,15 @@ export function AdminClient() {
   const [addUserForm, setAddUserForm] = useState<AddUserForm>(initialAddUserForm);
   const [issuedCredentials, setIssuedCredentials] = useState<AdminCreateUserResponse | null>(null);
   const [planTarget, setPlanTarget] = useState<PlanAction | null>(null);
+  const [banTarget, setBanTarget] = useState<BanAction | null>(null);
+  const [banReason, setBanReason] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [showQuotaReset, setShowQuotaReset] = useState(false);
   const [quotaResetConfirmation, setQuotaResetConfirmation] = useState("");
+  const [ipQuery, setIpQuery] = useState("");
+  const [ipDetails, setIpDetails] = useState<IpDetails | null>(null);
+  const [ipBanReason, setIpBanReason] = useState("");
   const [busyAction, setBusyAction] = useState("");
 
   const normalizedBackendUrl = useMemo(
@@ -254,6 +301,108 @@ export function AdminClient() {
     }
   }
 
+  async function updateBan() {
+    if (!sessionToken || !banTarget) return;
+    const { user, action } = banTarget;
+    const actionId = `${action}-${user.id}`;
+    setBusyAction(actionId);
+    setStatus(action === "ban" ? "正在冻结用户..." : "正在解冻用户...");
+
+    try {
+      const response = await fetch(`${normalizedBackendUrl}/admin/users/${user.id}/${action}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${sessionToken}`,
+          "Content-Type": "application/json",
+        },
+        body: action === "ban" ? JSON.stringify({ reason: banReason || undefined }) : undefined,
+      });
+      if (!response.ok) throw new Error(await errorText(response));
+      setStatus(action === "ban" ? "用户已冻结" : "用户已解冻");
+      setBanTarget(null);
+      setBanReason("");
+      await loadUsers(sessionToken);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "用户封禁操作失败");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  async function loadIpDetails(ip = ipQuery) {
+    if (!sessionToken || !ip.trim()) return;
+    setBusyAction("ip-details");
+    setStatus("正在读取 IP 明细...");
+
+    try {
+      const response = await fetch(`${normalizedBackendUrl}/admin/ip-details?ip=${encodeURIComponent(ip.trim())}`, {
+        headers: {
+          Authorization: `Bearer ${sessionToken}`,
+        },
+      });
+      if (!response.ok) throw new Error(await errorText(response));
+      setIpDetails((await response.json()) as IpDetails);
+      setStatus("IP 明细已更新");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "IP 明细读取失败");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  async function banIp() {
+    if (!sessionToken || !ipQuery.trim()) return;
+    setBusyAction("ban-ip");
+    setStatus("正在封禁 IP...");
+
+    try {
+      const response = await fetch(`${normalizedBackendUrl}/admin/ip-bans`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${sessionToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ip: ipQuery.trim(),
+          reason: ipBanReason || undefined,
+          hours: 24,
+        }),
+      });
+      if (!response.ok) throw new Error(await errorText(response));
+      setIpBanReason("");
+      await loadIpDetails(ipQuery);
+      setStatus("IP 已封禁");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "IP 封禁失败");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  async function liftIpBan() {
+    if (!sessionToken || !ipDetails?.active_ban) return;
+    setBusyAction("lift-ip");
+    setStatus("正在解封 IP...");
+
+    try {
+      const response = await fetch(`${normalizedBackendUrl}/admin/ip-bans/${ipDetails.active_ban.id}/lift`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${sessionToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ reason: "manual admin unban" }),
+      });
+      if (!response.ok) throw new Error(await errorText(response));
+      await loadIpDetails(ipDetails.ip);
+      setStatus("IP 已解封");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "IP 解封失败");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
   async function resetAllQuota() {
     if (!sessionToken || quotaResetConfirmation !== "RESET") return;
     setBusyAction("reset-quota");
@@ -390,13 +539,72 @@ export function AdminClient() {
               </Button>
             </section>
 
+            <section className="issued-panel">
+              <div>
+                <p>Security</p>
+                <h2>IP 风控</h2>
+                <span>查询真实 IP 的关联账号、限流事件和封禁状态。</span>
+              </div>
+              <div className="issued-grid">
+                <label>
+                  IP 地址
+                  <input
+                    aria-label="IP 地址"
+                    placeholder="203.0.113.10"
+                    value={ipQuery}
+                    onChange={(event) => setIpQuery(event.target.value)}
+                  />
+                </label>
+                <label>
+                  封禁原因
+                  <input
+                    aria-label="封禁原因"
+                    placeholder="批量注册或滥用 Free 模型"
+                    value={ipBanReason}
+                    onChange={(event) => setIpBanReason(event.target.value)}
+                  />
+                </label>
+              </div>
+              <div className="modal-actions">
+                <Button type="button" variant="secondary" disabled={busyAction === "ip-details"} onClick={() => loadIpDetails()}>
+                  查询 IP
+                </Button>
+                <Button type="button" variant="destructive" disabled={!ipQuery.trim() || busyAction === "ban-ip"} onClick={banIp}>
+                  封禁 24 小时
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={!ipDetails?.active_ban || busyAction === "lift-ip"}
+                  onClick={liftIpBan}
+                >
+                  解封 IP
+                </Button>
+              </div>
+              {ipDetails && (
+                <div className="ip-details">
+                  <strong>{ipDetails.ip}</strong>
+                  <span>{ipDetails.active_ban ? `已封禁：${ipDetails.active_ban.reason}` : "未封禁"}</span>
+                  <span>近 1 小时注册 {ipDetails.registration_count_1h.toLocaleString()} 次</span>
+                  <span>近 1 小时 Free/Zen 调用 {ipDetails.free_ai_request_count_1h.toLocaleString()} 次</span>
+                  <span>近 24 小时限流事件 {ipDetails.rate_limit_event_count_24h.toLocaleString()} 次</span>
+                  <small>
+                    关联账号：
+                    {ipDetails.associated_users.length === 0
+                      ? "无"
+                      : ipDetails.associated_users.map((user) => user.email).join(", ")}
+                  </small>
+                </div>
+              )}
+            </section>
+
             <section className="user-table">
               <div className="table-head">
                 <span>用户</span>
                 <span>套餐</span>
                 <span>用量</span>
                 <span>Key</span>
-                <span>最后活跃</span>
+                <span>IP / 状态</span>
                 <span>操作</span>
               </div>
               {filteredUsers.map((user) => {
@@ -406,7 +614,10 @@ export function AdminClient() {
                     <div className="identity-cell">
                       <strong>{user.name}</strong>
                       <span>{user.email}</span>
-                      <small>{user.is_admin ? "管理员" : `注册于 ${formatDate(user.created_at)}`}</small>
+                      <small>
+                        {user.is_admin ? "管理员" : `注册于 ${formatDate(user.created_at)}`}
+                        {user.status === "banned" ? " · 已冻结" : ""}
+                      </small>
                     </div>
                     <div>
                       <PlanBadge user={user} />
@@ -423,7 +634,8 @@ export function AdminClient() {
                       <span>个 Key</span>
                     </div>
                     <div>
-                      <span>{user.last_used_at ? formatDate(user.last_used_at) : "暂无调用"}</span>
+                      <span>{user.last_seen_ip ?? user.registration_ip ?? "暂无 IP"}</span>
+                      <small>{user.last_seen_at ? `请求于 ${formatDate(user.last_seen_at)}` : "暂无请求记录"}</small>
                     </div>
                     <div className="actions-cell">
                       <Button
@@ -442,6 +654,18 @@ export function AdminClient() {
                         onClick={() => setPlanTarget({ user, plan: "free" })}
                       >
                         降级 Free
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        type="button"
+                        disabled={isSelf}
+                        onClick={() => {
+                          setBanReason("");
+                          setBanTarget({ user, action: user.status === "banned" ? "unban" : "ban" });
+                        }}
+                      >
+                        {user.status === "banned" ? "解冻" : "冻结"}
                       </Button>
                       <Button
                         size="sm"
@@ -614,6 +838,62 @@ export function AdminClient() {
                 onClick={resetAllQuota}
               >
                 {busyAction === "reset-quota" ? "重置中..." : "确认重置"}
+              </Button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {banTarget && (
+        <div className="modal-backdrop" role="presentation">
+          <section className="modal danger" role="dialog" aria-modal="true" aria-labelledby="ban-user-title">
+            <div className="modal-head">
+              <div>
+                <p>{banTarget.action === "ban" ? "Ban" : "Unban"}</p>
+                <h2 id="ban-user-title">{banTarget.action === "ban" ? "冻结用户" : "解冻用户"}</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setBanTarget(null);
+                  setBanReason("");
+                }}
+                aria-label="关闭"
+              >
+                ×
+              </button>
+            </div>
+            <p className="danger-copy">
+              {banTarget.action === "ban"
+                ? `冻结 ${banTarget.user.email} 会撤销现有 session，并拒绝登录和 API Key 鉴权。`
+                : `解冻 ${banTarget.user.email} 后，该用户需要重新登录；关联 IP ban 不会自动解除。`}
+            </p>
+            {banTarget.action === "ban" && (
+              <input
+                aria-label="冻结原因"
+                placeholder="冻结原因"
+                value={banReason}
+                onChange={(event) => setBanReason(event.target.value)}
+              />
+            )}
+            <div className="modal-actions">
+              <Button
+                variant="secondary"
+                type="button"
+                onClick={() => {
+                  setBanTarget(null);
+                  setBanReason("");
+                }}
+              >
+                取消
+              </Button>
+              <Button
+                variant={banTarget.action === "ban" ? "destructive" : "default"}
+                type="button"
+                disabled={busyAction === `${banTarget.action}-${banTarget.user.id}`}
+                onClick={updateBan}
+              >
+                {busyAction === `${banTarget.action}-${banTarget.user.id}` ? "处理中..." : "确认"}
               </Button>
             </div>
           </section>
@@ -799,6 +1079,23 @@ export function AdminClient() {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
           gap: 12px;
+        }
+
+        .ip-details {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+          align-items: center;
+          border: 1px solid #e8e6dc;
+          border-radius: 8px;
+          padding: 12px;
+          background: #fffdf8;
+        }
+
+        .ip-details strong,
+        .ip-details small {
+          flex-basis: 100%;
+          overflow-wrap: anywhere;
         }
 
         :global(.credential) {

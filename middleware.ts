@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const LEGACY_LOCALES = ["ja", "zh"] as const;
+const PROXIED_API_PREFIXES = ["/api/backend", "/v1"] as const;
 
 function legacyLocaleRedirect(pathname: string) {
   for (const locale of LEGACY_LOCALES) {
@@ -11,8 +12,38 @@ function legacyLocaleRedirect(pathname: string) {
   return null;
 }
 
+function proxiedApiPath(pathname: string) {
+  return PROXIED_API_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+}
+
+function firstForwardedIp(value: string | null) {
+  return value
+    ?.split(",")
+    .map((part) => part.trim())
+    .find(Boolean);
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (proxiedApiPath(pathname)) {
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.delete("x-openachieve-client-ip");
+
+    const cloudflareClientIp = firstForwardedIp(request.headers.get("cf-connecting-ip"));
+    if (cloudflareClientIp) {
+      requestHeaders.set("x-openachieve-client-ip", cloudflareClientIp);
+    }
+
+    return NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    });
+  }
+
   const redirectedPath = legacyLocaleRedirect(pathname);
 
   if (!redirectedPath) return NextResponse.next();
@@ -23,5 +54,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next|api|v1|images|favicon.ico|.*\\.\\w+$).*)"],
+  matcher: ["/api/backend/:path*", "/v1/:path*", "/((?!_next|api|v1|images|favicon.ico|.*\\.\\w+$).*)"],
 };

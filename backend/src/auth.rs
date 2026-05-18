@@ -11,6 +11,7 @@ use crate::{
     errors::ApiError,
     keys::{CUSTOMER_KEY_PREFIX, hash_key},
     models::{ApiKey, User},
+    security::ensure_user_active,
 };
 
 pub const SESSION_TOKEN_PREFIX: &str = "openachieve_session_";
@@ -90,6 +91,7 @@ pub async fn authenticate_session(pool: &PgPool, bearer_token: &str) -> Result<U
     if !user.email_is_verified() {
         return Err(ApiError::EmailNotVerified);
     }
+    ensure_user_active(pool, user.id).await?;
 
     Ok(user)
 }
@@ -135,6 +137,7 @@ pub async fn user_for_api_key(pool: &PgPool, api_key: &ApiKey) -> Result<User, A
     if !user.email_is_verified() {
         return Err(ApiError::EmailNotVerified);
     }
+    ensure_user_active(pool, user.id).await?;
 
     Ok(user)
 }
