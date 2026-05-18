@@ -38,12 +38,7 @@ pub struct RateLimitRule {
 }
 
 pub fn client_ip(req: &HttpRequest) -> String {
-    for header_name in [
-        "x-openachieve-client-ip",
-        "cf-connecting-ip",
-        "x-real-ip",
-        "x-forwarded-for",
-    ] {
+    for header_name in ["cf-connecting-ip", "x-real-ip", "x-forwarded-for"] {
         if let Some(value) = req
             .headers()
             .get(header_name)
