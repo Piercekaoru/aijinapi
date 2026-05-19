@@ -129,8 +129,8 @@ const models = [
   {
     id: "deepseek-v4-flash",
     title: "DeepSeek V4 Flash",
-    description: "低延迟响应和成本敏感场景，用于高频产品调用。",
-    tag: "Plus",
+    description: "付费 Go 通道赞助开放，Free 和 Plus 用户都可调用。",
+    tag: "Free",
     image: "/images/GS8OLQObIAcG_0D.jpg",
     tone: "dark",
   },
@@ -184,6 +184,11 @@ const freeModelMetadata: Record<
   "deepseek-v4-flash-free": {
     description: "免费低延迟推理模型，适合高频问答、代码辅助和快速实验。",
     image: "/images/HHZ_hQzbIAEw83V.jpg",
+    tone: "dark",
+  },
+  "deepseek-v4-flash": {
+    description: "付费 Go 通道赞助开放，适合低延迟问答、代码辅助和高频产品调用。",
+    image: "/images/GS8OLQObIAcG_0D.jpg",
     tone: "dark",
   },
   "minimax-m2.5-free": {

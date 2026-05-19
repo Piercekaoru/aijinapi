@@ -18,6 +18,7 @@ export const publicFreeModelsEndpoint = "/api/backend/public/free-models";
 const knownModelNames: Record<string, string> = {
   "big-pickle": "Big Pickle",
   "deepseek-v4-flash-free": "DeepSeek V4 Flash Free",
+  "deepseek-v4-flash": "DeepSeek V4 Flash",
   "minimax-m2.5-free": "MiniMax M2.5 Free",
   "ring-2.6-1t-free": "Ring 2.6 1T Free",
   "nemotron-3-super-free": "Nemotron 3 Super Free",

@@ -24,6 +24,17 @@ pub const FREE_MODELS: &[&str] = &[
     "nemotron-3-super-free",
 ];
 
+pub const SPONSORED_FREE_GO_MODELS: &[&str] = &["deepseek-v4-flash"];
+
+pub const FREE_ALLOWED_MODELS: &[&str] = &[
+    "big-pickle",
+    "deepseek-v4-flash-free",
+    "minimax-m2.5-free",
+    "ring-2.6-1t-free",
+    "nemotron-3-super-free",
+    "deepseek-v4-flash",
+];
+
 pub const PLUS_MODELS: &[&str] = &[
     "glm-5.1",
     "glm-5",
@@ -162,18 +173,24 @@ impl RouteKeyRing {
 }
 
 pub fn is_supported_chat_model(model: &str) -> bool {
-    FREE_MODELS.contains(&model) || PLUS_MODELS.contains(&model)
+    FREE_MODELS.contains(&model)
+        || SPONSORED_FREE_GO_MODELS.contains(&model)
+        || PLUS_MODELS.contains(&model)
 }
 
 pub fn is_plus_model(model: &str) -> bool {
     PLUS_MODELS.contains(&model)
 }
 
+pub fn is_sponsored_free_go_model(model: &str) -> bool {
+    SPONSORED_FREE_GO_MODELS.contains(&model)
+}
+
 pub fn allowed_models_for_plan(plan: &str) -> &'static [&'static str] {
     if plan == "plus" {
         PLUS_ALLOWED_MODELS
     } else {
-        FREE_MODELS
+        FREE_ALLOWED_MODELS
     }
 }
 
@@ -190,6 +207,10 @@ pub fn request_is_stream(body: &Value) -> bool {
 pub fn route_for_model(plan: &str, model: &str) -> Result<UpstreamRoute, ApiError> {
     if FREE_MODELS.contains(&model) {
         return Ok(UpstreamRoute::Zen);
+    }
+
+    if is_sponsored_free_go_model(model) {
+        return Ok(UpstreamRoute::Go);
     }
 
     if PLUS_MODELS.contains(&model) {
@@ -534,6 +555,7 @@ mod tests {
         assert!(is_supported_chat_model("kimi-k2.6"));
         assert!(is_supported_chat_model("big-pickle"));
         assert!(is_supported_chat_model("deepseek-v4-flash-free"));
+        assert!(is_supported_chat_model("deepseek-v4-flash"));
         assert!(is_supported_chat_model("nemotron-3-super-free"));
         assert!(!is_supported_chat_model("unknown-model"));
     }
@@ -548,7 +570,8 @@ mod tests {
                 "deepseek-v4-flash-free",
                 "minimax-m2.5-free",
                 "ring-2.6-1t-free",
-                "nemotron-3-super-free"
+                "nemotron-3-super-free",
+                "deepseek-v4-flash"
             ]
         );
 
@@ -572,6 +595,14 @@ mod tests {
         assert_eq!(
             route_for_model("plus", "deepseek-v4-flash-free").unwrap(),
             UpstreamRoute::Zen
+        );
+        assert_eq!(
+            route_for_model("free", "deepseek-v4-flash").unwrap(),
+            UpstreamRoute::Go
+        );
+        assert_eq!(
+            route_for_model("plus", "deepseek-v4-flash").unwrap(),
+            UpstreamRoute::Go
         );
         assert_eq!(
             route_for_model("plus", "qwen3.6-plus").unwrap(),
