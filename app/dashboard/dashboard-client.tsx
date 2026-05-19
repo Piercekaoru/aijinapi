@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { useI18n } from "@/lib/i18n";
+import type { Language } from "@/lib/i18n-core";
 import { SiteFooter } from "../components/SiteFooter";
 import { SiteHeader } from "../components/SiteHeader";
 
@@ -59,7 +61,7 @@ type IssuedApiKey = {
   monthly_request_limit: number;
 };
 
-const copy: Record<string, string> = {
+const copyZh: Record<string, string> = {
   title: "Key 控制台",
   loading: "正在读取控制台...",
   loadingKeys: "读取中...",
@@ -91,17 +93,55 @@ const copy: Record<string, string> = {
   label: "控制台",
 };
 
-function t(key: string) {
+const copyEn: Record<string, string> = {
+  title: "Key Console",
+  loading: "Loading console...",
+  loadingKeys: "Loading...",
+  keyLabel: "API key",
+  apiBaseURL: "Base URL",
+  createKey: "Create new key",
+  creating: "Creating...",
+  keyCopied: "Copied to clipboard",
+  keyWarning: "This key is shown only once. Copy it now and store it safely.",
+  connected: "Connected",
+  failed: "Failed to load console",
+  needLogin: "Login required",
+  needLoginDesc: "Log in or sign up to create API keys and view quota and usage.",
+  goLogin: "Log in",
+  generated: "New API key generated. Save it now.",
+  copy: "Copy",
+  deleteKey: "Delete",
+  deletingKey: "Deleting...",
+  keyDeleted: "API key deleted and revoked",
+  apiKeys: "API keys",
+  apiKeysSub: "Multiple keys share the account plan quota instead of being billed per key.",
+  noKeys: "No API key yet. Create one from the top-right button.",
+  oldKeyPrefix: "Legacy key prefix unavailable",
+  enabled: "Enabled",
+  disabled: "Disabled",
+  recentUsage: "Recent usage",
+  refresh: "Refresh",
+  noUsage: "No usage records yet.",
+  label: "Console",
+  confirmDelete: "Delete API key \"{name}\"?\n\nThe key will be revoked immediately and cannot be restored. You can create a new key afterwards.",
+  userConsole: "{name}'s console",
+  requests: "requests",
+};
+
+function translate(language: Language, key: string) {
   const shortKey = key.split(".").at(-1) ?? key;
-  return copy[key] ?? copy[shortKey] ?? key;
+  const dictionary = language === "en" ? copyEn : copyZh;
+  return dictionary[key] ?? dictionary[shortKey] ?? key;
 }
 
 export function DashboardClient() {
+  const { language } = useI18n();
+  const t = useCallback((key: string) => translate(language, key), [language]);
   const [backendUrl, setBackendUrl] = useState(defaultBackendUrl);
   const [sessionToken, setSessionToken] = useState("");
   const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
   const [latestKey, setLatestKey] = useState("");
-  const [status, setStatus] = useState(t("dashboard.loading"));
+  const [status, setStatus] = useState(() => t("dashboard.loading"));
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [deletingKeyId, setDeletingKeyId] = useState<number | null>(null);
@@ -130,7 +170,7 @@ export function DashboardClient() {
     } finally {
       setLoading(false);
     }
-  }, [normalizedBackendUrl, sessionToken]);
+  }, [normalizedBackendUrl, sessionToken, t]);
 
   useEffect(() => {
     const token = window.localStorage.getItem("openachieve_session_token") ?? "";
@@ -143,7 +183,7 @@ export function DashboardClient() {
       return;
     }
     void loadDashboard(token, normalizedBackendUrl);
-  }, [loadDashboard, normalizedBackendUrl]);
+  }, [loadDashboard, normalizedBackendUrl, t]);
 
   async function createKey() {
     if (!sessionToken) return;
@@ -176,9 +216,7 @@ export function DashboardClient() {
 
   async function deleteKey(key: DashboardResponse["api_keys"][number]) {
     if (!sessionToken || !key.enabled) return;
-    const confirmed = window.confirm(
-      `确认删除 API Key「${key.name}」？\n\n删除后该 Key 会立即失效，无法恢复；你可以重新创建新 Key。`,
-    );
+    const confirmed = window.confirm(t("dashboard.confirmDelete").replace("{name}", key.name));
     if (!confirmed) return;
 
     setDeletingKeyId(key.id);
@@ -214,7 +252,7 @@ export function DashboardClient() {
         <section className="hero-band">
           <div>
             <p>{t("dashboard.label")}</p>
-            <h1>{dashboard ? `${dashboard.user.name} 的控制台` : t("dashboard.title")}</h1>
+            <h1>{dashboard ? t("dashboard.userConsole").replace("{name}", dashboard.user.name) : t("dashboard.title")}</h1>
             <span>
               {dashboard
                 ? `${dashboard.user.email} · ${dashboard.subscription.plan === "plus" ? "Plus" : "Free"} · ${dashboard.subscription.requests_this_month}/${dashboard.subscription.monthly_request_limit}`
@@ -271,7 +309,7 @@ export function DashboardClient() {
                       <span>{key.key_prefix ? `${key.key_prefix}...` : t("dashboard.oldKeyPrefix")}</span>
                     </div>
                     <div className="key-actions">
-                      <span>{key.requests_this_month} 次</span>
+                      <span>{key.requests_this_month} {t("dashboard.requests")}</span>
                       <small>{key.enabled ? t("dashboard.enabled") : t("dashboard.disabled")}</small>
                       {key.enabled && (
                         <Button

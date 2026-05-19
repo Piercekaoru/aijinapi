@@ -49,6 +49,7 @@ pub struct FovPayConfig {
     pub plus_amount_cents: i32,
     pub plus_days: i32,
     pub allowed_paytypes: Vec<String>,
+    pub disabled_paytypes: Vec<String>,
 }
 
 impl fmt::Debug for FovPayConfig {
@@ -61,6 +62,7 @@ impl fmt::Debug for FovPayConfig {
             .field("plus_amount_cents", &self.plus_amount_cents)
             .field("plus_days", &self.plus_days)
             .field("allowed_paytypes", &self.allowed_paytypes)
+            .field("disabled_paytypes", &self.disabled_paytypes)
             .finish()
     }
 }
@@ -225,17 +227,16 @@ fn fovpay_config_from_env() -> anyhow::Result<Option<FovPayConfig>> {
         return Ok(None);
     }
 
-    let allowed_paytypes = optional("FOVPAY_ALLOWED_PAYTYPES")
+    let disabled_paytypes = optional("FOVPAY_DISABLED_PAYTYPES")
+        .map(|value| parse_key_list(&value))
+        .unwrap_or_else(|| vec!["paypal".to_string(), "usdt".to_string()]);
+
+    let mut allowed_paytypes = optional("FOVPAY_ALLOWED_PAYTYPES")
         .map(|value| parse_key_list(&value))
         .filter(|paytypes| !paytypes.is_empty())
-        .unwrap_or_else(|| {
-            vec![
-                "alipay".to_string(),
-                "wxpay".to_string(),
-                "paypal".to_string(),
-                "usdt".to_string(),
-            ]
-        });
+        .unwrap_or_else(|| vec!["alipay".to_string(), "wxpay".to_string()]);
+    allowed_paytypes
+        .retain(|paytype| !disabled_paytypes.iter().any(|disabled| disabled == paytype));
 
     let plus_days = env::var("FOVPAY_PLUS_DAYS")
         .unwrap_or_else(|_| "30".to_string())
@@ -259,6 +260,7 @@ fn fovpay_config_from_env() -> anyhow::Result<Option<FovPayConfig>> {
         )?,
         plus_days,
         allowed_paytypes,
+        disabled_paytypes,
     }))
 }
 

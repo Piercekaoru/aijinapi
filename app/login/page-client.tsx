@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
+import { useI18n } from "@/lib/i18n";
+import type { Language } from "@/lib/i18n-core";
 import { SiteFooter } from "../components/SiteFooter";
 import { SiteHeader } from "../components/SiteHeader";
 
 type LoginPageClientProps = {
   style: string;
-  html: string;
+  html: Record<Language, string>;
+  title: Record<Language, string>;
 };
 
 const backendUrl =
@@ -84,17 +87,64 @@ const copy: Record<string, string> = {
   termsToast: "请先同意服务条款",
   registerSuccess: "验证邮件已发送，请查收后再登录",
   registerFailed: "注册失败",
+  required: "{label} 不能为空",
+  email: "邮箱",
+  password: "密码",
+  newPassword: "新密码",
+  name: "用户名",
 };
 
-function t(key: string) {
+const copyEn: Record<string, string> = {
+  welcome: "Welcome back",
+  welcomeSub: "Log in to manage quota, API keys, usage history, and docs.",
+  register: "Create account",
+  registerSub: "Verify your email first, then get your OpenAchieve key.",
+  requestFailed: "Request failed",
+  passwordWeak: "Weak",
+  passwordMedium: "Medium",
+  passwordStrong: "Strong",
+  confirmAgain: "Please enter the password again",
+  passwordMismatch: "The two passwords do not match",
+  showPassword: "Show password",
+  hidePassword: "Hide password",
+  loginSuccess: "Login successful, opening the console",
+  loginFailed: "Login failed",
+  emailNotVerified: "Email is not verified. Please check your verification email first.",
+  resendVerification: "Resend verification email",
+  resendSuccess: "Verification email sent. Please check your inbox.",
+  resendTooSoon: "Verification email was just sent. Please try again later.",
+  verified: "Email verified. Please log in.",
+  verificationInvalid: "Verification link is invalid or expired. Please resend the email.",
+  resetRequestTitle: "Reset password",
+  resetRequestSub: "Enter your account email and use the reset link to set a new password.",
+  resetConfirmTitle: "Set new password",
+  resetConfirmSub: "Existing sessions will expire. Log in again with the new password.",
+  resetRequestSuccess: "If the email exists, a reset email will be sent to it.",
+  resetSuccess: "Password updated. Please log in again.",
+  resetInvalid: "Reset link is invalid or expired. Please request a new one.",
+  termsToast: "Please agree to the terms first",
+  registerSuccess: "Verification email sent. Please verify before logging in.",
+  registerFailed: "Sign-up failed",
+  required: "{label} is required",
+  email: "Email",
+  password: "Password",
+  newPassword: "New password",
+  name: "Name",
+};
+
+function translate(key: string, language: Language) {
   const shortKey = key.split(".").at(-1) ?? key;
-  return copy[key] ?? copy[shortKey] ?? key;
+  const dictionary = language === "en" ? copyEn : copy;
+  return dictionary[key] ?? dictionary[shortKey] ?? key;
 }
 
-export function LoginPageClient({ style, html }: LoginPageClientProps) {
+export function LoginPageClient({ style, html, title }: LoginPageClientProps) {
+  const { language } = useI18n();
   const rootRef = useRef<HTMLDivElement>(null);
+  const t = useCallback((key: string) => translate(key, language), [language]);
 
   useEffect(() => {
+    document.title = title[language];
     const root = rootRef.current;
     if (!root) return;
 
@@ -111,7 +161,7 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
       resetRequest: root.querySelector<HTMLElement>("#resetRequestPanel"),
       resetConfirm: root.querySelector<HTMLElement>("#resetConfirmPanel"),
     };
-    const title = root.querySelector<HTMLElement>("#formTitle");
+    const formTitle = root.querySelector<HTMLElement>("#formTitle");
     const subtitle = root.querySelector<HTMLElement>("#formSubtitle");
     const toast = root.querySelector<HTMLElement>("#toast");
     const forgotPassword = root.querySelector<HTMLButtonElement>("#forgotPassword");
@@ -149,7 +199,7 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
     };
 
     function setAuthView(next: AuthView) {
-      if (!tabsWrap || !title || !subtitle) return;
+      if (!tabsWrap || !formTitle || !subtitle) return;
 
       const tabView = next === "login" || next === "register";
       tabsWrap.hidden = !tabView;
@@ -162,7 +212,7 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
       Object.entries(panels).forEach(([view, panel]) => {
         panel?.classList.toggle("active", view === next);
       });
-      title.textContent = viewCopy[next].title;
+      formTitle.textContent = viewCopy[next].title;
       subtitle.textContent = viewCopy[next].subtitle;
 
       if (next === "resetRequest" && resetEmail && !resetEmail.value) {
@@ -185,7 +235,7 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
     function requireValue(input: HTMLInputElement | null, label: string) {
       if (!input) return false;
       const ok = input.value.trim().length > 0;
-      setError(input, ok ? "" : `${label} 不能为空`);
+      setError(input, ok ? "" : t("auth.required").replace("{label}", label));
       return ok;
     }
 
@@ -398,7 +448,7 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
         event.preventDefault();
         const email = root.querySelector<HTMLInputElement>("#loginEmail");
         const password = root.querySelector<HTMLInputElement>("#loginPassword");
-        const valid = [requireValue(email, "邮箱"), requireValue(password, "密码")].every(Boolean);
+        const valid = [requireValue(email, t("auth.email")), requireValue(password, t("auth.password"))].every(Boolean);
         const submitter = (event as SubmitEvent).submitter as HTMLButtonElement | null;
         if (!valid || !email || !password) return;
 
@@ -433,7 +483,7 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
       async () => {
         const email = root.querySelector<HTMLInputElement>("#loginEmail");
         const password = root.querySelector<HTMLInputElement>("#loginPassword");
-        const valid = [requireValue(email, "邮箱"), requireValue(password, "密码")].every(Boolean);
+        const valid = [requireValue(email, t("auth.email")), requireValue(password, t("auth.password"))].every(Boolean);
         if (!valid || !email || !password) return;
 
         setButtonBusy(resendVerification, true);
@@ -461,7 +511,7 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
       "submit",
       async (event) => {
         event.preventDefault();
-        const valid = requireValue(resetEmail, "邮箱");
+        const valid = requireValue(resetEmail, t("auth.email"));
         const submitter = (event as SubmitEvent).submitter as HTMLButtonElement | null;
         if (!valid || !resetEmail) return;
 
@@ -486,7 +536,7 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
       async (event) => {
         event.preventDefault();
         const valid = [
-          requireValue(resetPassword, "新密码"),
+          requireValue(resetPassword, t("auth.newPassword")),
           validateResetPasswordMatch(false),
         ].every(Boolean);
         const submitter = (event as SubmitEvent).submitter as HTMLButtonElement | null;
@@ -525,9 +575,9 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
         const email = root.querySelector<HTMLInputElement>("#registerEmail");
         const terms = root.querySelector<HTMLInputElement>("#terms");
         const valid = [
-          requireValue(name, "用户名"),
-          requireValue(email, "邮箱"),
-          requireValue(registerPassword, "密码"),
+          requireValue(name, t("auth.name")),
+          requireValue(email, t("auth.email")),
+          requireValue(registerPassword, t("auth.password")),
           validatePasswordMatch(false),
         ].every(Boolean);
         const submitter = (event as SubmitEvent).submitter as HTMLButtonElement | null;
@@ -580,7 +630,7 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
       controller.abort();
       if (toastTimer) window.clearTimeout(toastTimer);
     };
-  }, []);
+  }, [language, t, title]);
 
   return (
     <div>
@@ -588,7 +638,7 @@ export function LoginPageClient({ style, html }: LoginPageClientProps) {
       <div className="static-page-chrome">
         <SiteHeader variant="public" />
       </div>
-      <div ref={rootRef} dangerouslySetInnerHTML={{ __html: html }} />
+      <div key={language} ref={rootRef} dangerouslySetInnerHTML={{ __html: html[language] }} />
       <SiteFooter />
       <style jsx>{`
         .static-page-chrome {

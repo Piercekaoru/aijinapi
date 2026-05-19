@@ -3,7 +3,9 @@
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { loadPublicFreeModels, modelDisplayName } from "@/lib/free-models";
-import { plusMonthlyPriceLabel } from "@/lib/pricing";
+import { useI18n } from "@/lib/i18n";
+import type { Language } from "@/lib/i18n-core";
+import { plusMonthlyPriceLabel, plusMonthlyPriceLabelEn } from "@/lib/pricing";
 import { SiteFooter } from "../components/SiteFooter";
 import { SiteHeader } from "../components/SiteHeader";
 
@@ -42,6 +44,44 @@ const kiloSteps = [
     body: "确认模型已写入后，在 Kilo Code 右下角模型选择器里选择 openachieve / big-pickle 或其他可用模型即可开始对话。",
     image: "/images/docs/kilo-code-model-list.png",
     alt: "Kilo Code 已连接 OpenAchieve 并选择模型",
+  },
+];
+
+const kiloStepsEn = [
+  {
+    kicker: "Step 1",
+    title: "Install Kilo Code",
+    body: "Search for Kilo Code in the VS Code Extensions panel and install the official extension. Open Kilo Settings after installation.",
+    image: "/images/docs/kilo-code-install.png",
+    alt: "Kilo Code extension details in VS Code Extensions",
+  },
+  {
+    kicker: "Step 2",
+    title: "Choose Custom Provider",
+    body: "Open the Providers page in Kilo Code Settings, find the custom provider entry in popular providers, and click Connect.",
+    image: "/images/docs/kilo-code-custom-provider.png",
+    alt: "Custom provider entry in Kilo Code Providers",
+  },
+  {
+    kicker: "Step 3",
+    title: "Fill in OpenAchieve",
+    body: "Set Provider ID and display name to openachieve, Base URL to https://openachieve.asia/v1, and API key to the key you generated in OpenAchieve.",
+    image: "/images/docs/kilo-code-provider-form.png",
+    alt: "Kilo Code custom provider form",
+  },
+  {
+    kicker: "Step 4",
+    title: "Import Free Models",
+    body: "Kilo Code reads the model list from OpenAchieve. Free users should import the currently available free models first, then add them.",
+    image: "/images/docs/kilo-code-import-models.png",
+    alt: "Kilo Code importing OpenAchieve models",
+  },
+  {
+    kicker: "Step 5",
+    title: "Pick a Model and Start",
+    body: "After the models are saved, choose openachieve / big-pickle or another available model from the Kilo Code model picker.",
+    image: "/images/docs/kilo-code-model-list.png",
+    alt: "Kilo Code connected to OpenAchieve and selecting a model",
   },
 ];
 
@@ -208,7 +248,81 @@ const freeModelMetadata: Record<
   },
 };
 
+const descriptionEn: Record<string, string> = {
+  "big-pickle": "Free model entry point for integration checks and light exploration.",
+  "deepseek-v4-flash-free": "Free low-latency reasoning model for frequent Q&A, coding help, and quick experiments.",
+  "minimax-m2.5-free": "Free general chat model for content generation, polishing, and lightweight assistants.",
+  "ring-2.6-1t-free": "Free long-context entry point for document understanding, summaries, and knowledge-base experiments.",
+  "nemotron-3-super-free": "Free trial model for non-sensitive validation and capability exploration.",
+  "glm-5.1": "General entry point for Chinese business Q&A, tool use, and stable production workflows.",
+  "glm-5": "Cost-effective choice for knowledge bases, support assistants, and long-text understanding.",
+  "kimi-k2.5": "Model capability for long context, document summaries, and multi-turn conversations.",
+  "kimi-k2.6": "Stronger text processing and app-assistant capability for complex content workflows.",
+  "deepseek-v4-pro": "Professional model for reasoning, coding help, and high-quality generation.",
+  "deepseek-v4-flash": "Sponsored through the paid Go route and available to both Free and Plus users.",
+  "mimo-v2.5": "Balanced model for creation, chat, and lightweight reasoning.",
+  "mimo-v2.5-pro": "Stronger generation quality and complex-task handling for production content apps.",
+  "qwen3.6-plus": "Developer-friendly model for code, tool use, and general agents.",
+  "qwen3.5-plus": "Stable general capability for default app usage and everyday requests.",
+};
+
+const docsCopy: Record<Language, Record<string, string>> = {
+  zh: {
+    introLabel: "开发文档",
+    introTitle: "开发文档",
+    introBody: "只需接入统一 OpenAI-compatible 接口；Free/Plus 权限由 OpenAchieve 自动处理。",
+    baseLabel: "接口地址",
+    baseBody: "所有请求发送到此接口即可，无需关注后端架构。",
+    authLabel: "认证",
+    authTitle: "认证方式",
+    authBody: "API Key 在注册或控制台生成，数据库只保存哈希；额度按账号套餐统一计算。",
+    chatLabel: "聊天补全示例",
+    chatTitle: "聊天补全",
+    samplePrompt: "介绍一下 OpenAchieve",
+    kiloTitle: "Kilo Code 接入教程",
+    kiloBody: "Kilo Code 支持 OpenAI-compatible 自定义提供商。按下面 5 步配置后，就能在 VS Code 里直接使用 OpenAchieve 模型。",
+    configQuick: "Kilo Code 配置速查",
+    freeImport: "Free 用户推荐先导入：",
+    freeUnavailable: "当前免费模型池暂不可用",
+    freeSyncing: "正在同步免费模型池",
+    modelsLabel: "支持模型",
+    modelsTitle: "支持模型",
+    modelsBody: `Free 可调用实时同步的免费模型池；Plus 为 ${plusMonthlyPriceLabel}、1500 次/月，并额外开放完整 Plus 模型池。`,
+    privacy: "免费模型可能用于服务改进或试用目的，请避免提交个人、商业机密或其他敏感信息。",
+    liveFreeDescription: "当前实时同步的免费模型，适合接入验证和轻量实验。",
+  },
+  en: {
+    introLabel: "Docs",
+    introTitle: "Developer Docs",
+    introBody: "Use one OpenAI-compatible API. OpenAchieve handles Free/Plus permissions automatically.",
+    baseLabel: "Endpoint",
+    baseBody: "Send every API request to this endpoint. You do not need to care about the backend routing.",
+    authLabel: "Auth",
+    authTitle: "Authentication",
+    authBody: "API keys are created during sign-up or in the console. Only hashes are stored, and quota is calculated at account-plan level.",
+    chatLabel: "Chat completion example",
+    chatTitle: "Chat Completions",
+    samplePrompt: "Introduce OpenAchieve",
+    kiloTitle: "Kilo Code Setup",
+    kiloBody: "Kilo Code supports OpenAI-compatible custom providers. Configure the five steps below to use OpenAchieve models directly in VS Code.",
+    configQuick: "Kilo Code quick config",
+    freeImport: "Free users should import first:",
+    freeUnavailable: "The free model catalog is temporarily unavailable",
+    freeSyncing: "Syncing the free model catalog",
+    modelsLabel: "Supported Models",
+    modelsTitle: "Supported Models",
+    modelsBody: `Free users can call the live free model catalog. Plus is ${plusMonthlyPriceLabel} with 1,500 requests/month and the full Plus model pool.`,
+    privacy: "Free models may be used for service improvement or trial purposes. Avoid personal, business-confidential, or sensitive content.",
+    liveFreeDescription: "A live free model for integration checks and light experiments.",
+  },
+};
+
+function docsT(language: Language, key: string) {
+  return docsCopy[language][key] ?? key;
+}
+
 export default function DocsPage() {
+  const { language } = useI18n();
   const [freeModelIds, setFreeModelIds] = useState<string[]>([]);
   const [freeCatalogLoaded, setFreeCatalogLoaded] = useState(false);
 
@@ -227,7 +341,7 @@ export default function DocsPage() {
   const renderedModels = useMemo(() => {
     const liveFreeModels = freeModelIds.map((id, index) => {
       const metadata = freeModelMetadata[id] ?? {
-        description: "当前实时同步的免费模型，适合接入验证和轻量实验。",
+        description: docsT(language, "liveFreeDescription"),
         image: "/images/GrHDjXQXYAACVsc.jpg",
         tone: index % 2 === 0 ? "light" : "dark",
       };
@@ -235,16 +349,25 @@ export default function DocsPage() {
       return {
         id,
         title: modelDisplayName(id),
-        description: metadata.description,
+        description: language === "en" ? descriptionEn[id] ?? docsT(language, "liveFreeDescription") : metadata.description,
         tag: "Free",
         image: metadata.image,
         tone: metadata.tone,
       };
     });
-    const plusModels = models.filter((model) => model.tag === "Plus");
+    const plusModels = models
+      .filter((model) => model.tag === "Plus")
+      .map((model) => ({
+        ...model,
+        description: language === "en" ? descriptionEn[model.id] ?? model.description : model.description,
+      }));
 
     return [...liveFreeModels, ...plusModels];
-  }, [freeModelIds]);
+  }, [freeModelIds, language]);
+
+  const activeKiloSteps = language === "en" ? kiloStepsEn : kiloSteps;
+  const t = (key: string) =>
+    docsT(language, key).replace(plusMonthlyPriceLabel, language === "en" ? plusMonthlyPriceLabelEn : plusMonthlyPriceLabel);
 
   return (
     <main className="docs-page">
@@ -253,37 +376,37 @@ export default function DocsPage() {
 
         <section className="intro">
           <div>
-            <p>开发文档</p>
-            <h1>开发文档</h1>
+            <p>{t("introLabel")}</p>
+            <h1>{t("introTitle")}</h1>
           </div>
-          <span>只需接入统一 OpenAI-compatible 接口；Free/Plus 权限由 OpenAchieve 自动处理。</span>
+          <span>{t("introBody")}</span>
         </section>
 
         <div className="docs-grid">
           <section className="panel" id="base-url">
-            <p>接口地址</p>
+            <p>{t("baseLabel")}</p>
             <h2>Base URL</h2>
             <pre>https://openachieve.asia/v1</pre>
-            <span>所有请求发送到此接口即可，无需关注后端架构。</span>
+            <span>{t("baseBody")}</span>
           </section>
 
           <section className="panel" id="auth">
-            <p>认证</p>
-            <h2>认证方式</h2>
+            <p>{t("authLabel")}</p>
+            <h2>{t("authTitle")}</h2>
             <pre>{`Authorization: Bearer openachieve_xxxxxxxxxxxxxxxx`}</pre>
-            <span>API Key 在注册或控制台生成，数据库只保存哈希；额度按账号套餐统一计算。</span>
+            <span>{t("authBody")}</span>
           </section>
 
           <section className="panel wide" id="chat">
-            <p>聊天补全示例</p>
-            <h2>聊天补全</h2>
+            <p>{t("chatLabel")}</p>
+            <h2>{t("chatTitle")}</h2>
             <pre>{`curl https://openachieve.asia/v1/chat/completions \\
   -H "Authorization: Bearer openachieve_xxxxxxxxxxxxxxxx" \\
   -H "Content-Type: application/json" \\
   -d '{
     "model": "qwen3.6-plus",
     "messages": [
-      { "role": "user", "content": "介绍一下 OpenAchieve" }
+      { "role": "user", "content": "${t("samplePrompt")}" }
     ]
   }'`}</pre>
           </section>
@@ -292,13 +415,11 @@ export default function DocsPage() {
         <section className="kilo-guide" id="kilo-code">
           <div className="section-head">
             <p>Kilo Code</p>
-            <h2>Kilo Code 接入教程</h2>
-            <span>
-              Kilo Code 支持 OpenAI-compatible 自定义提供商。按下面 5 步配置后，就能在 VS Code 里直接使用 OpenAchieve 模型。
-            </span>
+            <h2>{t("kiloTitle")}</h2>
+            <span>{t("kiloBody")}</span>
           </div>
 
-          <div className="config-strip" aria-label="Kilo Code 配置速查">
+          <div className="config-strip" aria-label={t("configQuick")}>
             <div>
               <span>Provider ID</span>
               <code>openachieve</code>
@@ -314,16 +435,16 @@ export default function DocsPage() {
           </div>
 
           <div className="free-model-strip">
-            <span>Free 用户推荐先导入：</span>
+            <span>{t("freeImport")}</span>
             {freeModelIds.length > 0 ? (
               freeModelIds.map((id) => <code key={id}>{id}</code>)
             ) : (
-              <code>{freeCatalogLoaded ? "当前免费模型池暂不可用" : "正在同步免费模型池"}</code>
+              <code>{freeCatalogLoaded ? t("freeUnavailable") : t("freeSyncing")}</code>
             )}
           </div>
 
           <div className="kilo-steps">
-            {kiloSteps.map((step, index) => (
+            {activeKiloSteps.map((step, index) => (
               <article className="kilo-step" key={step.title}>
                 <div className="step-copy">
                   <p>{step.kicker}</p>
@@ -346,13 +467,10 @@ export default function DocsPage() {
 
         <section className="model-section" id="models">
           <div className="section-head">
-            <p>支持模型</p>
-            <h2>支持模型</h2>
-            <span>
-              Free 可调用实时同步的免费模型池；Plus 为 {plusMonthlyPriceLabel}
-              、1500 次/月，并额外开放完整 Plus 模型池。
-            </span>
-            <span>免费模型可能用于服务改进或试用目的，请避免提交个人、商业机密或其他敏感信息。</span>
+            <p>{t("modelsLabel")}</p>
+            <h2>{t("modelsTitle")}</h2>
+            <span>{t("modelsBody")}</span>
+            <span>{t("privacy")}</span>
           </div>
           <div className="model-card-grid">
             {renderedModels.map((model) => (

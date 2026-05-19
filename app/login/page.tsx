@@ -5,9 +5,9 @@ import { LoginPageClient } from "./page-client";
 const page = getStaticHtmlPage("login");
 
 export const metadata: Metadata = {
-  title: page.title,
+  title: page.title.zh,
 };
 
 export default function LoginPage() {
-  return <LoginPageClient style={page.style} html={page.body} />;
+  return <LoginPageClient style={page.style} html={page.body} title={page.title} />;
 }

@@ -17,7 +17,9 @@ import {
 } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { modelDisplayName } from "@/lib/free-models";
-import { plusMonthlyPriceLabel } from "@/lib/pricing";
+import { useI18n } from "@/lib/i18n";
+import type { Language } from "@/lib/i18n-core";
+import { plusMonthlyPriceLabel, plusMonthlyPriceLabelEn } from "@/lib/pricing";
 import { cn } from "@/lib/utils";
 import { SiteFooter } from "../components/SiteFooter";
 import { SiteHeader } from "../components/SiteHeader";
@@ -43,7 +45,7 @@ const modelDisplayNames: Record<string, string> = {
   "qwen3.5-plus": "Qwen3.5 Plus",
 };
 
-const copy: Record<string, string> = {
+const copyZh: Record<string, string> = {
   title: "账号总览",
   loading: "正在读取账号...",
   needLogin: "需要登录",
@@ -99,11 +101,84 @@ const copy: Record<string, string> = {
   checkoutPending: "正在等待支付结果...",
   checkoutPaid: "支付成功，Plus 已生效。",
   checkoutFailed: "支付未完成，请重新发起。",
+  member: "会员",
+  quotaOverview: "账号额度概览",
+  usageRatio: "额度使用比例",
+  freePrice: "$0 / 月",
+  manageKey: "管理 Key",
+  goPlayground: "去调试",
+  recent: "Recent",
 };
 
-function t(key: string) {
+const copyEn: Record<string, string> = {
+  title: "Account",
+  loading: "Loading account...",
+  needLogin: "Login required",
+  needLoginDesc: "Log in to view API keys, monthly quota, remaining requests, and recent usage.",
+  goLogin: "Log in",
+  refresh: "Refresh",
+  remaining: "requests remaining this month",
+  usedQuota: "Used quota",
+  usedDesc: "requests recorded this month",
+  monthlyTotal: "Monthly total",
+  monthlyDesc: "plan quota",
+  modelRange: "Model access",
+  modelRangeDesc: "Free + Plus model pools",
+  modelRangeFree: "Live free catalog + DeepSeek V4 Flash",
+  viewModels: "View models",
+  availableModels: "Available models",
+  close: "Close",
+  modelPrivacyNote: "Free models may be used for service improvement or trial purposes. Avoid personal, business-confidential, or sensitive content.",
+  monthlyUsage: "Monthly usage",
+  thisMonth: "This month",
+  used: "Used",
+  remainingLabel: "Remaining",
+  freeNote: "Free users get 500 requests per month and can call the live free model catalog plus DeepSeek V4 Flash.",
+  plusExpires: "Plus expires",
+  notSet: "Not set",
+  apiKeys: "API Keys",
+  recentUsage: "Recent usage",
+  noUsage: "No usage records yet",
+  label: "Account",
+  keysLabel: "Keys",
+  nameTitle: "account",
+  updated: "Account updated",
+  loadFailed: "Failed to load account",
+  noKeys: "No API key yet. Create one in the console.",
+  apiKeysSub: "Multiple keys share the account plan quota instead of being billed per key.",
+  oldKeyPrefix: "Legacy key prefix unavailable",
+  enabled: "Enabled",
+  disabled: "Disabled",
+  buyPlus: "Buy Plus",
+  renewPlus: "Renew Plus",
+  checkoutTitle: "Choose payment method",
+  checkoutDesc: "Plus is activated or renewed for 30 days after payment succeeds.",
+  checkoutAmount: "Amount",
+  checkoutTip: "After payment, you will return to the account page and the plan will refresh automatically.",
+  alipay: "Alipay",
+  wxpay: "WeChat Pay",
+  paypal: "PayPal",
+  usdt: "USDT",
+  payNow: "Pay now",
+  selectPaytype: "Choose payment method",
+  checkoutUnavailable: "Self-service checkout is not available",
+  checkoutCreating: "Creating checkout order...",
+  checkoutPending: "Waiting for payment result...",
+  checkoutPaid: "Payment succeeded. Plus is active.",
+  checkoutFailed: "Payment was not completed. Please try again.",
+  member: "member",
+  quotaOverview: "Account quota overview",
+  usageRatio: "Quota usage ratio",
+  freePrice: "$0 / month",
+  manageKey: "Manage keys",
+  goPlayground: "Open playground",
+  recent: "Recent",
+};
+
+function translate(language: Language, key: string) {
   const shortKey = key.split(".").at(-1) ?? key;
-  return copy[key] ?? copy[shortKey] ?? key;
+  const dictionary = language === "en" ? copyEn : copyZh;
+  return dictionary[key] ?? dictionary[shortKey] ?? key;
 }
 
 type DashboardResponse = {
@@ -180,46 +255,81 @@ type PaymentOption = {
   Icon: LucideIcon;
 };
 
-const knownPaytypes: Record<string, PaymentOption> = {
-  alipay: {
-    code: "alipay",
-    label: "支付宝",
-    description: "适合中国大陆用户的快捷扫码支付。",
-    Icon: Wallet,
+const temporarilyHiddenPaytypes = new Set(["paypal", "usdt"]);
+
+const knownPaytypes: Record<Language, Record<string, PaymentOption>> = {
+  zh: {
+    alipay: {
+      code: "alipay",
+      label: "支付宝",
+      description: "适合中国大陆用户的快捷扫码支付。",
+      Icon: Wallet,
+    },
+    wxpay: {
+      code: "wxpay",
+      label: "微信支付",
+      description: "使用微信完成扫码或移动端支付。",
+      Icon: CreditCard,
+    },
+    paypal: {
+      code: "paypal",
+      label: "PayPal",
+      description: "适合海外银行卡、PayPal 余额等国际支付。",
+      Icon: Landmark,
+    },
+    usdt: {
+      code: "usdt",
+      label: "USDT",
+      description: "通过 FovPay 托管收银台完成稳定币支付。",
+      Icon: CircleDollarSign,
+    },
   },
-  wxpay: {
-    code: "wxpay",
-    label: "微信支付",
-    description: "使用微信完成扫码或移动端支付。",
-    Icon: CreditCard,
-  },
-  paypal: {
-    code: "paypal",
-    label: "PayPal",
-    description: "适合海外银行卡、PayPal 余额等国际支付。",
-    Icon: Landmark,
-  },
-  usdt: {
-    code: "usdt",
-    label: "USDT",
-    description: "通过 FovPay 托管收银台完成稳定币支付。",
-    Icon: CircleDollarSign,
+  en: {
+    alipay: {
+      code: "alipay",
+      label: "Alipay",
+      description: "Fast hosted checkout for Alipay users.",
+      Icon: Wallet,
+    },
+    wxpay: {
+      code: "wxpay",
+      label: "WeChat Pay",
+      description: "Use WeChat Pay through the FovPay hosted cashier.",
+      Icon: CreditCard,
+    },
+    paypal: {
+      code: "paypal",
+      label: "PayPal",
+      description: "Temporarily unavailable while payment backend is being verified.",
+      Icon: Landmark,
+    },
+    usdt: {
+      code: "usdt",
+      label: "USDT",
+      description: "Temporarily unavailable while payment backend is being verified.",
+      Icon: CircleDollarSign,
+    },
   },
 };
 
-function paytypeOption(paytype: string): PaymentOption {
-  return knownPaytypes[paytype] ?? {
+function paytypeOption(paytype: string, language: Language): PaymentOption {
+  return knownPaytypes[language][paytype] ?? {
     code: paytype,
     label: paytype,
-    description: "通过 FovPay 支持的托管收银台完成支付。",
+    description:
+      language === "zh"
+        ? "通过 FovPay 支持的托管收银台完成支付。"
+        : "Pay through the FovPay hosted cashier.",
     Icon: CreditCard,
   };
 }
 
 export function AccountClient() {
+  const { language } = useI18n();
+  const t = useCallback((key: string) => translate(language, key), [language]);
   const [sessionToken, setSessionToken] = useState("");
   const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
-  const [status, setStatus] = useState(t("account.loading"));
+  const [status, setStatus] = useState(() => t("account.loading"));
   const [loading, setLoading] = useState(true);
   const [modelsOpen, setModelsOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
@@ -240,7 +350,7 @@ export function AccountClient() {
       usagePercent,
       plan,
       planLabel: plan === "plus" ? "Plus" : "Free",
-    allowedModels: dashboard?.subscription.allowed_models ?? [],
+      allowedModels: dashboard?.subscription.allowed_models ?? [],
       plusExpiresAt: dashboard?.subscription.plus_expires_at ?? null,
     };
   }, [dashboard]);
@@ -258,15 +368,17 @@ export function AccountClient() {
     const preferredOrder = ["alipay", "wxpay", "paypal", "usdt"];
     return allowed
       .slice()
+      .filter((paytype) => !temporarilyHiddenPaytypes.has(paytype))
       .sort((left, right) => {
         const leftIndex = preferredOrder.indexOf(left);
         const rightIndex = preferredOrder.indexOf(right);
         return (leftIndex === -1 ? 99 : leftIndex) - (rightIndex === -1 ? 99 : rightIndex);
       })
-      .map(paytypeOption);
-  }, [dashboard?.billing?.allowed_paytypes]);
+      .map((paytype) => paytypeOption(paytype, language));
+  }, [dashboard?.billing?.allowed_paytypes, language]);
 
   const plusAmountCny = dashboard?.billing?.plus_amount_cny ?? "58.00";
+  const plusPriceLabel = language === "en" ? plusMonthlyPriceLabelEn : plusMonthlyPriceLabel;
 
   useEffect(() => {
     if (paymentOptions.length === 0) {
@@ -299,7 +411,7 @@ export function AccountClient() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     const token = window.localStorage.getItem("openachieve_session_token") ?? "";
@@ -312,7 +424,7 @@ export function AccountClient() {
     }
 
     void loadAccount(token);
-  }, [loadAccount]);
+  }, [loadAccount, t]);
 
   useEffect(() => {
     if (!modelsOpen && !checkoutOpen) return;
@@ -392,7 +504,7 @@ export function AccountClient() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [loadAccount, sessionToken]);
+  }, [loadAccount, sessionToken, t]);
 
   async function startCheckout(paytypeCode: string) {
     if (!sessionToken) return;
@@ -425,9 +537,9 @@ export function AccountClient() {
         <section className="account-hero">
           <div>
             <p>{t("account.label")}</p>
-            <h1>{dashboard ? `${dashboard.user.name} ${t("nameTitle")}` : "账号总览"}</h1>
+            <h1>{dashboard ? `${dashboard.user.name} ${t("nameTitle")}` : t("account.title")}</h1>
             <span>
-              {dashboard ? `${dashboard.user.email} · ${summary.planLabel} 会员` : status}
+              {dashboard ? `${dashboard.user.email} · ${summary.planLabel} ${t("account.member")}` : status}
             </span>
           </div>
           <Button type="button" onClick={() => sessionToken && loadAccount(sessionToken)} disabled={loading || !sessionToken}>
@@ -443,7 +555,7 @@ export function AccountClient() {
           </section>
         ) : (
           <>
-            <section className="quota-grid" aria-label="账号额度概览">
+            <section className="quota-grid" aria-label={t("account.quotaOverview")}>
               <article className="quota-card primary">
                 <p>{summary.planLabel}</p>
                 <strong>{summary.remaining.toLocaleString()}</strong>
@@ -512,7 +624,7 @@ export function AccountClient() {
                 </div>
                 <code>{Math.round(summary.usagePercent)}%</code>
               </div>
-              <div className="meter" aria-label="额度使用比例">
+              <div className="meter" aria-label={t("account.usageRatio")}>
                 <span style={{ width: `${summary.usagePercent}%` }} />
               </div>
               <div className="meter-labels">
@@ -520,7 +632,7 @@ export function AccountClient() {
                 <span>{t("account.remainingLabel")} {summary.remaining.toLocaleString()}</span>
               </div>
               <div className="plan-note">
-                <strong>{summary.plan === "plus" ? plusMonthlyPriceLabel : "$0 / 月"}</strong>
+                <strong>{summary.plan === "plus" ? plusPriceLabel : t("account.freePrice")}</strong>
                 <span>
                   {summary.plan === "plus"
                     ? `${t("account.plusExpires")}：${summary.plusExpiresAt ? new Date(summary.plusExpiresAt).toLocaleString() : t("account.notSet")}`
@@ -573,7 +685,7 @@ export function AccountClient() {
 
                 <Card className="border-[#e0ded4] bg-[#fffdfa] py-0">
                   <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-end sm:justify-between">
-                    <span className="text-sm font-extrabold text-muted-foreground">{plusMonthlyPriceLabel}</span>
+                    <span className="text-sm font-extrabold text-muted-foreground">{plusPriceLabel}</span>
                     <strong className="text-3xl leading-none text-foreground">¥{plusAmountCny}</strong>
                   </CardContent>
                 </Card>
@@ -637,7 +749,7 @@ export function AccountClient() {
                     <p>{t("account.keysLabel")}</p>
                     <h2>{t("account.apiKeys")}</h2>
                   </div>
-                  <Link className={buttonVariants({ variant: "secondary" })} href="/dashboard">管理 Key</Link>
+                  <Link className={buttonVariants({ variant: "secondary" })} href="/dashboard">{t("account.manageKey")}</Link>
                 </div>
                 <p className="panel-note">
                   {t("dashboard.apiKeysSub")}
@@ -664,10 +776,10 @@ export function AccountClient() {
               <section className="panel dark">
                 <div className="panel-head">
                   <div>
-                    <p>Recent</p>
+                    <p>{t("account.recent")}</p>
                     <h2>{t("account.recentUsage")}</h2>
                   </div>
-                  <Link className={buttonVariants({ variant: "outline" })} href="/playground">去调试</Link>
+                  <Link className={buttonVariants({ variant: "outline" })} href="/playground">{t("account.goPlayground")}</Link>
                 </div>
                 <div className="usage-list">
                   {dashboard?.recent_usage.slice(0, 6).map((event, index) => (

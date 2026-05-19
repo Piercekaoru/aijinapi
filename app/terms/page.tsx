@@ -1,6 +1,7 @@
 "use client";
 
-import { plusMonthlyPriceLabel } from "@/lib/pricing";
+import { useI18n } from "@/lib/i18n";
+import { plusMonthlyPriceLabel, plusMonthlyPriceLabelEn } from "@/lib/pricing";
 import { SiteFooter } from "../components/SiteFooter";
 import { SiteHeader } from "../components/SiteHeader";
 
@@ -64,7 +65,69 @@ function TermsBodyZh() {
   );
 }
 
+function TermsBodyEn() {
+  return (
+    <article className="terms-body">
+      <section>
+        <h2>1. Service Description</h2>
+        <p>OpenAchieve is an AI API relay platform for developers. It provides an OpenAI-compatible interface and forwards requests to upstream model providers. The service offers Free and Plus plans.</p>
+      </section>
+      <section>
+        <h2>2. Account Registration and Security</h2>
+        <p>You need to create an account before using the service. You must provide an accurate email address and keep your password and API keys secure.</p>
+        <p>API keys are shown only once at creation time. OpenAchieve stores only hashed API keys. Losses caused by leaked or lost API keys are your responsibility.</p>
+        <p>You may not lend, transfer, or sell your account to others.</p>
+      </section>
+      <section>
+        <h2>3. Acceptable Use</h2>
+        <p>You may not use this service to:</p>
+        <ul>
+          <li>Generate or distribute illegal, harmful, fraudulent, defamatory, harassing, or hateful content</li>
+          <li>Infringe intellectual property, privacy, or other legal rights</li>
+          <li>Bypass quota limits or abuse the API with malicious request patterns</li>
+          <li>Develop weapons, support military use, or violate applicable laws</li>
+        </ul>
+        <p>OpenAchieve may suspend or terminate accounts when violations are found.</p>
+      </section>
+      <section>
+        <h2>4. Plans and Billing</h2>
+        <p>Free plan: free to use, 500 requests per month, with access to the live free model catalog and sponsored free models.</p>
+        <p>Plus plan: {plusMonthlyPriceLabelEn}, 1,500 requests per month, and access to the full Plus model pool. Plus is valid for 30 days from activation and downgrades to Free after expiry.</p>
+        <p>Self-service checkout currently supports Alipay and WeChat Pay while PayPal and USDT are temporarily hidden.</p>
+        <p>Request quota resets on the first day of each month. Unused quota does not carry over.</p>
+      </section>
+      <section>
+        <h2>5. Availability and Limits</h2>
+        <p>This service depends on upstream model providers. OpenAchieve tries to keep the service stable but does not guarantee 100% availability.</p>
+        <p>Free and Plus plans both have monthly request limits. After the limit is exceeded, requests may return 429 until the next monthly reset. Abuse controls may temporarily limit abnormal request patterns.</p>
+      </section>
+      <section>
+        <h2>6. Disclaimer</h2>
+        <p>AI model outputs are produced by upstream providers. OpenAchieve does not guarantee accuracy, completeness, legality, or fitness for purpose. You should evaluate and verify outputs yourself.</p>
+        <p>To the maximum extent permitted by law, OpenAchieve is not liable for direct, indirect, incidental, special, or consequential damages arising from use or inability to use the service.</p>
+      </section>
+      <section>
+        <h2>7. Privacy and Data</h2>
+        <p>We collect the minimum data needed to provide the service: email address, password hash, API key hash, and API usage records such as model name, path, status code, and latency.</p>
+        <p>We do not read, store, or analyze chat message content sent through the API. Request content only passes through the server while being forwarded upstream. Some upstream free models may be used for service improvement or trials, so avoid sensitive content.</p>
+        <p>We do not sell or share your personal information with third parties unless required by law.</p>
+      </section>
+      <section>
+        <h2>8. Changes to Terms</h2>
+        <p>OpenAchieve may update these terms from time to time. Major changes will be announced on the website or by email. Continued use means you accept the updated terms.</p>
+      </section>
+      <section>
+        <h2>9. Contact</h2>
+        <p>If you have questions about these terms, contact us at:</p>
+        <p>GitHub: github.com/Piercekaoru/openachieve</p>
+      </section>
+    </article>
+  );
+}
+
 export default function TermsPage() {
+  const { language } = useI18n();
+
   return (
     <main className="terms-page">
       <div className="terms-header">
@@ -74,11 +137,11 @@ export default function TermsPage() {
       <section className="terms-shell">
         <div className="terms-intro">
           <p>Terms of Service</p>
-          <h1>服务条款</h1>
-          <span>最后更新：2026 年 5 月</span>
+          <h1>{language === "zh" ? "服务条款" : "Terms of Service"}</h1>
+          <span>{language === "zh" ? "最后更新：2026 年 5 月" : "Last updated: May 2026"}</span>
         </div>
 
-        <TermsBodyZh />
+        {language === "zh" ? <TermsBodyZh /> : <TermsBodyEn />}
       </section>
 
       <SiteFooter />

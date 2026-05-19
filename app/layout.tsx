@@ -2,13 +2,14 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Geist } from "next/font/google";
 import { FreeModelsAnnouncement } from "./components/FreeModelsAnnouncement";
+import { LanguageProvider } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
   title: "OpenAchieve",
-  description: "面向国内开发者的 AI API 中转服务",
+  description: "OpenAI-compatible AI API relay for developers",
 };
 
 export default function RootLayout({
@@ -17,10 +18,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN" className={cn("font-sans", geist.variable)}>
+    <html lang="zh-CN" className={cn("font-sans", geist.variable)} suppressHydrationWarning>
       <body>
-        {children}
-        <FreeModelsAnnouncement />
+        <LanguageProvider>
+          {children}
+          <FreeModelsAnnouncement />
+        </LanguageProvider>
       </body>
     </html>
   );

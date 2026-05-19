@@ -1,7 +1,12 @@
+"use client";
+
 import Link from "next/link";
+import { useI18n } from "@/lib/i18n";
 import { footerGroups } from "@/lib/site-routes";
 
 export function SiteFooter() {
+  const { t } = useI18n();
+
   return (
     <footer className="site-footer">
       <div className="site-footer-inner">
@@ -9,16 +14,16 @@ export function SiteFooter() {
           <Link className="site-footer-logo" href="/">
             OpenAchieve
           </Link>
-          <p>面向国内开发者的 OpenAI-compatible API 中转服务。</p>
+          <p>{t("footer.tagline")}</p>
         </div>
 
-        <div className="site-footer-map" aria-label="页脚站点地图">
+        <div className="site-footer-map" aria-label={t("footer.sitemap")}>
           {footerGroups.map((group) => (
             <div className="site-footer-group" key={group.title}>
-              <strong>{group.title}</strong>
+              <strong>{t(`footer.${group.titleKey}`)}</strong>
               {group.links.map((link) => (
                 <Link href={link.href} key={link.key}>
-                  {link.label}
+                  {t(`routes.${link.key}`)}
                 </Link>
               ))}
             </div>

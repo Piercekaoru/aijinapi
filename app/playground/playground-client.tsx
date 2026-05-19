@@ -1,7 +1,9 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/lib/i18n";
+import type { Language } from "@/lib/i18n-core";
 import { SiteFooter } from "../components/SiteFooter";
 import { SiteHeader } from "../components/SiteHeader";
 
@@ -12,7 +14,7 @@ type ModelListResponse = {
   data?: Array<{ id?: string }>;
 };
 
-const copy: Record<string, string> = {
+const copyZh: Record<string, string> = {
   title: "API 调试台",
   label: "接口调试",
   apiBaseURL: "接口地址",
@@ -28,18 +30,41 @@ const copy: Record<string, string> = {
   requestFailed: "请求失败",
   response: "响应",
   placeholder: "输入接口地址和 API Key，即可获取模型或发送请求。",
+  defaultMessage: "用三句话介绍 OpenAchieve 的接入方式。",
 };
 
-function t(key: string) {
+const copyEn: Record<string, string> = {
+  title: "API Playground",
+  label: "API testing",
+  apiBaseURL: "Base URL",
+  apiKey: "API Key",
+  model: "Model",
+  message: "Message",
+  send: "Send request",
+  loadModels: "Load models",
+  waiting: "Waiting",
+  loadingModels: "Loading model list...",
+  loadingChatStream: "Reading streaming response...",
+  loadingChat: "Requesting chat completion...",
+  requestFailed: "Request failed",
+  response: "Response",
+  placeholder: "Enter a Base URL and API key to load models or send a request.",
+  defaultMessage: "Explain how to integrate OpenAchieve in three sentences.",
+};
+
+function translate(language: Language, key: string) {
   const shortKey = key.split(".").at(-1) ?? key;
-  return copy[key] ?? copy[shortKey] ?? key;
+  const dictionary = language === "en" ? copyEn : copyZh;
+  return dictionary[key] ?? dictionary[shortKey] ?? key;
 }
 
 export function PlaygroundClient() {
+  const { language } = useI18n();
+  const t = useCallback((key: string) => translate(language, key), [language]);
   const [backendUrl, setBackendUrl] = useState(defaultBackendUrl);
   const [apiKey, setApiKey] = useState("");
   const [model, setModel] = useState("big-pickle");
-  const [message, setMessage] = useState("用三句话介绍 OpenAchieve 的接入方式。");
+  const [message, setMessage] = useState(() => t("playground.defaultMessage"));
   const [stream, setStream] = useState(false);
   const [models, setModels] = useState<string[]>([]);
   const [status, setStatus] = useState(t("playground.waiting"));
@@ -49,6 +74,13 @@ export function PlaygroundClient() {
   useEffect(() => {
     setApiKey(window.localStorage.getItem("openachieve_latest_customer_key") ?? "");
   }, []);
+
+  useEffect(() => {
+    setMessage((current) => {
+      const defaults = [copyZh.defaultMessage, copyEn.defaultMessage];
+      return defaults.includes(current) ? t("playground.defaultMessage") : current;
+    });
+  }, [language, t]);
 
   const normalizedBackendUrl = useMemo(
     () => backendUrl.replace(/\/+$/, ""),

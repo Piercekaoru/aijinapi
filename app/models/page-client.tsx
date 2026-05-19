@@ -2,16 +2,20 @@
 
 import { useEffect, useRef } from "react";
 import { loadPublicFreeModels, modelDisplayName } from "@/lib/free-models";
+import { useI18n } from "@/lib/i18n";
+import type { Language } from "@/lib/i18n-core";
 import { SiteFooter } from "../components/SiteFooter";
 import { SiteHeader } from "../components/SiteHeader";
 
 type ModelsPageClientProps = {
   style: string;
-  html: string;
+  html: Record<Language, string>;
+  title: Record<Language, string>;
 };
 
-const codeSamples = {
-  python: `from openai import OpenAI
+const codeSamples: Record<Language, Record<"python" | "js" | "curl", string>> = {
+  zh: {
+    python: `from openai import OpenAI
 
 client = OpenAI(
     api_key="YOUR_OPENACHIEVE_KEY",
@@ -50,12 +54,56 @@ console.log(response.choices[0].message.content);`,
       { "role": "user", "content": "总结这份文档的重点" }
     ]
   }'`,
+  },
+  en: {
+    python: `from openai import OpenAI
+
+client = OpenAI(
+    api_key="YOUR_OPENACHIEVE_KEY",
+    base_url="https://openachieve.asia/v1"
+)
+
+response = client.chat.completions.create(
+    model="qwen3.6-plus",
+    messages=[
+        {"role": "user", "content": "Explain the OpenAchieve integration flow in three sentences"}
+    ]
+)
+
+print(response.choices[0].message.content)`,
+    js: `import OpenAI from "openai";
+
+const client = new OpenAI({
+  apiKey: process.env.OPENACHIEVE_KEY,
+  baseURL: "https://openachieve.asia/v1"
+});
+
+const response = await client.chat.completions.create({
+  model: "deepseek-v4-pro",
+  messages: [
+    { role: "user", content: "Recommend a model for my app" }
+  ]
+});
+
+console.log(response.choices[0].message.content);`,
+    curl: `curl https://openachieve.asia/v1/chat/completions \\
+  -H "Authorization: Bearer YOUR_OPENACHIEVE_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "model": "kimi-k2.6",
+    "messages": [
+      { "role": "user", "content": "Summarize the key points of this document" }
+    ]
+  }'`,
+  },
 };
 
-export function ModelsPageClient({ style, html }: ModelsPageClientProps) {
+export function ModelsPageClient({ style, html, title }: ModelsPageClientProps) {
+  const { language } = useI18n();
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    document.title = title[language];
     const root = rootRef.current;
     if (!root) return;
 
@@ -66,8 +114,8 @@ export function ModelsPageClient({ style, html }: ModelsPageClientProps) {
     const filters = Array.from(root.querySelectorAll<HTMLButtonElement>(".filter"));
     const cards = () => Array.from(root.querySelectorAll<HTMLElement>(".model-card"));
 
-    function renderCode(kind: keyof typeof codeSamples) {
-      if (codeBlock) codeBlock.textContent = codeSamples[kind];
+    function renderCode(kind: keyof (typeof codeSamples)["zh"]) {
+      if (codeBlock) codeBlock.textContent = codeSamples[language][kind];
       codeTabs.forEach((tab) => tab.classList.toggle("active", tab.dataset.code === kind));
     }
 
@@ -102,12 +150,20 @@ export function ModelsPageClient({ style, html }: ModelsPageClientProps) {
         const freeIds = new Set(freeModels.map((model) => model.id));
         const modelText =
           freeModels.length > 0
-            ? freeModels.map((model) => modelDisplayName(model.id)).join("、")
-            : "当前免费模型池正在同步";
+            ? freeModels.map((model) => modelDisplayName(model.id)).join(language === "zh" ? "、" : ", ")
+            : language === "zh"
+              ? "当前免费模型池正在同步"
+              : "The free model catalog is syncing";
 
         root.querySelectorAll<HTMLElement>("[data-live-free-count]").forEach((element) => {
           element.textContent =
-            freeModels.length > 0 ? `${freeModels.length} 个实时免费模型` : "实时免费模型池";
+            freeModels.length > 0
+              ? language === "zh"
+                ? `${freeModels.length} 个实时免费模型`
+                : `${freeModels.length} live free models`
+              : language === "zh"
+                ? "实时免费模型池"
+                : "live free model catalog";
         });
         root.querySelectorAll<HTMLElement>("[data-live-free-models]").forEach((element) => {
           element.textContent = modelText;
@@ -137,7 +193,7 @@ export function ModelsPageClient({ style, html }: ModelsPageClientProps) {
             card.dataset.category = "chat fast";
             card.innerHTML = `<p class="model-tier">Free</p><h3>${escapeHtml(
               modelDisplayName(model.id),
-            )}</h3><p class="model-desc">当前实时同步的免费模型，适合接入验证、轻量实验和非敏感内容探索。</p><code class="model-id">${escapeHtml(
+            )}</h3><p class="model-desc">${language === "zh" ? "当前实时同步的免费模型，适合接入验证、轻量实验和非敏感内容探索。" : "A live free model for integration checks, light experiments, and non-sensitive exploration."}</p><code class="model-id">${escapeHtml(
               model.id,
             )}</code>`;
             grid.appendChild(card);
@@ -145,12 +201,12 @@ export function ModelsPageClient({ style, html }: ModelsPageClientProps) {
       })
       .catch(() => {
         root.querySelectorAll<HTMLElement>("[data-live-free-count]").forEach((element) => {
-          element.textContent = "实时免费模型池";
+          element.textContent = language === "zh" ? "实时免费模型池" : "live free model catalog";
         });
       });
 
     return () => controller.abort();
-  }, []);
+  }, [language, title]);
 
   return (
     <div>
@@ -158,7 +214,7 @@ export function ModelsPageClient({ style, html }: ModelsPageClientProps) {
       <div className="static-page-chrome">
         <SiteHeader active="models" variant="public" />
       </div>
-      <div ref={rootRef} dangerouslySetInnerHTML={{ __html: html }} />
+      <div key={language} ref={rootRef} dangerouslySetInnerHTML={{ __html: html[language] }} />
       <SiteFooter />
       <style jsx>{`
         .static-page-chrome {

@@ -12,7 +12,9 @@ import {
   workspaceNavItems,
 } from "@/lib/site-routes";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { LanguageSwitcher } from "./LanguageSwitcher";
 
 const defaultBackendUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/+$/, "") ?? "/api/backend";
@@ -32,6 +34,7 @@ type SiteHeaderProps = {
 };
 
 export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }: SiteHeaderProps) {
+  const { t } = useI18n();
   const [token, setToken] = useState("");
   const [user, setUser] = useState<PublicUser | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -103,26 +106,26 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
         <Link className={cn("account-chip", active === "account" && "active")} href={siteRoutes.account.href}>
           <span className="account-avatar">{initial}</span>
           <span className="account-copy">
-            <strong>{user?.name || "账号总览"}</strong>
-            <small>{user?.email || "Key 控制台"}</small>
+            <strong>{user?.name || t("header.accountOverview")}</strong>
+            <small>{user?.email || t("header.keyConsole")}</small>
           </span>
         </Link>
         {variant === "public" && (
           <Link className={buttonVariants({ variant: "default" })} href={siteRoutes.dashboard.href}>
-            {siteRoutes.dashboard.label}
+            {t("routes.dashboard")}
           </Link>
         )}
         <Button variant="secondary" type="button" onClick={logout}>
-          退出
+          {t("header.logout")}
         </Button>
       </>
     ) : (
       <>
         <Link className={buttonVariants({ variant: "secondary" })} href={siteRoutes.login.href}>
-          {siteRoutes.login.label}
+          {t("routes.login")}
         </Link>
         <Link className={buttonVariants({ variant: "default" })} href={siteRoutes.register.href}>
-          {siteRoutes.register.label}
+          {t("routes.register")}
         </Link>
       </>
     );
@@ -140,7 +143,7 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
         <button
           className="mobile-menu-button"
           type="button"
-          aria-label={menuOpen ? "关闭菜单" : "打开菜单"}
+          aria-label={menuOpen ? t("header.closeMenu") : t("header.openMenu")}
           aria-expanded={menuOpen}
           onClick={() => setMenuOpen((open) => !open)}
         >
@@ -149,35 +152,37 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
       </div>
 
       <div className="site-header-center">
-        <nav aria-label="站点导航">
+        <nav aria-label={t("header.siteNav")}>
           {navItems.map((item) => (
             <Link
               className={active === item.key ? "active" : ""}
               href={item.href}
               key={item.key}
             >
-              {item.label}
+              {t(`routes.${item.key}`)}
             </Link>
           ))}
         </nav>
       </div>
 
       <div className="site-header-right">
+        <LanguageSwitcher />
         {renderAccountActions()}
       </div>
 
       <div className={cn("site-mobile-menu", menuOpen && "open")}>
-        <nav aria-label="移动端导航">
+        <nav aria-label={t("header.mobileNav")}>
           {navItems.map((item) => (
             <Link
               className={active === item.key ? "active" : ""}
               href={item.href}
               key={item.key}
             >
-              {item.label}
+              {t(`routes.${item.key}`)}
             </Link>
           ))}
         </nav>
+        <LanguageSwitcher className="mobile-language-switcher" />
         <div className="mobile-actions">{renderAccountActions()}</div>
       </div>
 
@@ -380,6 +385,10 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
           .site-mobile-menu.open {
             display: grid;
             gap: 12px;
+          }
+
+          :global(.mobile-language-switcher) {
+            width: 100%;
           }
 
           .site-mobile-menu nav {

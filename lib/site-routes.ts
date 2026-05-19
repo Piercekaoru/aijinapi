@@ -45,14 +45,17 @@ export const workspaceNavItems = [
 export const footerGroups = [
   {
     title: "产品",
+    titleKey: "product",
     links: [siteRoutes.pricing, siteRoutes.models, siteRoutes.docs, siteRoutes.terms],
   },
   {
     title: "账号",
+    titleKey: "account",
     links: [siteRoutes.login, siteRoutes.register, siteRoutes.account, siteRoutes.dashboard],
   },
   {
     title: "开发者",
+    titleKey: "developer",
     links: [siteRoutes.playground, siteRoutes.docsBaseUrl, siteRoutes.docsChat],
   },
 ] as const;

@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { useI18n } from "@/lib/i18n";
+import type { Language } from "@/lib/i18n-core";
 import { SiteFooter } from "../components/SiteFooter";
 import { SiteHeader } from "../components/SiteHeader";
 
@@ -113,19 +115,272 @@ const initialAddUserForm: AddUserForm = {
   days: "30",
 };
 
-const filterLabels: Record<UserFilter, string> = {
-  all: "全部",
-  free: "Free",
-  plus: "Plus",
-  inactive_plus: "Plus 过期",
+const filterLabels: Record<Language, Record<UserFilter, string>> = {
+  zh: {
+    all: "全部",
+    free: "Free",
+    plus: "Plus",
+    inactive_plus: "Plus 过期",
+  },
+  en: {
+    all: "All",
+    free: "Free",
+    plus: "Plus",
+    inactive_plus: "Expired Plus",
+  },
 };
 
+const adminCopy: Record<Language, Record<string, string>> = {
+  zh: {
+    verifying: "正在验证管理员权限...",
+    loadingUsers: "正在读取用户...",
+    forbiddenStatus: "当前账号没有管理员权限。",
+    connected: "已连接",
+    loadFailed: "管理后台读取失败",
+    addingUser: "正在添加用户...",
+    userAdded: "用户已添加",
+    addFailed: "添加用户失败",
+    upgrading: "正在升级用户...",
+    downgrading: "正在降级用户...",
+    upgraded: "已开通 Plus",
+    downgraded: "已降级 Free",
+    planFailed: "套餐更新失败",
+    deletingUser: "正在删除用户...",
+    userDeleted: "用户已删除",
+    deleteFailed: "删除用户失败",
+    banning: "正在冻结用户...",
+    unbanning: "正在解冻用户...",
+    banned: "用户已冻结",
+    unbanned: "用户已解冻",
+    banFailed: "用户封禁操作失败",
+    loadingIp: "正在读取 IP 明细...",
+    ipUpdated: "IP 明细已更新",
+    ipLoadFailed: "IP 明细读取失败",
+    banningIp: "正在封禁 IP...",
+    ipBanned: "IP 已封禁",
+    ipBanFailed: "IP 封禁失败",
+    liftingIp: "正在解封 IP...",
+    ipLifted: "IP 已解封",
+    ipLiftFailed: "IP 解封失败",
+    resettingQuota: "正在重置全部额度...",
+    quotaResetDone: "已重置 {count} 个用户的额度",
+    quotaResetFailed: "额度重置失败",
+    copied: "已复制到剪贴板",
+    adminTitle: "管理后台",
+    backendUrl: "后端地址",
+    noPermission: "无权限",
+    noPermissionBody: "当前账号不是管理员，无法查看用户数据。",
+    backAccount: "返回账号总览",
+    readFailed: "读取失败",
+    retry: "重试",
+    totalUsers: "总用户",
+    expiredPlus: "Plus 过期",
+    oneTime: "一次性凭证",
+    credentialNote: "临时密码和 API Key 只在这里显示一次。",
+    tempPassword: "临时密码",
+    close: "关闭",
+    searchUser: "搜索用户",
+    userFilter: "用户筛选",
+    addUser: "添加用户",
+    resetAllQuota: "重置全部额度",
+    refresh: "刷新",
+    ipRisk: "IP 风控",
+    ipRiskBody: "查询真实 IP 的关联账号、限流事件和封禁状态。",
+    ipAddress: "IP 地址",
+    ipReason: "封禁原因",
+    ipReasonPlaceholder: "批量注册或滥用 Free 模型",
+    queryIp: "查询 IP",
+    banIp24h: "封禁 24 小时",
+    liftIp: "解封 IP",
+    bannedStatus: "已封禁：{reason}",
+    notBanned: "未封禁",
+    reg1h: "近 1 小时注册 {count} 次",
+    freeAi1h: "近 1 小时 Free/Zen 调用 {count} 次",
+    rate24h: "近 24 小时限流事件 {count} 次",
+    associatedAccounts: "关联账号：",
+    none: "无",
+    user: "用户",
+    plan: "套餐",
+    usage: "用量",
+    ipStatus: "IP / 状态",
+    actions: "操作",
+    admin: "管理员",
+    registeredAt: "注册于 {date}",
+    frozenSuffix: " · 已冻结",
+    expiresAt: "到期 {date}",
+    noExpiry: "无到期时间",
+    remaining: "剩余 {count}",
+    keyCount: "个 Key",
+    noIp: "暂无 IP",
+    seenAt: "请求于 {date}",
+    noSeen: "暂无请求记录",
+    upgradePlus: "升级 Plus",
+    downgradeFree: "降级 Free",
+    freeze: "冻结",
+    unfreeze: "解冻",
+    delete: "删除",
+    noMatches: "没有匹配的用户。",
+    name: "姓名",
+    email: "邮箱",
+    plusDays: "Plus 天数",
+    cancel: "取消",
+    adding: "添加中...",
+    add: "添加",
+    confirmUpgrade: "确认升级",
+    confirmDowngrade: "确认降级",
+    upgradeBody: "将 {email} 开通 Plus 30 天，额度调整为 1,500 次/月。",
+    downgradeBody: "将 {email} 降级为 Free，Plus 到期时间会清空，额度调整为 500 次/月。",
+    processing: "处理中...",
+    resetQuotaTitle: "重置全部额度",
+    resetQuotaBody: "这会让所有用户从现在开始重新计算本月额度。历史调用记录会保留，套餐、Plus 到期时间和 API Key 不会改变。请输入 RESET 确认。",
+    resetConfirmAria: "确认重置额度",
+    resetInProgress: "重置中...",
+    resetConfirm: "确认重置",
+    freezeUser: "冻结用户",
+    unfreezeUser: "解冻用户",
+    freezeBody: "冻结 {email} 会撤销现有 session，并拒绝登录和 API Key 鉴权。",
+    unfreezeBody: "解冻 {email} 后，该用户需要重新登录；关联 IP ban 不会自动解除。",
+    freezeReason: "冻结原因",
+    confirm: "确认",
+    deleteUser: "删除用户",
+    deleteBody: "删除会永久移除该用户、API Key 和登录会话，历史调用记录会保留为审计记录。此操作无法恢复，请输入邮箱确认：{email}",
+    deleteEmailAria: "确认删除邮箱",
+    deleting: "删除中...",
+    confirmDelete: "确认删除",
+    copy: "复制",
+  },
+  en: {
+    verifying: "Verifying admin access...",
+    loadingUsers: "Loading users...",
+    forbiddenStatus: "This account does not have admin access.",
+    connected: "Connected",
+    loadFailed: "Failed to load admin data",
+    addingUser: "Adding user...",
+    userAdded: "User added",
+    addFailed: "Failed to add user",
+    upgrading: "Upgrading user...",
+    downgrading: "Downgrading user...",
+    upgraded: "Plus activated",
+    downgraded: "Downgraded to Free",
+    planFailed: "Failed to update plan",
+    deletingUser: "Deleting user...",
+    userDeleted: "User deleted",
+    deleteFailed: "Failed to delete user",
+    banning: "Freezing user...",
+    unbanning: "Unfreezing user...",
+    banned: "User frozen",
+    unbanned: "User unfrozen",
+    banFailed: "Failed to update user ban",
+    loadingIp: "Loading IP details...",
+    ipUpdated: "IP details updated",
+    ipLoadFailed: "Failed to load IP details",
+    banningIp: "Banning IP...",
+    ipBanned: "IP banned",
+    ipBanFailed: "Failed to ban IP",
+    liftingIp: "Lifting IP ban...",
+    ipLifted: "IP ban lifted",
+    ipLiftFailed: "Failed to lift IP ban",
+    resettingQuota: "Resetting all quota...",
+    quotaResetDone: "Reset quota for {count} users",
+    quotaResetFailed: "Failed to reset quota",
+    copied: "Copied to clipboard",
+    adminTitle: "Admin",
+    backendUrl: "Backend URL",
+    noPermission: "No access",
+    noPermissionBody: "This account is not an admin and cannot view user data.",
+    backAccount: "Back to account",
+    readFailed: "Failed to load",
+    retry: "Retry",
+    totalUsers: "Total users",
+    expiredPlus: "Expired Plus",
+    oneTime: "One-time credentials",
+    credentialNote: "Temporary password and API key are shown only once.",
+    tempPassword: "Temporary password",
+    close: "Close",
+    searchUser: "Search email or name",
+    userFilter: "User filter",
+    addUser: "Add user",
+    resetAllQuota: "Reset all quota",
+    refresh: "Refresh",
+    ipRisk: "IP Security",
+    ipRiskBody: "Inspect associated accounts, rate-limit events, and ban status for a real client IP.",
+    ipAddress: "IP address",
+    ipReason: "Ban reason",
+    ipReasonPlaceholder: "Bulk registration or Free model abuse",
+    queryIp: "Query IP",
+    banIp24h: "Ban for 24 hours",
+    liftIp: "Lift IP ban",
+    bannedStatus: "Banned: {reason}",
+    notBanned: "Not banned",
+    reg1h: "{count} registrations in the last hour",
+    freeAi1h: "{count} Free/Zen calls in the last hour",
+    rate24h: "{count} rate-limit events in 24 hours",
+    associatedAccounts: "Associated accounts: ",
+    none: "None",
+    user: "User",
+    plan: "Plan",
+    usage: "Usage",
+    ipStatus: "IP / Status",
+    actions: "Actions",
+    admin: "Admin",
+    registeredAt: "Registered {date}",
+    frozenSuffix: " · Frozen",
+    expiresAt: "Expires {date}",
+    noExpiry: "No expiry",
+    remaining: "{count} remaining",
+    keyCount: "keys",
+    noIp: "No IP",
+    seenAt: "Seen {date}",
+    noSeen: "No request record",
+    upgradePlus: "Upgrade Plus",
+    downgradeFree: "Downgrade Free",
+    freeze: "Freeze",
+    unfreeze: "Unfreeze",
+    delete: "Delete",
+    noMatches: "No matching users.",
+    name: "Name",
+    email: "Email",
+    plusDays: "Plus days",
+    cancel: "Cancel",
+    adding: "Adding...",
+    add: "Add",
+    confirmUpgrade: "Confirm upgrade",
+    confirmDowngrade: "Confirm downgrade",
+    upgradeBody: "Activate Plus for {email} for 30 days and set quota to 1,500 requests/month.",
+    downgradeBody: "Downgrade {email} to Free, clear Plus expiry, and set quota to 500 requests/month.",
+    processing: "Processing...",
+    resetQuotaTitle: "Reset all quota",
+    resetQuotaBody: "This makes every user start a new monthly quota window from now. Usage history is kept; plans, Plus expiry, and API keys are unchanged. Type RESET to confirm.",
+    resetConfirmAria: "Confirm quota reset",
+    resetInProgress: "Resetting...",
+    resetConfirm: "Confirm reset",
+    freezeUser: "Freeze user",
+    unfreezeUser: "Unfreeze user",
+    freezeBody: "Freezing {email} revokes existing sessions and rejects login and API-key auth.",
+    unfreezeBody: "After unfreezing {email}, the user must log in again. Related IP bans are not lifted automatically.",
+    freezeReason: "Freeze reason",
+    confirm: "Confirm",
+    deleteUser: "Delete user",
+    deleteBody: "Deleting permanently removes the user, API keys, and login sessions. Usage history stays as audit evidence. This cannot be undone. Type the email to confirm: {email}",
+    deleteEmailAria: "Confirm delete email",
+    deleting: "Deleting...",
+    confirmDelete: "Confirm delete",
+    copy: "Copy",
+  },
+};
+
+function fill(template: string, values: Record<string, string>) {
+  return Object.entries(values).reduce((next, [key, value]) => next.replaceAll(`{${key}}`, value), template);
+}
+
 export function AdminClient() {
+  const { language } = useI18n();
+  const t = useCallback((key: string) => adminCopy[language][key] ?? key, [language]);
   const [backendUrl, setBackendUrl] = useState(defaultBackendUrl);
   const [sessionToken, setSessionToken] = useState("");
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [access, setAccess] = useState<AccessState>("loading");
-  const [status, setStatus] = useState("正在验证管理员权限...");
+  const [status, setStatus] = useState(() => t("verifying"));
   const [adminData, setAdminData] = useState<AdminUsersResponse | null>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<UserFilter>("all");
@@ -151,7 +406,7 @@ export function AdminClient() {
 
   const loadUsers = useCallback(async (token: string) => {
     if (!token) return;
-    setStatus("正在读取用户...");
+    setStatus(t("loadingUsers"));
 
     try {
       const response = await fetch(`${normalizedBackendUrl}/admin/users`, {
@@ -168,19 +423,19 @@ export function AdminClient() {
       if (response.status === 403) {
         setAdminData(null);
         setAccess("forbidden");
-        setStatus("当前账号没有管理员权限。");
+        setStatus(t("forbiddenStatus"));
         return;
       }
       if (!response.ok) throw new Error(await errorText(response));
 
       setAdminData((await response.json()) as AdminUsersResponse);
       setAccess("allowed");
-      setStatus("已连接");
+      setStatus(t("connected"));
     } catch (error) {
       setAccess("error");
-      setStatus(error instanceof Error ? error.message : "管理后台读取失败");
+      setStatus(error instanceof Error ? error.message : t("loadFailed"));
     }
-  }, [normalizedBackendUrl]);
+  }, [normalizedBackendUrl, t]);
 
   useEffect(() => {
     const token = window.localStorage.getItem("openachieve_session_token") ?? "";
@@ -218,7 +473,7 @@ export function AdminClient() {
     event.preventDefault();
     if (!sessionToken) return;
     setBusyAction("create");
-    setStatus("正在添加用户...");
+    setStatus(t("addingUser"));
 
     try {
       const response = await fetch(`${normalizedBackendUrl}/admin/users`, {
@@ -239,10 +494,10 @@ export function AdminClient() {
       setIssuedCredentials(issued);
       setAddUserForm(initialAddUserForm);
       setShowAddUser(false);
-      setStatus("用户已添加");
+      setStatus(t("userAdded"));
       await loadUsers(sessionToken);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "添加用户失败");
+      setStatus(error instanceof Error ? error.message : t("addFailed"));
     } finally {
       setBusyAction("");
     }
@@ -252,7 +507,7 @@ export function AdminClient() {
     if (!sessionToken) return;
     const actionId = `${plan}-${user.id}`;
     setBusyAction(actionId);
-    setStatus(plan === "plus" ? "正在升级用户..." : "正在降级用户...");
+    setStatus(plan === "plus" ? t("upgrading") : t("downgrading"));
 
     try {
       const response = await fetch(`${normalizedBackendUrl}/admin/users/${user.id}/plan`, {
@@ -267,11 +522,11 @@ export function AdminClient() {
         }),
       });
       if (!response.ok) throw new Error(await errorText(response));
-      setStatus(plan === "plus" ? "已开通 Plus" : "已降级 Free");
+      setStatus(plan === "plus" ? t("upgraded") : t("downgraded"));
       setPlanTarget(null);
       await loadUsers(sessionToken);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "套餐更新失败");
+      setStatus(error instanceof Error ? error.message : t("planFailed"));
     } finally {
       setBusyAction("");
     }
@@ -280,7 +535,7 @@ export function AdminClient() {
   async function deleteUser() {
     if (!sessionToken || !deleteTarget || deleteConfirmation !== deleteTarget.email) return;
     setBusyAction(`delete-${deleteTarget.id}`);
-    setStatus("正在删除用户...");
+    setStatus(t("deletingUser"));
 
     try {
       const response = await fetch(`${normalizedBackendUrl}/admin/users/${deleteTarget.id}`, {
@@ -290,12 +545,12 @@ export function AdminClient() {
         },
       });
       if (!response.ok) throw new Error(await errorText(response));
-      setStatus("用户已删除");
+      setStatus(t("userDeleted"));
       setDeleteTarget(null);
       setDeleteConfirmation("");
       await loadUsers(sessionToken);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "删除用户失败");
+      setStatus(error instanceof Error ? error.message : t("deleteFailed"));
     } finally {
       setBusyAction("");
     }
@@ -306,7 +561,7 @@ export function AdminClient() {
     const { user, action } = banTarget;
     const actionId = `${action}-${user.id}`;
     setBusyAction(actionId);
-    setStatus(action === "ban" ? "正在冻结用户..." : "正在解冻用户...");
+    setStatus(action === "ban" ? t("banning") : t("unbanning"));
 
     try {
       const response = await fetch(`${normalizedBackendUrl}/admin/users/${user.id}/${action}`, {
@@ -318,12 +573,12 @@ export function AdminClient() {
         body: action === "ban" ? JSON.stringify({ reason: banReason || undefined }) : undefined,
       });
       if (!response.ok) throw new Error(await errorText(response));
-      setStatus(action === "ban" ? "用户已冻结" : "用户已解冻");
+      setStatus(action === "ban" ? t("banned") : t("unbanned"));
       setBanTarget(null);
       setBanReason("");
       await loadUsers(sessionToken);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "用户封禁操作失败");
+      setStatus(error instanceof Error ? error.message : t("banFailed"));
     } finally {
       setBusyAction("");
     }
@@ -332,7 +587,7 @@ export function AdminClient() {
   async function loadIpDetails(ip = ipQuery) {
     if (!sessionToken || !ip.trim()) return;
     setBusyAction("ip-details");
-    setStatus("正在读取 IP 明细...");
+    setStatus(t("loadingIp"));
 
     try {
       const response = await fetch(`${normalizedBackendUrl}/admin/ip-details?ip=${encodeURIComponent(ip.trim())}`, {
@@ -342,9 +597,9 @@ export function AdminClient() {
       });
       if (!response.ok) throw new Error(await errorText(response));
       setIpDetails((await response.json()) as IpDetails);
-      setStatus("IP 明细已更新");
+      setStatus(t("ipUpdated"));
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "IP 明细读取失败");
+      setStatus(error instanceof Error ? error.message : t("ipLoadFailed"));
     } finally {
       setBusyAction("");
     }
@@ -353,7 +608,7 @@ export function AdminClient() {
   async function banIp() {
     if (!sessionToken || !ipQuery.trim()) return;
     setBusyAction("ban-ip");
-    setStatus("正在封禁 IP...");
+    setStatus(t("banningIp"));
 
     try {
       const response = await fetch(`${normalizedBackendUrl}/admin/ip-bans`, {
@@ -371,9 +626,9 @@ export function AdminClient() {
       if (!response.ok) throw new Error(await errorText(response));
       setIpBanReason("");
       await loadIpDetails(ipQuery);
-      setStatus("IP 已封禁");
+      setStatus(t("ipBanned"));
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "IP 封禁失败");
+      setStatus(error instanceof Error ? error.message : t("ipBanFailed"));
     } finally {
       setBusyAction("");
     }
@@ -382,7 +637,7 @@ export function AdminClient() {
   async function liftIpBan() {
     if (!sessionToken || !ipDetails?.active_ban) return;
     setBusyAction("lift-ip");
-    setStatus("正在解封 IP...");
+    setStatus(t("liftingIp"));
 
     try {
       const response = await fetch(`${normalizedBackendUrl}/admin/ip-bans/${ipDetails.active_ban.id}/lift`, {
@@ -395,9 +650,9 @@ export function AdminClient() {
       });
       if (!response.ok) throw new Error(await errorText(response));
       await loadIpDetails(ipDetails.ip);
-      setStatus("IP 已解封");
+      setStatus(t("ipLifted"));
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "IP 解封失败");
+      setStatus(error instanceof Error ? error.message : t("ipLiftFailed"));
     } finally {
       setBusyAction("");
     }
@@ -406,7 +661,7 @@ export function AdminClient() {
   async function resetAllQuota() {
     if (!sessionToken || quotaResetConfirmation !== "RESET") return;
     setBusyAction("reset-quota");
-    setStatus("正在重置全部额度...");
+    setStatus(t("resettingQuota"));
 
     try {
       const response = await fetch(`${normalizedBackendUrl}/admin/quota-resets`, {
@@ -417,12 +672,12 @@ export function AdminClient() {
       });
       if (!response.ok) throw new Error(await errorText(response));
       const result = (await response.json()) as AdminQuotaResetResponse;
-      setStatus(`已重置 ${result.users_affected.toLocaleString()} 个用户的额度`);
+      setStatus(fill(t("quotaResetDone"), { count: result.users_affected.toLocaleString() }));
       setShowQuotaReset(false);
       setQuotaResetConfirmation("");
       await loadUsers(sessionToken);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "额度重置失败");
+      setStatus(error instanceof Error ? error.message : t("quotaResetFailed"));
     } finally {
       setBusyAction("");
     }
@@ -430,7 +685,7 @@ export function AdminClient() {
 
   async function copy(text: string) {
     await navigator.clipboard.writeText(text);
-    setStatus("已复制到剪贴板");
+    setStatus(t("copied"));
   }
 
   return (
@@ -441,88 +696,88 @@ export function AdminClient() {
         <section className="hero-band">
           <div>
             <p>Admin</p>
-            <h1>管理后台</h1>
+            <h1>{t("adminTitle")}</h1>
             <span>{status}</span>
           </div>
           <label>
-            后端地址
+            {t("backendUrl")}
             <input
-              aria-label="后端地址"
+              aria-label={t("backendUrl")}
               value={backendUrl}
               onChange={(event) => setBackendUrl(event.target.value)}
             />
           </label>
         </section>
 
-        {access === "loading" && <section className="empty-state">正在验证管理员权限...</section>}
+        {access === "loading" && <section className="empty-state">{t("verifying")}</section>}
 
         {access === "forbidden" && (
           <section className="empty-state">
-            <h2>无权限</h2>
-            <p>当前账号不是管理员，无法查看用户数据。</p>
+            <h2>{t("noPermission")}</h2>
+            <p>{t("noPermissionBody")}</p>
             <Link className={buttonVariants({ variant: "default" })} href="/account">
-              返回账号总览
+              {t("backAccount")}
             </Link>
           </section>
         )}
 
         {access === "error" && (
           <section className="empty-state">
-            <h2>读取失败</h2>
+            <h2>{t("readFailed")}</h2>
             <p>{status}</p>
             <Button type="button" onClick={() => loadUsers(sessionToken)}>
-              重试
+              {t("retry")}
             </Button>
           </section>
         )}
 
         {access === "allowed" && adminData && (
           <>
-            <section className="stats-grid" aria-label="用户统计">
-              <StatBlock label="总用户" value={adminData.stats.total_users} />
+            <section className="stats-grid" aria-label={t("userFilter")}>
+              <StatBlock label={t("totalUsers")} value={adminData.stats.total_users} />
               <StatBlock label="Free" value={adminData.stats.free_users} />
               <StatBlock label="Plus" value={adminData.stats.plus_users} />
-              <StatBlock label="Plus 过期" value={adminData.stats.inactive_plus_users} />
+              <StatBlock label={t("expiredPlus")} value={adminData.stats.inactive_plus_users} />
             </section>
 
             {issuedCredentials && (
               <section className="issued-panel">
                 <div>
-                  <p>一次性凭证</p>
+                  <p>{t("oneTime")}</p>
                   <h2>{issuedCredentials.user.email}</h2>
-                  <span>临时密码和 API Key 只在这里显示一次。</span>
+                  <span>{t("credentialNote")}</span>
                 </div>
                 <div className="issued-grid">
-                  <Credential label="临时密码" value={issuedCredentials.temporary_password} onCopy={copy} />
-                  <Credential label="API Key" value={issuedCredentials.api_key.key} onCopy={copy} />
+                  <Credential label={t("tempPassword")} copyLabel={t("copy")} value={issuedCredentials.temporary_password} onCopy={copy} />
+                  <Credential label="API Key" copyLabel={t("copy")} value={issuedCredentials.api_key.key} onCopy={copy} />
                 </div>
                 <Button variant="secondary" type="button" onClick={() => setIssuedCredentials(null)}>
-                  关闭
+                  {t("close")}
                 </Button>
               </section>
             )}
 
             <section className="toolbar">
               <input
-                aria-label="搜索用户"
-                placeholder="搜索邮箱或姓名"
+                aria-label={t("searchUser")}
+                placeholder={t("searchUser")}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
               />
-              <div className="segments" aria-label="用户筛选">
-                {(Object.keys(filterLabels) as UserFilter[]).map((key) => (
+              <div className="segments" aria-label={t("userFilter")}>
+                {(Object.keys(filterLabels[language]) as UserFilter[]).map((key) => (
                   <button
                     className={filter === key ? "active" : ""}
                     key={key}
                     type="button"
                     onClick={() => setFilter(key)}
                   >
-                    {filterLabels[key]}
+                    {filterLabels[language][key]}
                   </button>
                 ))}
               </div>
               <Button type="button" onClick={() => setShowAddUser(true)}>
-                添加用户
+                {t("addUser")}
               </Button>
               <Button
                 variant="destructive"
@@ -532,34 +787,34 @@ export function AdminClient() {
                   setShowQuotaReset(true);
                 }}
               >
-                重置全部额度
+                {t("resetAllQuota")}
               </Button>
               <Button variant="secondary" type="button" onClick={() => loadUsers(sessionToken)}>
-                刷新
+                {t("refresh")}
               </Button>
             </section>
 
             <section className="issued-panel">
               <div>
                 <p>Security</p>
-                <h2>IP 风控</h2>
-                <span>查询真实 IP 的关联账号、限流事件和封禁状态。</span>
+                <h2>{t("ipRisk")}</h2>
+                <span>{t("ipRiskBody")}</span>
               </div>
               <div className="issued-grid">
                 <label>
-                  IP 地址
+                  {t("ipAddress")}
                   <input
-                    aria-label="IP 地址"
+                    aria-label={t("ipAddress")}
                     placeholder="203.0.113.10"
                     value={ipQuery}
                     onChange={(event) => setIpQuery(event.target.value)}
                   />
                 </label>
                 <label>
-                  封禁原因
+                  {t("ipReason")}
                   <input
-                    aria-label="封禁原因"
-                    placeholder="批量注册或滥用 Free 模型"
+                    aria-label={t("ipReason")}
+                    placeholder={t("ipReasonPlaceholder")}
                     value={ipBanReason}
                     onChange={(event) => setIpBanReason(event.target.value)}
                   />
@@ -567,10 +822,10 @@ export function AdminClient() {
               </div>
               <div className="modal-actions">
                 <Button type="button" variant="secondary" disabled={busyAction === "ip-details"} onClick={() => loadIpDetails()}>
-                  查询 IP
+                  {t("queryIp")}
                 </Button>
                 <Button type="button" variant="destructive" disabled={!ipQuery.trim() || busyAction === "ban-ip"} onClick={banIp}>
-                  封禁 24 小时
+                  {t("banIp24h")}
                 </Button>
                 <Button
                   type="button"
@@ -578,20 +833,20 @@ export function AdminClient() {
                   disabled={!ipDetails?.active_ban || busyAction === "lift-ip"}
                   onClick={liftIpBan}
                 >
-                  解封 IP
+                  {t("liftIp")}
                 </Button>
               </div>
               {ipDetails && (
                 <div className="ip-details">
                   <strong>{ipDetails.ip}</strong>
-                  <span>{ipDetails.active_ban ? `已封禁：${ipDetails.active_ban.reason}` : "未封禁"}</span>
-                  <span>近 1 小时注册 {ipDetails.registration_count_1h.toLocaleString()} 次</span>
-                  <span>近 1 小时 Free/Zen 调用 {ipDetails.free_ai_request_count_1h.toLocaleString()} 次</span>
-                  <span>近 24 小时限流事件 {ipDetails.rate_limit_event_count_24h.toLocaleString()} 次</span>
+                  <span>{ipDetails.active_ban ? fill(t("bannedStatus"), { reason: ipDetails.active_ban.reason }) : t("notBanned")}</span>
+                  <span>{fill(t("reg1h"), { count: ipDetails.registration_count_1h.toLocaleString() })}</span>
+                  <span>{fill(t("freeAi1h"), { count: ipDetails.free_ai_request_count_1h.toLocaleString() })}</span>
+                  <span>{fill(t("rate24h"), { count: ipDetails.rate_limit_event_count_24h.toLocaleString() })}</span>
                   <small>
-                    关联账号：
+                    {t("associatedAccounts")}
                     {ipDetails.associated_users.length === 0
-                      ? "无"
+                      ? t("none")
                       : ipDetails.associated_users.map((user) => user.email).join(", ")}
                   </small>
                 </div>
@@ -600,12 +855,12 @@ export function AdminClient() {
 
             <section className="user-table">
               <div className="table-head">
-                <span>用户</span>
-                <span>套餐</span>
-                <span>用量</span>
+                <span>{t("user")}</span>
+                <span>{t("plan")}</span>
+                <span>{t("usage")}</span>
                 <span>Key</span>
-                <span>IP / 状态</span>
-                <span>操作</span>
+                <span>{t("ipStatus")}</span>
+                <span>{t("actions")}</span>
               </div>
               {filteredUsers.map((user) => {
                 const isSelf = currentUserId === user.id;
@@ -615,27 +870,27 @@ export function AdminClient() {
                       <strong>{user.name}</strong>
                       <span>{user.email}</span>
                       <small>
-                        {user.is_admin ? "管理员" : `注册于 ${formatDate(user.created_at)}`}
-                        {user.status === "banned" ? " · 已冻结" : ""}
+                        {user.is_admin ? t("admin") : fill(t("registeredAt"), { date: formatDate(user.created_at) })}
+                        {user.status === "banned" ? t("frozenSuffix") : ""}
                       </small>
                     </div>
                     <div>
-                      <PlanBadge user={user} />
-                      <small>{user.plus_expires_at ? `到期 ${formatDate(user.plus_expires_at)}` : "无到期时间"}</small>
+                      <PlanBadge user={user} language={language} />
+                      <small>{user.plus_expires_at ? fill(t("expiresAt"), { date: formatDate(user.plus_expires_at) }) : t("noExpiry")}</small>
                     </div>
                     <div>
                       <strong>
                         {user.requests_this_month.toLocaleString()} / {user.monthly_request_limit.toLocaleString()}
                       </strong>
-                      <span>剩余 {user.remaining_requests.toLocaleString()}</span>
+                      <span>{fill(t("remaining"), { count: user.remaining_requests.toLocaleString() })}</span>
                     </div>
                     <div>
                       <strong>{user.api_key_count}</strong>
-                      <span>个 Key</span>
+                      <span>{t("keyCount")}</span>
                     </div>
                     <div>
-                      <span>{user.last_seen_ip ?? user.registration_ip ?? "暂无 IP"}</span>
-                      <small>{user.last_seen_at ? `请求于 ${formatDate(user.last_seen_at)}` : "暂无请求记录"}</small>
+                      <span>{user.last_seen_ip ?? user.registration_ip ?? t("noIp")}</span>
+                      <small>{user.last_seen_at ? fill(t("seenAt"), { date: formatDate(user.last_seen_at) }) : t("noSeen")}</small>
                     </div>
                     <div className="actions-cell">
                       <Button
@@ -644,7 +899,7 @@ export function AdminClient() {
                         disabled={busyAction === `plus-${user.id}` || user.plan === "plus"}
                         onClick={() => setPlanTarget({ user, plan: "plus" })}
                       >
-                        升级 Plus
+                        {t("upgradePlus")}
                       </Button>
                       <Button
                         size="sm"
@@ -653,7 +908,7 @@ export function AdminClient() {
                         disabled={busyAction === `free-${user.id}` || isSelf || user.plan !== "plus"}
                         onClick={() => setPlanTarget({ user, plan: "free" })}
                       >
-                        降级 Free
+                        {t("downgradeFree")}
                       </Button>
                       <Button
                         size="sm"
@@ -665,7 +920,7 @@ export function AdminClient() {
                           setBanTarget({ user, action: user.status === "banned" ? "unban" : "ban" });
                         }}
                       >
-                        {user.status === "banned" ? "解冻" : "冻结"}
+                        {user.status === "banned" ? t("unfreeze") : t("freeze")}
                       </Button>
                       <Button
                         size="sm"
@@ -674,13 +929,13 @@ export function AdminClient() {
                         disabled={isSelf}
                         onClick={() => setDeleteTarget(user)}
                       >
-                        删除
+                        {t("delete")}
                       </Button>
                     </div>
                   </article>
                 );
               })}
-              {filteredUsers.length === 0 && <p className="empty-row">没有匹配的用户。</p>}
+              {filteredUsers.length === 0 && <p className="empty-row">{t("noMatches")}</p>}
             </section>
           </>
         )}
@@ -693,15 +948,15 @@ export function AdminClient() {
             <div className="modal-head">
               <div>
                 <p>New User</p>
-                <h2 id="add-user-title">添加用户</h2>
+                <h2 id="add-user-title">{t("addUser")}</h2>
               </div>
-              <button type="button" onClick={() => setShowAddUser(false)} aria-label="关闭">
+              <button type="button" onClick={() => setShowAddUser(false)} aria-label={t("close")}>
                 ×
               </button>
             </div>
             <form onSubmit={createUser}>
               <label>
-                姓名
+                {t("name")}
                 <input
                   required
                   minLength={2}
@@ -710,7 +965,7 @@ export function AdminClient() {
                 />
               </label>
               <label>
-                邮箱
+                {t("email")}
                 <input
                   required
                   type="email"
@@ -719,7 +974,7 @@ export function AdminClient() {
                 />
               </label>
               <label>
-                套餐
+                {t("plan")}
                 <select
                   value={addUserForm.plan}
                   onChange={(event) =>
@@ -732,7 +987,7 @@ export function AdminClient() {
               </label>
               {addUserForm.plan === "plus" && (
                 <label>
-                  Plus 天数
+                  {t("plusDays")}
                   <input
                     max={365}
                     min={1}
@@ -744,10 +999,10 @@ export function AdminClient() {
               )}
               <div className="modal-actions">
                 <Button variant="secondary" type="button" onClick={() => setShowAddUser(false)}>
-                  取消
+                  {t("cancel")}
                 </Button>
                 <Button type="submit" disabled={busyAction === "create"}>
-                  {busyAction === "create" ? "添加中..." : "添加"}
+                  {busyAction === "create" ? t("adding") : t("add")}
                 </Button>
               </div>
             </form>
@@ -761,20 +1016,20 @@ export function AdminClient() {
             <div className="modal-head">
               <div>
                 <p>{planTarget.plan === "plus" ? "Upgrade" : "Downgrade"}</p>
-                <h2 id="plan-user-title">{planTarget.plan === "plus" ? "确认升级" : "确认降级"}</h2>
+                <h2 id="plan-user-title">{planTarget.plan === "plus" ? t("confirmUpgrade") : t("confirmDowngrade")}</h2>
               </div>
-              <button type="button" onClick={() => setPlanTarget(null)} aria-label="关闭">
+              <button type="button" onClick={() => setPlanTarget(null)} aria-label={t("close")}>
                 ×
               </button>
             </div>
             <p className="danger-copy">
               {planTarget.plan === "plus"
-                ? `将 ${planTarget.user.email} 开通 Plus 30 天，额度调整为 1,500 次/月。`
-                : `将 ${planTarget.user.email} 降级为 Free，Plus 到期时间会清空，额度调整为 500 次/月。`}
+                ? fill(t("upgradeBody"), { email: planTarget.user.email })
+                : fill(t("downgradeBody"), { email: planTarget.user.email })}
             </p>
             <div className="modal-actions">
               <Button variant="secondary" type="button" onClick={() => setPlanTarget(null)}>
-                取消
+                {t("cancel")}
               </Button>
               <Button
                 variant={planTarget.plan === "plus" ? "default" : "destructive"}
@@ -783,10 +1038,10 @@ export function AdminClient() {
                 onClick={() => updatePlan(planTarget.user, planTarget.plan)}
               >
                 {busyAction === `${planTarget.plan}-${planTarget.user.id}`
-                  ? "处理中..."
+                  ? t("processing")
                   : planTarget.plan === "plus"
-                    ? "确认升级"
-                    : "确认降级"}
+                    ? t("confirmUpgrade")
+                    : t("confirmDowngrade")}
               </Button>
             </div>
           </section>
@@ -799,7 +1054,7 @@ export function AdminClient() {
             <div className="modal-head">
               <div>
                 <p>Reset</p>
-                <h2 id="reset-quota-title">重置全部额度</h2>
+                <h2 id="reset-quota-title">{t("resetQuotaTitle")}</h2>
               </div>
               <button
                 type="button"
@@ -807,16 +1062,16 @@ export function AdminClient() {
                   setShowQuotaReset(false);
                   setQuotaResetConfirmation("");
                 }}
-                aria-label="关闭"
+                aria-label={t("close")}
               >
                 ×
               </button>
             </div>
             <p className="danger-copy">
-              这会让所有用户从现在开始重新计算本月额度。历史调用记录会保留，套餐、Plus 到期时间和 API Key 不会改变。请输入 RESET 确认。
+              {t("resetQuotaBody")}
             </p>
             <input
-              aria-label="确认重置额度"
+              aria-label={t("resetConfirmAria")}
               value={quotaResetConfirmation}
               onChange={(event) => setQuotaResetConfirmation(event.target.value)}
             />
@@ -829,7 +1084,7 @@ export function AdminClient() {
                   setQuotaResetConfirmation("");
                 }}
               >
-                取消
+                {t("cancel")}
               </Button>
               <Button
                 variant="destructive"
@@ -837,7 +1092,7 @@ export function AdminClient() {
                 disabled={quotaResetConfirmation !== "RESET" || busyAction === "reset-quota"}
                 onClick={resetAllQuota}
               >
-                {busyAction === "reset-quota" ? "重置中..." : "确认重置"}
+                {busyAction === "reset-quota" ? t("resetInProgress") : t("resetConfirm")}
               </Button>
             </div>
           </section>
@@ -850,7 +1105,7 @@ export function AdminClient() {
             <div className="modal-head">
               <div>
                 <p>{banTarget.action === "ban" ? "Ban" : "Unban"}</p>
-                <h2 id="ban-user-title">{banTarget.action === "ban" ? "冻结用户" : "解冻用户"}</h2>
+                <h2 id="ban-user-title">{banTarget.action === "ban" ? t("freezeUser") : t("unfreezeUser")}</h2>
               </div>
               <button
                 type="button"
@@ -858,20 +1113,20 @@ export function AdminClient() {
                   setBanTarget(null);
                   setBanReason("");
                 }}
-                aria-label="关闭"
+                aria-label={t("close")}
               >
                 ×
               </button>
             </div>
             <p className="danger-copy">
               {banTarget.action === "ban"
-                ? `冻结 ${banTarget.user.email} 会撤销现有 session，并拒绝登录和 API Key 鉴权。`
-                : `解冻 ${banTarget.user.email} 后，该用户需要重新登录；关联 IP ban 不会自动解除。`}
+                ? fill(t("freezeBody"), { email: banTarget.user.email })
+                : fill(t("unfreezeBody"), { email: banTarget.user.email })}
             </p>
             {banTarget.action === "ban" && (
               <input
-                aria-label="冻结原因"
-                placeholder="冻结原因"
+                aria-label={t("freezeReason")}
+                placeholder={t("freezeReason")}
                 value={banReason}
                 onChange={(event) => setBanReason(event.target.value)}
               />
@@ -885,7 +1140,7 @@ export function AdminClient() {
                   setBanReason("");
                 }}
               >
-                取消
+                {t("cancel")}
               </Button>
               <Button
                 variant={banTarget.action === "ban" ? "destructive" : "default"}
@@ -893,7 +1148,7 @@ export function AdminClient() {
                 disabled={busyAction === `${banTarget.action}-${banTarget.user.id}`}
                 onClick={updateBan}
               >
-                {busyAction === `${banTarget.action}-${banTarget.user.id}` ? "处理中..." : "确认"}
+                {busyAction === `${banTarget.action}-${banTarget.user.id}` ? t("processing") : t("confirm")}
               </Button>
             </div>
           </section>
@@ -906,7 +1161,7 @@ export function AdminClient() {
             <div className="modal-head">
               <div>
                 <p>Delete</p>
-                <h2 id="delete-user-title">删除用户</h2>
+                <h2 id="delete-user-title">{t("deleteUser")}</h2>
               </div>
               <button
                 type="button"
@@ -914,16 +1169,16 @@ export function AdminClient() {
                   setDeleteTarget(null);
                   setDeleteConfirmation("");
                 }}
-                aria-label="关闭"
+                aria-label={t("close")}
               >
                 ×
               </button>
             </div>
             <p className="danger-copy">
-              删除会永久移除该用户、API Key 和登录会话，历史调用记录会保留为审计记录。此操作无法恢复，请输入邮箱确认：{deleteTarget.email}
+              {fill(t("deleteBody"), { email: deleteTarget.email })}
             </p>
             <input
-              aria-label="确认删除邮箱"
+              aria-label={t("deleteEmailAria")}
               value={deleteConfirmation}
               onChange={(event) => setDeleteConfirmation(event.target.value)}
             />
@@ -936,14 +1191,14 @@ export function AdminClient() {
                   setDeleteConfirmation("");
                 }}
               >
-                取消
+                {t("cancel")}
               </Button>
               <Button
                 type="button"
                 disabled={deleteConfirmation !== deleteTarget.email || busyAction === `delete-${deleteTarget.id}`}
                 onClick={deleteUser}
               >
-                {busyAction === `delete-${deleteTarget.id}` ? "删除中..." : "确认删除"}
+                {busyAction === `delete-${deleteTarget.id}` ? t("deleting") : t("confirmDelete")}
               </Button>
             </div>
           </section>
@@ -1341,10 +1596,12 @@ function StatBlock({ label, value }: { label: string; value: number }) {
 
 function Credential({
   label,
+  copyLabel,
   value,
   onCopy,
 }: {
   label: string;
+  copyLabel: string;
   value: string;
   onCopy: (value: string) => Promise<void>;
 }) {
@@ -1355,16 +1612,16 @@ function Credential({
         <code>{value}</code>
       </div>
       <Button variant="secondary" type="button" onClick={() => onCopy(value)}>
-        复制
+        {copyLabel}
       </Button>
     </div>
   );
 }
 
-function PlanBadge({ user }: { user: AdminUser }) {
+function PlanBadge({ user, language }: { user: AdminUser; language: Language }) {
   const expiredPlus = user.stored_plan === "plus" && user.plan !== "plus";
   const className = `plan-badge ${user.plan === "plus" ? "plus" : ""} ${expiredPlus ? "expired" : ""}`;
-  const label = expiredPlus ? "Plus 过期" : user.plan === "plus" ? "Plus" : "Free";
+  const label = expiredPlus ? filterLabels[language].inactive_plus : user.plan === "plus" ? "Plus" : "Free";
 
   return <strong className={className}>{label}</strong>;
 }

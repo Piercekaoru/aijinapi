@@ -208,4 +208,69 @@ body {
     opacity: 0.55;
     transform: none;
   }
+
+  .language-switcher-card {
+    width: fit-content;
+    border-radius: 0.75rem;
+    border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
+    background: color-mix(in srgb, var(--card) 92%, transparent);
+    box-shadow: none;
+  }
+
+  .language-switcher-content {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.35rem;
+  }
+
+  .language-switcher-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0 0.3rem;
+    color: var(--muted-foreground);
+    font-size: 0.75rem;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  .language-switcher-options {
+    display: grid;
+    width: auto;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.25rem;
+  }
+
+  .language-option {
+    position: relative;
+    display: inline-flex;
+    min-width: 3.1rem;
+    height: 2rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    border-radius: 0.55rem;
+    color: var(--muted-foreground);
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 850;
+    line-height: 1;
+    transition:
+      background-color 0.18s ease,
+      color 0.18s ease;
+  }
+
+  .language-option [data-slot="radio-group-item"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .language-option.active {
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
 }

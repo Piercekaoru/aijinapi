@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { loadPublicFreeModels, modelDisplayName, type PublicFreeModel } from "@/lib/free-models";
+import { useI18n } from "@/lib/i18n";
 
 const publicPaths = new Set(["/", "/models", "/docs", "/login", "/terms"]);
 
@@ -11,6 +12,7 @@ const sessionStorageKey = "openachieve_free_models_announcement_closed";
 const todayStorageKey = "openachieve_free_models_announcement_closed_date";
 
 export function FreeModelsAnnouncement() {
+  const { language, t } = useI18n();
   const pathname = usePathname();
   const [visible, setVisible] = useState(false);
   const [freeModels, setFreeModels] = useState<PublicFreeModel[]>([]);
@@ -82,7 +84,7 @@ export function FreeModelsAnnouncement() {
         onClick={(event) => event.stopPropagation()}
       >
         <button
-          aria-label="关闭弹窗"
+          aria-label={t("announcement.close")}
           className="announcement-close"
           type="button"
           onClick={closeForSession}
@@ -91,25 +93,23 @@ export function FreeModelsAnnouncement() {
         </button>
 
         <div className="announcement-visual">
-          <div className="announcement-pill">Free Models</div>
+          <div className="announcement-pill">{t("announcement.pill")}</div>
           <p className="announcement-caption">
             {freeModels.length > 0
-              ? `当前 Free 可用：${freeModels.map((model) => modelDisplayName(model.id)).join("、")}`
-              : "当前免费模型池正在同步"}
+              ? `${t("announcement.current")}${freeModels.map((model) => modelDisplayName(model.id)).join(language === "zh" ? "、" : ", ")}`
+              : t("announcement.syncing")}
           </p>
         </div>
 
         <div className="announcement-copy">
           <div>
-            <p className="announcement-eyebrow">OpenAchieve Free</p>
-            <h2 id="free-model-announcement-title">当前可用免费模型</h2>
+            <p className="announcement-eyebrow">{t("announcement.eyebrow")}</p>
+            <h2 id="free-model-announcement-title">{t("announcement.title")}</h2>
           </div>
-          <p>
-            Free 用户每月 500 次请求额度，可调用实时同步的免费模型池。免费模型适合接入验证、轻量实验和非敏感内容探索。
-          </p>
+          <p>{t("announcement.body")}</p>
         </div>
 
-        <div className="model-list" aria-label="免费模型列表">
+        <div className="model-list" aria-label={t("announcement.list")}>
           {freeModels.length > 0 ? (
             freeModels.map((model) => (
               <div className="model-item" key={model.id}>
@@ -119,7 +119,7 @@ export function FreeModelsAnnouncement() {
             ))
           ) : (
             <div className="model-item">
-              <strong>{catalogFailed ? "暂时不可用" : "正在同步"}</strong>
+              <strong>{catalogFailed ? t("announcement.unavailable") : t("announcement.syncingShort")}</strong>
               <code>{catalogFailed ? "fail-closed" : "syncing"}</code>
             </div>
           )}
@@ -127,10 +127,10 @@ export function FreeModelsAnnouncement() {
 
         <div className="announcement-actions">
           <button className="secondary-action" type="button" onClick={closeForSession}>
-            关闭
+            {t("announcement.closeAction")}
           </button>
           <button className="primary-action" type="button" onClick={closeForToday}>
-            今日不再显示
+            {t("announcement.closeToday")}
           </button>
         </div>
       </div>
