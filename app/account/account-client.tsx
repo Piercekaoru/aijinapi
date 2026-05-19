@@ -2,9 +2,23 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import type { LucideIcon } from "lucide-react";
+import { CircleDollarSign, CreditCard, Landmark, Wallet, X } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { modelDisplayName } from "@/lib/free-models";
 import { plusMonthlyPriceLabel } from "@/lib/pricing";
+import { cn } from "@/lib/utils";
 import { SiteFooter } from "../components/SiteFooter";
 import { SiteHeader } from "../components/SiteHeader";
 
@@ -76,7 +90,10 @@ const copy: Record<string, string> = {
   checkoutTip: "支付完成后会自动返回账号页并刷新套餐状态。",
   alipay: "支付宝",
   wxpay: "微信支付",
+  paypal: "PayPal",
+  usdt: "USDT",
   payNow: "去支付",
+  selectPaytype: "选择支付方式",
   checkoutUnavailable: "自助购买暂未开启",
   checkoutCreating: "正在创建支付订单...",
   checkoutPending: "正在等待支付结果...",
@@ -156,10 +173,48 @@ type BillingOrderResponse = {
   granted_until: string | null;
 };
 
-const paytypeLabels: Record<string, string> = {
-  alipay: "支付宝",
-  wxpay: "微信支付",
+type PaymentOption = {
+  code: string;
+  label: string;
+  description: string;
+  Icon: LucideIcon;
 };
+
+const knownPaytypes: Record<string, PaymentOption> = {
+  alipay: {
+    code: "alipay",
+    label: "支付宝",
+    description: "适合中国大陆用户的快捷扫码支付。",
+    Icon: Wallet,
+  },
+  wxpay: {
+    code: "wxpay",
+    label: "微信支付",
+    description: "使用微信完成扫码或移动端支付。",
+    Icon: CreditCard,
+  },
+  paypal: {
+    code: "paypal",
+    label: "PayPal",
+    description: "适合海外银行卡、PayPal 余额等国际支付。",
+    Icon: Landmark,
+  },
+  usdt: {
+    code: "usdt",
+    label: "USDT",
+    description: "通过 FovPay 托管收银台完成稳定币支付。",
+    Icon: CircleDollarSign,
+  },
+};
+
+function paytypeOption(paytype: string): PaymentOption {
+  return knownPaytypes[paytype] ?? {
+    code: paytype,
+    label: paytype,
+    description: "通过 FovPay 支持的托管收银台完成支付。",
+    Icon: CreditCard,
+  };
+}
 
 export function AccountClient() {
   const [sessionToken, setSessionToken] = useState("");
@@ -169,6 +224,7 @@ export function AccountClient() {
   const [modelsOpen, setModelsOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+  const [selectedPaytype, setSelectedPaytype] = useState("");
 
   const summary = useMemo(() => {
     const monthlyLimit = dashboard?.subscription.monthly_request_limit ?? 500;
@@ -199,15 +255,28 @@ export function AccountClient() {
 
   const paymentOptions = useMemo(() => {
     const allowed = dashboard?.billing?.allowed_paytypes ?? [];
-    return ["alipay", "wxpay"]
-      .filter((paytype) => allowed.includes(paytype))
-      .map((paytype) => ({
-        code: paytype,
-        label: paytypeLabels[paytype] ?? paytype,
-      }));
+    const preferredOrder = ["alipay", "wxpay", "paypal", "usdt"];
+    return allowed
+      .slice()
+      .sort((left, right) => {
+        const leftIndex = preferredOrder.indexOf(left);
+        const rightIndex = preferredOrder.indexOf(right);
+        return (leftIndex === -1 ? 99 : leftIndex) - (rightIndex === -1 ? 99 : rightIndex);
+      })
+      .map(paytypeOption);
   }, [dashboard?.billing?.allowed_paytypes]);
 
   const plusAmountCny = dashboard?.billing?.plus_amount_cny ?? "58.00";
+
+  useEffect(() => {
+    if (paymentOptions.length === 0) {
+      setSelectedPaytype("");
+      return;
+    }
+    if (!paymentOptions.some((option) => option.code === selectedPaytype)) {
+      setSelectedPaytype(paymentOptions[0].code);
+    }
+  }, [paymentOptions, selectedPaytype]);
 
   const loadAccount = useCallback(async (token: string) => {
     setLoading(true);
@@ -461,7 +530,14 @@ export function AccountClient() {
               <div className="billing-actions">
                 {dashboard?.billing?.fovpay_enabled ? (
                   <>
-                    <Button type="button" onClick={() => setCheckoutOpen(true)}>
+                    <Button
+                      type="button"
+                      disabled={paymentOptions.length === 0}
+                      onClick={() => {
+                        setSelectedPaytype(paymentOptions[0]?.code ?? "");
+                        setCheckoutOpen(true);
+                      }}
+                    >
                       {summary.plan === "plus" ? t("account.renewPlus") : t("account.buyPlus")}
                     </Button>
                     <span>{t("account.checkoutAmount")} ¥{plusAmountCny}</span>
@@ -472,51 +548,87 @@ export function AccountClient() {
               </div>
             </section>
 
-            {checkoutOpen && (
-              <div className="model-dialog-backdrop" role="presentation" onClick={() => setCheckoutOpen(false)}>
-                <section
-                  aria-labelledby="checkout-dialog-title"
-                  aria-modal="true"
-                  className="model-dialog checkout-dialog"
-                  role="dialog"
-                  onClick={(event) => event.stopPropagation()}
+            <Dialog
+              open={checkoutOpen}
+              onOpenChange={(open) => {
+                setCheckoutOpen(open);
+                if (!open) setCheckoutLoading(null);
+              }}
+            >
+              <DialogContent className="w-[min(calc(100vw-2rem),36rem)] bg-[#faf9f5]">
+                <div className="flex items-start justify-between gap-4">
+                  <DialogHeader>
+                    <p className="text-xs font-extrabold tracking-normal text-muted-foreground">Plus</p>
+                    <DialogTitle>{t("account.checkoutTitle")}</DialogTitle>
+                    <DialogDescription>{t("account.checkoutDesc")}</DialogDescription>
+                  </DialogHeader>
+                  <DialogClose
+                    aria-label={t("account.close")}
+                    className="grid size-9 place-items-center"
+                    type="button"
+                  >
+                    <X className="size-4" />
+                  </DialogClose>
+                </div>
+
+                <Card className="border-[#e0ded4] bg-[#fffdfa] py-0">
+                  <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-end sm:justify-between">
+                    <span className="text-sm font-extrabold text-muted-foreground">{plusMonthlyPriceLabel}</span>
+                    <strong className="text-3xl leading-none text-foreground">¥{plusAmountCny}</strong>
+                  </CardContent>
+                </Card>
+
+                <RadioGroup
+                  aria-label={t("account.selectPaytype")}
+                  className="grid gap-3 sm:grid-cols-2"
+                  value={selectedPaytype}
+                  onValueChange={(value) => setSelectedPaytype(value)}
                 >
-                  <div className="model-dialog-head">
-                    <div>
-                      <p>Plus</p>
-                      <h2 id="checkout-dialog-title">{t("account.checkoutTitle")}</h2>
-                    </div>
-                    <button className="dialog-close" type="button" onClick={() => setCheckoutOpen(false)}>
-                      {t("account.close")}
-                    </button>
-                  </div>
-                  <p className="checkout-copy">{t("account.checkoutDesc")}</p>
-                  <div className="checkout-amount">
-                    <span>{plusMonthlyPriceLabel}</span>
-                    <strong>¥{plusAmountCny}</strong>
-                  </div>
-                  <div className="paytype-grid">
-                    {paymentOptions.map((option) => (
-                      <button
-                        className="paytype-button"
-                        disabled={checkoutLoading !== null}
-                        key={option.code}
-                        type="button"
-                        onClick={() => startCheckout(option.code)}
+                  {paymentOptions.map((option) => (
+                    <div className="h-full" key={option.code}>
+                      <Card
+                        className={cn(
+                          "h-full cursor-pointer border-[#e0ded4] bg-[#fffdfa] py-0 transition-colors hover:border-primary",
+                          selectedPaytype === option.code && "border-primary ring-2 ring-primary/20",
+                          checkoutLoading !== null && "cursor-wait opacity-75"
+                        )}
+                        onClick={() => {
+                          if (checkoutLoading === null) setSelectedPaytype(option.code);
+                        }}
                       >
-                        <strong>{option.label}</strong>
-                        <span>
-                          {checkoutLoading === option.code
-                            ? t("account.checkoutCreating")
-                            : t("account.payNow")}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                  <p className="model-dialog-note">{t("account.checkoutTip")}</p>
-                </section>
-              </div>
-            )}
+                        <CardContent className="grid h-full gap-4 p-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-secondary text-foreground">
+                              <option.Icon className="size-5" />
+                            </span>
+                            <RadioGroupItem
+                              disabled={checkoutLoading !== null}
+                              value={option.code}
+                              onClick={() => setSelectedPaytype(option.code)}
+                            />
+                          </div>
+                          <div className="grid gap-1">
+                            <strong className="text-base leading-tight">{option.label}</strong>
+                            <span className="text-sm leading-6 text-muted-foreground">{option.description}</span>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  ))}
+                </RadioGroup>
+
+                <DialogFooter className="gap-3 sm:items-center sm:justify-between">
+                  <p className="m-0 text-sm leading-6 text-muted-foreground">{t("account.checkoutTip")}</p>
+                  <Button
+                    type="button"
+                    disabled={!selectedPaytype || checkoutLoading !== null}
+                    onClick={() => selectedPaytype && startCheckout(selectedPaytype)}
+                  >
+                    {checkoutLoading ? t("account.checkoutCreating") : t("account.payNow")}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
 
             <div className="account-grid">
               <section className="panel">
@@ -858,8 +970,7 @@ export function AccountClient() {
 
         .plan-note,
         .panel-note,
-        .billing-actions,
-        .checkout-copy {
+        .billing-actions {
           margin-top: 14px;
           color: #6a6861;
           font-size: 13px;
@@ -885,75 +996,6 @@ export function AccountClient() {
         .billing-actions span {
           color: #6a6861;
           font-weight: 750;
-        }
-
-        .checkout-dialog {
-          width: min(540px, 100%);
-        }
-
-        .checkout-copy {
-          margin: -4px 0 16px;
-          line-height: 1.7;
-        }
-
-        .checkout-amount {
-          display: flex;
-          align-items: end;
-          justify-content: space-between;
-          gap: 16px;
-          margin-bottom: 16px;
-          border: 1px solid #e0ded4;
-          border-radius: 12px;
-          padding: 16px;
-          background: #fffdfa;
-        }
-
-        .checkout-amount span {
-          color: #6a6861;
-          font-weight: 850;
-        }
-
-        .checkout-amount strong {
-          color: #141413;
-          font-size: 28px;
-        }
-
-        .paytype-grid {
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 12px;
-        }
-
-        .paytype-button {
-          min-height: 96px;
-          display: grid;
-          align-content: space-between;
-          gap: 12px;
-          border: 1px solid #e0ded4;
-          border-radius: 12px;
-          padding: 16px;
-          color: #141413;
-          background: #fffdfa;
-          font: inherit;
-          text-align: left;
-          cursor: pointer;
-        }
-
-        .paytype-button:hover,
-        .paytype-button:focus-visible {
-          border-color: #c96442;
-          outline: none;
-        }
-
-        .paytype-button:disabled {
-          cursor: wait;
-          opacity: 0.72;
-        }
-
-        .paytype-button span {
-          color: #be5331;
-          font-size: 12px;
-          font-weight: 850;
         }
 
         .panel-note {
@@ -1071,8 +1113,7 @@ export function AccountClient() {
           .usage-row,
           .meter-labels,
           .plan-note,
-          .billing-actions,
-          .checkout-amount {
+          .billing-actions {
             display: grid;
             grid-template-columns: 1fr;
             justify-items: start;
@@ -1124,10 +1165,6 @@ export function AccountClient() {
           }
 
           .model-list {
-            grid-template-columns: 1fr;
-          }
-
-          .paytype-grid {
             grid-template-columns: 1fr;
           }
         }

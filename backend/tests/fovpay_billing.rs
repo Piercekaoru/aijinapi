@@ -48,7 +48,7 @@ async fn checkout_rejects_disallowed_paytype(pool: PgPool) {
     let app = test_app(pool, &server).await;
 
     let request = authed_post(&session, "/dashboard/billing/fovpay/checkout")
-        .set_json(json!({ "paytype_code": "paypal" }))
+        .set_json(json!({ "paytype_code": "unsupported_paytype" }))
         .to_request();
     let response = test::call_service(&app, request).await;
 
@@ -95,6 +95,16 @@ async fn checkout_creates_pending_order_and_requests_fovpay(pool: PgPool) {
     .await
     .unwrap();
     assert_eq!(pending_count, 1);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn checkout_supports_paypal_paytype(pool: PgPool) {
+    assert_checkout_succeeds_for_paytype(pool, "paypal", "paypal-checkout@example.com").await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn checkout_supports_usdt_paytype(pool: PgPool) {
+    assert_checkout_succeeds_for_paytype(pool, "usdt", "usdt-checkout@example.com").await;
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -262,7 +272,12 @@ fn app_state(pool: PgPool, server: &MockServer) -> AppState {
             secret_key: "fovpay-secret".to_string(),
             plus_amount_cents: 5800,
             plus_days: 30,
-            allowed_paytypes: vec!["alipay".to_string(), "wxpay".to_string()],
+            allowed_paytypes: vec![
+                "alipay".to_string(),
+                "wxpay".to_string(),
+                "paypal".to_string(),
+                "usdt".to_string(),
+            ],
         }),
     };
     let upstream_keys = UpstreamKeyRing::from_config(&config);
@@ -281,6 +296,49 @@ fn authed_post(session: &str, uri: &str) -> test::TestRequest {
     let mut request = test::TestRequest::post().uri(uri);
     request = request.insert_header((header::AUTHORIZATION, format!("Bearer {session}")));
     request
+}
+
+async fn assert_checkout_succeeds_for_paytype(pool: PgPool, paytype: &str, email: &str) {
+    let server = MockServer::start().await;
+    let pay_url = format!("https://pay.fovpay.com/cashier/{paytype}");
+    Mock::given(method("POST"))
+        .and(path("/openapi/pay/create"))
+        .and(body_string_contains(format!("paytype_code={paytype}")))
+        .and(body_string_contains("total_amount=58.00"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "code": 1,
+            "msg": "success",
+            "data": {
+                "trade_no": format!("P202605170001_{paytype}"),
+                "out_trade_no": "ignored-by-test",
+                "pay_url": pay_url
+            }
+        })))
+        .mount(&server)
+        .await;
+
+    let user_id = insert_user(&pool, email).await;
+    let session = create_session(&pool, user_id).await.unwrap();
+    let app = test_app(pool.clone(), &server).await;
+    let request = authed_post(&session, "/dashboard/billing/fovpay/checkout")
+        .set_json(json!({ "paytype_code": paytype }))
+        .to_request();
+    let response = test::call_service(&app, request).await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = test::read_body_json::<Value, _>(response).await;
+    assert_eq!(body["pay_url"], pay_url);
+    assert_eq!(body["paytype_code"], paytype);
+
+    let pending_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM billing_orders WHERE user_id = $1 AND status = 'pending' AND paytype_code = $2",
+    )
+    .bind(user_id)
+    .bind(paytype)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(pending_count, 1);
 }
 
 fn success_notify_params(out_trade_no: &str) -> HashMap<String, String> {
