@@ -228,7 +228,14 @@ fn fovpay_config_from_env() -> anyhow::Result<Option<FovPayConfig>> {
     let allowed_paytypes = optional("FOVPAY_ALLOWED_PAYTYPES")
         .map(|value| parse_key_list(&value))
         .filter(|paytypes| !paytypes.is_empty())
-        .unwrap_or_else(|| vec!["alipay".to_string(), "wxpay".to_string()]);
+        .unwrap_or_else(|| {
+            vec![
+                "alipay".to_string(),
+                "wxpay".to_string(),
+                "paypal".to_string(),
+                "usdt".to_string(),
+            ]
+        });
 
     let plus_days = env::var("FOVPAY_PLUS_DAYS")
         .unwrap_or_else(|_| "30".to_string())

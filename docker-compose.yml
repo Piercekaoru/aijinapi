@@ -36,7 +36,7 @@ services:
       FOVPAY_SECRET_KEY: ${FOVPAY_SECRET_KEY:-}
       FOVPAY_PLUS_AMOUNT_CNY: ${FOVPAY_PLUS_AMOUNT_CNY:-58.00}
       FOVPAY_PLUS_DAYS: ${FOVPAY_PLUS_DAYS:-30}
-      FOVPAY_ALLOWED_PAYTYPES: ${FOVPAY_ALLOWED_PAYTYPES:-alipay,wxpay}
+      FOVPAY_ALLOWED_PAYTYPES: ${FOVPAY_ALLOWED_PAYTYPES:-alipay,wxpay,paypal,usdt}
     depends_on:
       db:
         condition: service_healthy

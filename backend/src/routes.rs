@@ -29,7 +29,7 @@ use crate::{
         CreateOrderResponse, SIGN_TYPE_MD5, STATUS_PAID, cents_to_amount, sign_md5,
         trade_status_to_order_status, verify_md5,
     },
-    free_models::{is_free_model_candidate, should_trip_free_model},
+    free_models::{PublicFreeModel, is_free_model_candidate, should_trip_free_model},
     models::{
         AdminBanUserRequest, AdminCreateIpBanRequest, AdminCreateUserRequest,
         AdminCreateUserResponse, AdminIpDetailsResponse, AdminIpUserSummary, AdminLiftIpBanRequest,
@@ -52,8 +52,9 @@ use crate::{
     },
     state::AppState,
     upstream::{
-        PLUS_MODELS, UpstreamRoute, bytes_from_static_json, forward_chat, is_plus_model,
-        openai_models_payload, request_is_stream, request_model,
+        PLUS_MODELS, SPONSORED_FREE_GO_MODELS, UpstreamRoute, bytes_from_static_json, forward_chat,
+        is_plus_model, is_sponsored_free_go_model, openai_models_payload, request_is_stream,
+        request_model,
     },
 };
 
@@ -1704,13 +1705,37 @@ async fn models(state: web::Data<AppState>, req: HttpRequest) -> Result<HttpResp
 }
 
 async fn public_free_models(state: web::Data<AppState>) -> Result<HttpResponse, ApiError> {
-    Ok(HttpResponse::Ok().json(state.free_models.public_snapshot().await))
+    let mut snapshot = state.free_models.public_snapshot().await;
+    for model in SPONSORED_FREE_GO_MODELS {
+        if !snapshot.data.iter().any(|item| item.id == *model) {
+            snapshot.data.push(PublicFreeModel {
+                id: (*model).to_string(),
+                object: "model",
+                owned_by: "openachieve",
+            });
+        }
+    }
+    if !SPONSORED_FREE_GO_MODELS.is_empty() {
+        snapshot.fail_closed = false;
+    }
+
+    Ok(HttpResponse::Ok().json(snapshot))
 }
 
 async fn allowed_models_for_effective_plan(state: &AppState, plan: &str) -> Vec<String> {
     let mut models = state.free_models.available_models().await;
+    models.extend(
+        SPONSORED_FREE_GO_MODELS
+            .iter()
+            .map(|model| (*model).to_string()),
+    );
     if plan == PLUS_PLAN {
-        models.extend(PLUS_MODELS.iter().map(|model| (*model).to_string()));
+        models.extend(
+            PLUS_MODELS
+                .iter()
+                .filter(|model| !SPONSORED_FREE_GO_MODELS.contains(model))
+                .map(|model| (*model).to_string()),
+        );
     }
     models
 }
@@ -1722,6 +1747,10 @@ async fn route_for_model(
 ) -> Result<UpstreamRoute, ApiError> {
     if state.free_models.is_available(model).await {
         return Ok(UpstreamRoute::Zen);
+    }
+
+    if is_sponsored_free_go_model(model) {
+        return Ok(UpstreamRoute::Go);
     }
 
     if is_plus_model(model) {
@@ -1755,7 +1784,8 @@ async fn chat_completions(
     let is_stream = request_is_stream(&body);
     let plan = user.effective_plan();
     let route = route_for_model(&state, plan, &model).await?;
-    if route == UpstreamRoute::Zen {
+    let is_free_limited_model = route == UpstreamRoute::Zen || is_sponsored_free_go_model(&model);
+    if is_free_limited_model {
         enforce_ip_rate_limits(
             &state.db,
             &ip,
@@ -1788,7 +1818,7 @@ async fn chat_completions(
             json!({
                 "plan": plan,
                 "model": model,
-                "route": "zen",
+                "route": if route == UpstreamRoute::Zen { "zen" } else { "go" },
             }),
         )
         .await?;
