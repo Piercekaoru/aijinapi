@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useI18n } from "@/lib/i18n";
 import type { Language } from "@/lib/i18n-core";
+import { useDocumentTitle } from "@/lib/use-document-title";
 import { SiteFooter } from "../components/SiteFooter";
 import { SiteHeader } from "../components/SiteHeader";
 
@@ -142,9 +143,9 @@ export function LoginPageClient({ style, html, title }: LoginPageClientProps) {
   const { language } = useI18n();
   const rootRef = useRef<HTMLDivElement>(null);
   const t = useCallback((key: string) => translate(key, language), [language]);
+  useDocumentTitle(title[language]);
 
   useEffect(() => {
-    document.title = title[language];
     const root = rootRef.current;
     if (!root) return;
 
@@ -630,7 +631,7 @@ export function LoginPageClient({ style, html, title }: LoginPageClientProps) {
       controller.abort();
       if (toastTimer) window.clearTimeout(toastTimer);
     };
-  }, [language, t, title]);
+  }, [language, t]);
 
   return (
     <div>

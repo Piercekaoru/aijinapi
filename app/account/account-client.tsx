@@ -316,10 +316,7 @@ function paytypeOption(paytype: string, language: Language): PaymentOption {
   return knownPaytypes[language][paytype] ?? {
     code: paytype,
     label: paytype,
-    description:
-      language === "zh"
-        ? "通过 FovPay 支持的托管收银台完成支付。"
-        : "Pay through the FovPay hosted cashier.",
+    description: "Pay through the FovPay hosted cashier.",
     Icon: CreditCard,
   };
 }
@@ -635,7 +632,7 @@ export function AccountClient() {
                 <strong>{summary.plan === "plus" ? plusPriceLabel : t("account.freePrice")}</strong>
                 <span>
                   {summary.plan === "plus"
-                    ? `${t("account.plusExpires")}：${summary.plusExpiresAt ? new Date(summary.plusExpiresAt).toLocaleString() : t("account.notSet")}`
+                    ? `${t("account.plusExpires")}${language === "zh" ? "：" : ": "}${summary.plusExpiresAt ? formatDateTime(summary.plusExpiresAt, language) : t("account.notSet")}`
                     : t("account.freeNote")}
                 </span>
               </div>
@@ -786,7 +783,7 @@ export function AccountClient() {
                     <article className="usage-row" key={`${event.created_at}-${index}`}>
                       <div>
                         <strong>{event.model ?? event.path}</strong>
-                        <span>{new Date(event.created_at).toLocaleString()}</span>
+                        <span>{formatDateTime(event.created_at, language)}</span>
                       </div>
                       <div>
                         <code>{event.status_code}</code>
@@ -821,7 +818,7 @@ export function AccountClient() {
         }
 
         .account-shell {
-          width: min(1180px, 100%);
+          width: min(1380px, 100%);
           margin: 0 auto;
         }
 
@@ -854,6 +851,7 @@ export function AccountClient() {
         h1 {
           font-size: clamp(48px, 6vw, 82px);
           line-height: 0.96;
+          margin-bottom: 12px;
         }
 
         h2 {
@@ -1293,4 +1291,11 @@ async function errorText(response: Response) {
   } catch {
     return `${response.status} ${response.statusText}`;
   }
+}
+
+function formatDateTime(value: string, language: Language) {
+  return new Intl.DateTimeFormat(language === "zh" ? "zh-CN" : "en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
 }

@@ -89,7 +89,7 @@ const models = [
   {
     id: "big-pickle",
     title: "Big Pickle",
-    description: "免费模型入口，适合验证接入链路和轻量探索。",
+    description: "Free model entry point for integration checks and light exploration.",
     tag: "Free",
     image: "/images/GrHDjXQXYAACVsc.jpg",
     tone: "light",
@@ -97,7 +97,7 @@ const models = [
   {
     id: "deepseek-v4-flash-free",
     title: "DeepSeek V4 Flash Free",
-    description: "免费低延迟推理模型，适合高频问答、代码辅助和快速实验。",
+    description: "Free low-latency reasoning model for frequent Q&A, coding help, and quick experiments.",
     tag: "Free",
     image: "/images/HHZ_hQzbIAEw83V.jpg",
     tone: "dark",
@@ -105,7 +105,7 @@ const models = [
   {
     id: "minimax-m2.5-free",
     title: "MiniMax M2.5 Free",
-    description: "免费通用对话模型，适合内容生成、润色和轻量业务助手。",
+    description: "Free general chat model for content generation, polishing, and lightweight assistants.",
     tag: "Free",
     image: "/images/HAh3SWLacAAA6By.jpg",
     tone: "light",
@@ -113,7 +113,7 @@ const models = [
   {
     id: "ring-2.6-1t-free",
     title: "Ring 2.6 1T Free",
-    description: "免费长上下文入口，适合文档理解、摘要和知识库实验。",
+    description: "Free long-context entry point for document understanding, summaries, and knowledge-base experiments.",
     tag: "Free",
     image: "/images/HG42ZYwa8AAGBEd.jpg",
     tone: "dark",
@@ -121,7 +121,7 @@ const models = [
   {
     id: "nemotron-3-super-free",
     title: "Nemotron 3 Super Free",
-    description: "免费试用型模型，适合非敏感内容验证和能力探索。",
+    description: "Free trial model for non-sensitive validation and capability exploration.",
     tag: "Free",
     image: "/images/GtH_mkRawAA2bJU.jpg",
     tone: "light",
@@ -129,7 +129,7 @@ const models = [
   {
     id: "glm-5.1",
     title: "GLM-5.1",
-    description: "中文业务问答、工具调用和稳定生产场景的通用入口。",
+    description: "General entry point for Chinese business Q&A, tool use, and stable production workflows.",
     tag: "Plus",
     image: "/images/Gth0fxcawAARQmB.jpg",
     tone: "light",
@@ -137,7 +137,7 @@ const models = [
   {
     id: "glm-5",
     title: "GLM-5",
-    description: "适合知识库、客服助手和长文本理解的高性价比选择。",
+    description: "Cost-effective choice for knowledge bases, support assistants, and long-text understanding.",
     tag: "Plus",
     image: "/images/GpXqspCbYAI1hx_.jpg",
     tone: "light",
@@ -145,7 +145,7 @@ const models = [
   {
     id: "kimi-k2.5",
     title: "Kimi K2.5",
-    description: "面向长上下文、文档总结和多轮对话的模型能力。",
+    description: "Model capability for long context, document summaries, and multi-turn conversations.",
     tag: "Plus",
     image: "/images/GsIHaDsaUAYwOmB.jpg",
     tone: "dark",
@@ -153,7 +153,7 @@ const models = [
   {
     id: "kimi-k2.6",
     title: "Kimi K2.6",
-    description: "更强的文本处理与应用助手能力，适合复杂内容工作流。",
+    description: "Stronger text processing and app-assistant capability for complex content workflows.",
     tag: "Plus",
     image: "/images/Gt96vaQXQAIxNcp.jpg",
     tone: "light",
@@ -161,7 +161,7 @@ const models = [
   {
     id: "deepseek-v4-pro",
     title: "DeepSeek V4 Pro",
-    description: "适合推理、代码辅助和高质量生成任务的专业模型。",
+    description: "Professional model for reasoning, coding help, and high-quality generation.",
     tag: "Plus",
     image: "/images/GxpsuzYawAQQ2lR.jpg",
     tone: "light",
@@ -169,7 +169,7 @@ const models = [
   {
     id: "deepseek-v4-flash",
     title: "DeepSeek V4 Flash",
-    description: "付费 Go 通道赞助开放，Free 和 Plus 用户都可调用。",
+    description: "Sponsored through the paid Go route and available to both Free and Plus users.",
     tag: "Free",
     image: "/images/GS8OLQObIAcG_0D.jpg",
     tone: "dark",
@@ -177,7 +177,7 @@ const models = [
   {
     id: "mimo-v2.5",
     title: "MiMo V2.5",
-    description: "创作、对话和轻量推理任务的平衡型模型入口。",
+    description: "Balanced model for creation, chat, and lightweight reasoning.",
     tag: "Plus",
     image: "/images/GkYCpj6awAAZSl0.jpg",
     tone: "light",
@@ -185,7 +185,7 @@ const models = [
   {
     id: "mimo-v2.5-pro",
     title: "MiMo V2.5 Pro",
-    description: "更强生成质量与复杂任务处理，适合生产型内容应用。",
+    description: "Stronger generation quality and complex-task handling for production content apps.",
     tag: "Plus",
     image: "/images/GswYqEeaIAA1-SM.jpg",
     tone: "light",
@@ -193,7 +193,7 @@ const models = [
   {
     id: "qwen3.6-plus",
     title: "Qwen3.6 Plus",
-    description: "开发者生态友好，适合代码、工具调用和通用智能体。",
+    description: "Developer-friendly model for code, tool use, and general agents.",
     tag: "Plus",
     image: "/images/GwvxlZqbIAAqlQB.jpg",
     tone: "light",
@@ -201,7 +201,7 @@ const models = [
   {
     id: "qwen3.5-plus",
     title: "Qwen3.5 Plus",
-    description: "稳定通用能力，适合作为应用默认模型和日常请求入口。",
+    description: "Stable general capability for default app usage and everyday requests.",
     tag: "Plus",
     image: "/images/GZCDeteaYAA-phJ.jpg",
     tone: "light",
@@ -217,32 +217,32 @@ const freeModelMetadata: Record<
   }
 > = {
   "big-pickle": {
-    description: "免费模型入口，适合验证接入链路和轻量探索。",
+    description: "Free model entry point for integration checks and light exploration.",
     image: "/images/GrHDjXQXYAACVsc.jpg",
     tone: "light",
   },
   "deepseek-v4-flash-free": {
-    description: "免费低延迟推理模型，适合高频问答、代码辅助和快速实验。",
+    description: "Free low-latency reasoning model for frequent Q&A, coding help, and quick experiments.",
     image: "/images/HHZ_hQzbIAEw83V.jpg",
     tone: "dark",
   },
   "deepseek-v4-flash": {
-    description: "付费 Go 通道赞助开放，适合低延迟问答、代码辅助和高频产品调用。",
+    description: "Sponsored through the paid Go route and available to both Free and Plus users.",
     image: "/images/GS8OLQObIAcG_0D.jpg",
     tone: "dark",
   },
   "minimax-m2.5-free": {
-    description: "免费通用对话模型，适合内容生成、润色和轻量业务助手。",
+    description: "Free general chat model for content generation, polishing, and lightweight assistants.",
     image: "/images/HAh3SWLacAAA6By.jpg",
     tone: "light",
   },
   "ring-2.6-1t-free": {
-    description: "免费长上下文入口，适合文档理解、摘要和知识库实验。",
+    description: "Free long-context entry point for document understanding, summaries, and knowledge-base experiments.",
     image: "/images/HG42ZYwa8AAGBEd.jpg",
     tone: "dark",
   },
   "nemotron-3-super-free": {
-    description: "免费试用型模型，适合非敏感内容验证和能力探索。",
+    description: "Free trial model for non-sensitive validation and capability exploration.",
     image: "/images/GtH_mkRawAA2bJU.jpg",
     tone: "light",
   },
@@ -311,7 +311,7 @@ const docsCopy: Record<Language, Record<string, string>> = {
     freeSyncing: "Syncing the free model catalog",
     modelsLabel: "Supported Models",
     modelsTitle: "Supported Models",
-    modelsBody: `Free users can call the live free model catalog. Plus is ${plusMonthlyPriceLabel} with 1,500 requests/month and the full Plus model pool.`,
+    modelsBody: `Free users can call the live free model catalog. Plus is ${plusMonthlyPriceLabelEn} with 1,500 requests/month and the full Plus model pool.`,
     privacy: "Free models may be used for service improvement or trial purposes. Avoid personal, business-confidential, or sensitive content.",
     liveFreeDescription: "A live free model for integration checks and light experiments.",
   },
@@ -503,7 +503,7 @@ export default function DocsPage() {
         }
 
         .docs-shell {
-          width: min(1160px, 100%);
+          width: min(1360px, 100%);
           margin: 0 auto;
           min-width: 0;
         }

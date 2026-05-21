@@ -106,8 +106,7 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
         <Link className={cn("account-chip", active === "account" && "active")} href={siteRoutes.account.href}>
           <span className="account-avatar">{initial}</span>
           <span className="account-copy">
-            <strong>{user?.name || t("header.accountOverview")}</strong>
-            <small>{user?.email || t("header.keyConsole")}</small>
+            {user?.email || t("header.accountOverview")}
           </span>
         </Link>
         {variant === "public" && (
@@ -193,7 +192,7 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
           display: grid;
           grid-template-columns: auto 1fr auto;
           align-items: center;
-          gap: 24px;
+          gap: clamp(12px, 2vw, 24px);
           border-bottom: 1px solid #e8e6dc;
           padding: 0 4px;
           overflow-x: hidden;
@@ -244,7 +243,7 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
         nav {
           display: inline-flex;
           align-items: center;
-          gap: 28px;
+          gap: clamp(8px, 1.5vw, 24px);
         }
 
         nav :global(a) {
@@ -254,6 +253,7 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
           background: transparent;
           text-decoration: none;
           transition: color 0.2s ease;
+          white-space: nowrap;
         }
 
         nav :global(a:visited) {
@@ -271,7 +271,11 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
           display: flex;
           align-items: center;
           justify-content: flex-end;
-          gap: 10px;
+          gap: clamp(6px, 1vw, 10px);
+        }
+
+        .site-header-right :global(button) {
+          flex-shrink: 0;
         }
 
         .mobile-menu-button {
@@ -290,7 +294,8 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
           display: inline-flex;
           align-items: center;
           gap: 10px;
-          max-width: 230px;
+          max-width: clamp(140px, 12vw, 210px);
+          min-width: 0;
           border-radius: 14px;
           padding: 5px 12px 5px 6px;
           color: #141413;
@@ -319,32 +324,17 @@ export function SiteHeader({ active, variant = "public", logoutRedirect = "/" }:
         }
 
         .account-copy {
-          display: grid;
-          gap: 1px;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-
-        .account-copy strong {
           color: #141413;
           font-size: 14px;
-          font-weight: 700;
-          line-height: 1;
+          font-weight: 500;
+          line-height: 1.2;
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
+          min-width: 0;
         }
 
-        .account-copy small {
-          color: #6a6861;
-          font-size: 11px;
-          line-height: 1;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-
-        @media (max-width: 980px) {
+        @media (max-width: 1120px) {
           .site-header {
             min-height: 72px;
             grid-template-columns: minmax(0, 1fr) auto;

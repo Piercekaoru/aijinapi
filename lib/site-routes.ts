@@ -19,18 +19,18 @@ export type SiteNavItem = {
 };
 
 export const siteRoutes: Record<SiteRouteKey, SiteNavItem> = {
-  pricing: { key: "pricing", href: "/#pricing", label: "价格套餐" },
-  models: { key: "models", href: "/models", label: "支持模型" },
-  docs: { key: "docs", href: "/docs", label: "开发文档" },
-  account: { key: "account", href: "/account", label: "账号总览" },
-  admin: { key: "admin", href: "/admin", label: "管理后台" },
-  dashboard: { key: "dashboard", href: "/dashboard", label: "Key 控制台" },
-  playground: { key: "playground", href: "/playground", label: "API 调试台" },
-  login: { key: "login", href: "/login", label: "登录" },
-  register: { key: "register", href: "/login?mode=register", label: "注册" },
-  docsBaseUrl: { key: "docsBaseUrl", href: "/docs#base-url", label: "接口地址" },
-  docsChat: { key: "docsChat", href: "/docs#chat", label: "聊天补全示例" },
-  terms: { key: "terms", href: "/terms", label: "服务条款" },
+  pricing: { key: "pricing", href: "/#pricing", label: "Pricing" },
+  models: { key: "models", href: "/models", label: "Models" },
+  docs: { key: "docs", href: "/docs", label: "Docs" },
+  account: { key: "account", href: "/account", label: "Account" },
+  admin: { key: "admin", href: "/admin", label: "Admin" },
+  dashboard: { key: "dashboard", href: "/dashboard", label: "Key Console" },
+  playground: { key: "playground", href: "/playground", label: "Playground" },
+  login: { key: "login", href: "/login", label: "Log in" },
+  register: { key: "register", href: "/login?mode=register", label: "Sign up" },
+  docsBaseUrl: { key: "docsBaseUrl", href: "/docs#base-url", label: "Base URL" },
+  docsChat: { key: "docsChat", href: "/docs#chat", label: "Chat example" },
+  terms: { key: "terms", href: "/terms", label: "Terms" },
 };
 
 export const publicNavItems = [siteRoutes.pricing, siteRoutes.models, siteRoutes.docs] as const;
@@ -44,17 +44,17 @@ export const workspaceNavItems = [
 
 export const footerGroups = [
   {
-    title: "产品",
+    title: "Product",
     titleKey: "product",
     links: [siteRoutes.pricing, siteRoutes.models, siteRoutes.docs, siteRoutes.terms],
   },
   {
-    title: "账号",
+    title: "Account",
     titleKey: "account",
     links: [siteRoutes.login, siteRoutes.register, siteRoutes.account, siteRoutes.dashboard],
   },
   {
-    title: "开发者",
+    title: "Developers",
     titleKey: "developer",
     links: [siteRoutes.playground, siteRoutes.docsBaseUrl, siteRoutes.docsChat],
   },

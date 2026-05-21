@@ -115,6 +115,10 @@ function translateStaticHtml(kind: RouteKind, html: string) {
     landing: [
       ["面向国内开发者的 AI API 中转服务。", "OpenAI-compatible AI API relay for developers."],
       [
+        "Plus 仅 {{PLUS_MONTHLY_PRICE}}，享约 {{PLUS_VALUE}} 等值 API 调用额度 — 比官方直购节省近 {{PLUS_SAVINGS_PERCENT}}。",
+        "Plus {{PLUS_MONTHLY_PRICE}} includes about {{PLUS_VALUE}} of API-call value, saving nearly {{PLUS_SAVINGS_PERCENT}}.",
+      ],
+      [
         "OpenAchieve 支持人民币直接充值，支付宝/微信即充即用。无需外卡、无需魔法，兼容 OpenAI 请求格式，一行代码把应用切到可用模型池。",
         "OpenAchieve gives you one OpenAI-compatible endpoint for free and Plus model pools, with simple local payment and no foreign-card setup.",
       ],
@@ -125,6 +129,7 @@ function translateStaticHtml(kind: RouteKind, html: string) {
       ["等值 API 调用额度", "of API-call value"],
       ["比官方直购节省近", "saving nearly"],
       ["Plus 超值", "Plus value"],
+      ["{{PLUS_PRICE}} ≈ {{PLUS_VALUE}} 等值额度", "{{PLUS_PRICE}} ≈ {{PLUS_VALUE}} value"],
       ["接口格式", "API format"],
       ["到账状态", "Provisioning"],
       ["Plus {{PLUS_MONTHLY_PRICE}}，享 {{PLUS_VALUE_PLUS}} 等值调用额 — 比直购省近 {{PLUS_SAVINGS_PERCENT}}。", "Plus {{PLUS_MONTHLY_PRICE}} includes about {{PLUS_VALUE_PLUS}} of call value, saving nearly {{PLUS_SAVINGS_PERCENT}} versus buying upstream directly."],
@@ -183,6 +188,10 @@ function translateStaticHtml(kind: RouteKind, html: string) {
       ["服务状态", "Service status"],
       ["开发文档", "Docs"],
       ["联系我们", "Contact"],
+      ["<span>/月</span>", "<span>/mo</span>"],
+      ["alt=\"OpenAchieve 二次元风格主视觉插画\"", "alt=\"OpenAchieve hero illustration\""],
+      ["aria-label=\"服务状态摘要\"", "aria-label=\"Service status summary\""],
+      ["alt=\"OpenAchieve 模型区插画\"", "alt=\"OpenAchieve model section illustration\""],
     ],
     login: [
       ["OpenAchieve 产品介绍", "OpenAchieve product introduction"],
@@ -289,8 +298,16 @@ function translateStaticHtml(kind: RouteKind, html: string) {
       ["用三句话解释 OpenAchieve 的接入方式", "Explain OpenAchieve integration in three sentences"],
       ["生成一个模型选型建议", "Generate a model selection suggestion"],
       ["总结这份文档的重点", "Summarize the key points of this document"],
+      ["alt=\"OpenAchieve 模型广场二次元背景图\"", "alt=\"OpenAchieve model catalog background\""],
+      ["alt=\"OpenAchieve 推荐模型插图\"", "alt=\"OpenAchieve recommended models illustration\""],
+      ["alt=\"OpenAchieve 文档区背景图\"", "alt=\"OpenAchieve docs section background\""],
+      ["aria-label=\"主导航\"", "aria-label=\"Site navigation\""],
+      ["aria-label=\"OpenAchieve 模型广场首页\"", "aria-label=\"OpenAchieve model catalog home\""],
     ],
   };
 
-  return replacements[kind].reduce((next, [from, to]) => next.replaceAll(from, to), html);
+  return replacements[kind]
+    .slice()
+    .sort(([left], [right]) => right.length - left.length)
+    .reduce((next, [from, to]) => next.replaceAll(from, to), html);
 }

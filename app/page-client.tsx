@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { loadPublicFreeModels, modelDisplayName } from "@/lib/free-models";
 import { useI18n } from "@/lib/i18n";
 import type { Language } from "@/lib/i18n-core";
+import { useDocumentTitle } from "@/lib/use-document-title";
 import { SiteFooter } from "./components/SiteFooter";
 import { SiteHeader } from "./components/SiteHeader";
 
@@ -16,9 +17,9 @@ type HomePageClientProps = {
 export function HomePageClient({ style, html, title }: HomePageClientProps) {
   const { language } = useI18n();
   const rootRef = useRef<HTMLDivElement>(null);
+  useDocumentTitle(title[language]);
 
   useEffect(() => {
-    document.title = title[language];
     const root = rootRef.current;
     if (!root) return;
 
@@ -53,7 +54,7 @@ export function HomePageClient({ style, html, title }: HomePageClientProps) {
       });
 
     return () => controller.abort();
-  }, [language, title]);
+  }, [language]);
 
   return (
     <div>

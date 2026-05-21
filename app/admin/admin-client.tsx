@@ -870,13 +870,13 @@ export function AdminClient() {
                       <strong>{user.name}</strong>
                       <span>{user.email}</span>
                       <small>
-                        {user.is_admin ? t("admin") : fill(t("registeredAt"), { date: formatDate(user.created_at) })}
+                        {user.is_admin ? t("admin") : fill(t("registeredAt"), { date: formatDate(user.created_at, language) })}
                         {user.status === "banned" ? t("frozenSuffix") : ""}
                       </small>
                     </div>
                     <div>
                       <PlanBadge user={user} language={language} />
-                      <small>{user.plus_expires_at ? fill(t("expiresAt"), { date: formatDate(user.plus_expires_at) }) : t("noExpiry")}</small>
+                      <small>{user.plus_expires_at ? fill(t("expiresAt"), { date: formatDate(user.plus_expires_at, language) }) : t("noExpiry")}</small>
                     </div>
                     <div>
                       <strong>
@@ -890,7 +890,7 @@ export function AdminClient() {
                     </div>
                     <div>
                       <span>{user.last_seen_ip ?? user.registration_ip ?? t("noIp")}</span>
-                      <small>{user.last_seen_at ? fill(t("seenAt"), { date: formatDate(user.last_seen_at) }) : t("noSeen")}</small>
+                      <small>{user.last_seen_at ? fill(t("seenAt"), { date: formatDate(user.last_seen_at, language) }) : t("noSeen")}</small>
                     </div>
                     <div className="actions-cell">
                       <Button
@@ -1219,7 +1219,7 @@ export function AdminClient() {
         }
 
         .admin-shell {
-          width: min(1240px, 100%);
+          width: min(1440px, 100%);
           margin: 0 auto;
         }
 
@@ -1626,8 +1626,8 @@ function PlanBadge({ user, language }: { user: AdminUser; language: Language }) 
   return <strong className={className}>{label}</strong>;
 }
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("zh-CN", {
+function formatDate(value: string, language: Language) {
+  return new Intl.DateTimeFormat(language === "zh" ? "zh-CN" : "en-US", {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));

@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { loadPublicFreeModels, modelDisplayName } from "@/lib/free-models";
 import { useI18n } from "@/lib/i18n";
 import type { Language } from "@/lib/i18n-core";
+import { useDocumentTitle } from "@/lib/use-document-title";
 import { SiteFooter } from "../components/SiteFooter";
 import { SiteHeader } from "../components/SiteHeader";
 
@@ -101,9 +102,9 @@ console.log(response.choices[0].message.content);`,
 export function ModelsPageClient({ style, html, title }: ModelsPageClientProps) {
   const { language } = useI18n();
   const rootRef = useRef<HTMLDivElement>(null);
+  useDocumentTitle(title[language]);
 
   useEffect(() => {
-    document.title = title[language];
     const root = rootRef.current;
     if (!root) return;
 
@@ -189,11 +190,15 @@ export function ModelsPageClient({ style, html, title }: ModelsPageClientProps) 
           .filter((model) => !existingIds.has(model.id))
           .forEach((model) => {
             const card = document.createElement("article");
+            const description =
+              language === "zh"
+                ? "当前实时同步的免费模型，适合接入验证、轻量实验和非敏感内容探索。"
+                : "A live free model for integration checks, light experiments, and non-sensitive exploration.";
             card.className = "model-card";
             card.dataset.category = "chat fast";
             card.innerHTML = `<p class="model-tier">Free</p><h3>${escapeHtml(
               modelDisplayName(model.id),
-            )}</h3><p class="model-desc">${language === "zh" ? "当前实时同步的免费模型，适合接入验证、轻量实验和非敏感内容探索。" : "A live free model for integration checks, light experiments, and non-sensitive exploration."}</p><code class="model-id">${escapeHtml(
+            )}</h3><p class="model-desc">${escapeHtml(description)}</p><code class="model-id">${escapeHtml(
               model.id,
             )}</code>`;
             grid.appendChild(card);
@@ -206,7 +211,7 @@ export function ModelsPageClient({ style, html, title }: ModelsPageClientProps) 
       });
 
     return () => controller.abort();
-  }, [language, title]);
+  }, [language]);
 
   return (
     <div>

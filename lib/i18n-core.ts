@@ -67,7 +67,7 @@ const dictionaries: Record<Language, DictionaryMap> = {
   en: {
     language: {
       label: "Language",
-      zh: "中文",
+      zh: "Chinese",
       en: "English",
       zhDesc: "Chinese UI",
       enDesc: "English UI",

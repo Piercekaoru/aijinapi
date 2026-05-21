@@ -4,8 +4,8 @@ export const PLUS_MONTHLY_REQUESTS = 1500;
 export const FREE_MONTHLY_REQUESTS = 500;
 
 export const plusPriceLabel = `$${PLUS_PRICE_USD}`;
-export const plusMonthlyPriceLabel = `${plusPriceLabel}/月`;
-export const plusMonthlyPriceText = `${PLUS_PRICE_USD} 美元/月`;
+export const plusMonthlyPriceLabel = `${plusPriceLabel}/month`;
+export const plusMonthlyPriceText = `$${PLUS_PRICE_USD}/month`;
 export const plusMonthlyPriceLabelEn = `${plusPriceLabel}/month`;
 export const plusMonthlyPriceTextEn = `$${PLUS_PRICE_USD}/month`;
 export const plusSavingsPercent = Math.round((1 - PLUS_PRICE_USD / PLUS_VALUE_USD) * 100);

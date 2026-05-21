@@ -349,7 +349,7 @@ export function DashboardClient() {
                   <article className="usage-row" key={`${event.created_at}-${index}`}>
                     <div>
                       <strong>{event.model ?? event.path}</strong>
-                      <span>{new Date(event.created_at).toLocaleString()}</span>
+                      <span>{formatDateTime(event.created_at, language)}</span>
                     </div>
                     <div>
                       <code>{event.status_code}</code>
@@ -382,7 +382,7 @@ export function DashboardClient() {
         }
 
         .dashboard-shell {
-          width: min(1180px, 100%);
+          width: min(1380px, 100%);
           margin: 0 auto;
         }
         .hero-band,
@@ -638,4 +638,11 @@ async function errorText(response: Response) {
   } catch {
     return text;
   }
+}
+
+function formatDateTime(value: string, language: Language) {
+  return new Intl.DateTimeFormat(language === "zh" ? "zh-CN" : "en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
 }

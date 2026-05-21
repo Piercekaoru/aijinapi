@@ -80,6 +80,10 @@ export function PlaygroundClient() {
       const defaults = [copyZh.defaultMessage, copyEn.defaultMessage];
       return defaults.includes(current) ? t("playground.defaultMessage") : current;
     });
+    setStatus((current) => {
+      const defaults = [copyZh.waiting, copyEn.waiting];
+      return defaults.includes(current) ? t("playground.waiting") : current;
+    });
   }, [language, t]);
 
   const normalizedBackendUrl = useMemo(
@@ -262,7 +266,7 @@ export function PlaygroundClient() {
         }
 
         .playground-shell {
-          width: min(1180px, 100%);
+          width: min(1380px, 100%);
           margin: 0 auto;
         }
         .playground-head {
