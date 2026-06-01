@@ -5,6 +5,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
 import type { Language } from "@/lib/i18n-core";
+import { modelDisplayName } from "@/lib/free-models";
+import { modelAccessNote, usageQuotaNote, usageTransportLabel } from "@/lib/model-access";
 import { ShutdownAnnouncementDialog } from "../components/ShutdownAnnouncementDialog";
 import { SiteFooter } from "../components/SiteFooter";
 import { SiteHeader } from "../components/SiteHeader";
@@ -92,6 +94,8 @@ const copyZh: Record<string, string> = {
   refresh: "刷新",
   noUsage: "暂无调用记录。",
   label: "控制台",
+  availableModels: "可用模型",
+  modelAccessNote: "MiniMax M3 需走 /v1/messages，且不计入月度额度。",
 };
 
 const copyEn: Record<string, string> = {
@@ -127,6 +131,8 @@ const copyEn: Record<string, string> = {
   confirmDelete: "Delete API key \"{name}\"?\n\nThe key will be revoked immediately and cannot be restored. You can create a new key afterwards.",
   userConsole: "{name}'s console",
   requests: "requests",
+  availableModels: "Available models",
+  modelAccessNote: "MiniMax M3 uses /v1/messages and does not count against monthly quota.",
 };
 
 function translate(language: Language, key: string) {
@@ -146,6 +152,16 @@ export function DashboardClient() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [deletingKeyId, setDeletingKeyId] = useState<number | null>(null);
+
+  const allowedModelItems = useMemo(
+    () =>
+      (dashboard?.subscription.allowed_models ?? []).map((id) => ({
+        id,
+        name: modelDisplayName(id),
+        note: modelAccessNote(id, language),
+      })),
+    [dashboard?.subscription.allowed_models, language],
+  );
 
   const normalizedBackendUrl = useMemo(
     () => backendUrl.replace(/\/+$/, ""),
@@ -347,6 +363,22 @@ export function DashboardClient() {
               </div>
 
               <div className="usage-list">
+                <div className="model-access">
+                  <div className="model-access-head">
+                    <strong>{t("dashboard.availableModels")}</strong>
+                    <span>{allowedModelItems.length}</span>
+                  </div>
+                  <div className="model-access-list">
+                    {allowedModelItems.map((model) => (
+                      <article className="model-access-item" key={model.id}>
+                        <strong>{model.name}</strong>
+                        <code>{model.id}</code>
+                        {model.note && <small>{model.note}</small>}
+                      </article>
+                    ))}
+                  </div>
+                  <p className="muted">{t("dashboard.modelAccessNote")}</p>
+                </div>
                 {dashboard?.recent_usage.map((event, index) => (
                   <article className="usage-row" key={`${event.created_at}-${index}`}>
                     <div>
@@ -355,7 +387,10 @@ export function DashboardClient() {
                     </div>
                     <div>
                       <code>{event.status_code}</code>
-                      <span>{event.is_stream ? "stream" : "json"}</span>
+                      <span>
+                        {usageTransportLabel(event.path, event.is_stream, event.model)}
+                        {usageQuotaNote(event.model, language) ? ` · ${usageQuotaNote(event.model, language)}` : ""}
+                      </span>
                     </div>
                   </article>
                 ))}
@@ -493,6 +528,45 @@ export function DashboardClient() {
           display: grid;
           gap: 10px;
           margin-top: 18px;
+        }
+
+        .model-access {
+          display: grid;
+          gap: 10px;
+          margin-bottom: 8px;
+          border: 1px solid rgba(25, 25, 22, 0.1);
+          border-radius: 8px;
+          padding: 14px;
+          background: rgba(255, 255, 255, 0.72);
+        }
+
+        .model-access-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+        }
+
+        .model-access-head strong {
+          font-size: 15px;
+        }
+
+        .model-access-list {
+          display: grid;
+          gap: 10px;
+        }
+
+        .model-access-item {
+          display: grid;
+          gap: 4px;
+          border: 1px solid rgba(25, 25, 22, 0.08);
+          border-radius: 8px;
+          padding: 10px 12px;
+          background: rgba(255, 255, 255, 0.84);
+        }
+
+        .model-access-item small {
+          color: rgba(25, 25, 22, 0.62);
         }
 
         .key-row,

@@ -39,6 +39,7 @@ fn test_config_with_keys(
         default_monthly_request_limit: 500,
         zen_chat_completions_url: format!("{}/zen/chat/completions", server.uri()),
         zen_go_chat_completions_url: format!("{}/go/chat/completions", server.uri()),
+        zen_go_messages_url: format!("{}/go/messages", server.uri()),
         zen_models_url: format!("{}/zen/models", server.uri()),
         zen_go_models_url: format!("{}/go/models", server.uri()),
         upstream_max_attempts: 1,

@@ -12,6 +12,7 @@ use crate::{
     keys::{CUSTOMER_KEY_PREFIX, hash_key},
     models::{ApiKey, User},
     security::ensure_user_active,
+    upstream::MINIMAX_M3_MODEL,
 };
 
 pub const SESSION_TOKEN_PREFIX: &str = "openachieve_session_";
@@ -236,11 +237,12 @@ pub async fn ensure_monthly_quota(pool: &PgPool, user: &User) -> Result<(), ApiE
         JOIN api_keys k ON k.id = e.api_key_id
         CROSS JOIN quota_window q
         WHERE k.user_id = $1
-          AND e.path = '/v1/chat/completions'
           AND e.created_at >= q.usage_start
+          AND e.model IS DISTINCT FROM $2
         "#,
     )
     .bind(user.id)
+    .bind(MINIMAX_M3_MODEL)
     .fetch_one(pool)
     .await?;
 

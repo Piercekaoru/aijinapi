@@ -1,6 +1,6 @@
 # OpenAchieve Backend
 
-Rust `actix-web` + PostgreSQL API relay for OpenAI-compatible requests.
+Rust `actix-web` + PostgreSQL API relay for OpenAI-compatible Chat Completions and Anthropic-compatible Messages.
 
 ## Local Setup
 
@@ -28,6 +28,11 @@ curl http://127.0.0.1:8080/v1/chat/completions \
   -H "Authorization: Bearer <customer_key>" \
   -H "Content-Type: application/json" \
   -d '{"model":"qwen3.6-plus","messages":[{"role":"user","content":"hello"}]}'
+
+curl http://127.0.0.1:8080/v1/messages \
+  -H "Authorization: Bearer <customer_key>" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"minimax-m3","max_tokens":256,"messages":[{"role":"user","content":[{"type":"text","text":"hello"}]}]}'
 ```
 
 Customer API keys are only shown once by `create_key`. The database stores only the SHA-256 hash.
@@ -44,3 +49,7 @@ Free users can call the runtime OpenCode Zen free model pool. The backend refres
 the Zen model list, cautiously admits `*-free` models plus `big-pickle`, probes
 availability, and fail-closes stale catalogs. Plus users can call the current Zen
 free pool plus the paid Plus model pool routed through OpenCode Go.
+
+`minimax-m3` is additionally exposed to all users through `POST /v1/messages`.
+It is routed to OpenCode Go `.../v1/messages`, remains visible in public/account
+surfaces, and does **not** count against monthly quota.

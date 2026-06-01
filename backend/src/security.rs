@@ -546,6 +546,7 @@ mod tests {
             default_monthly_request_limit: 500,
             zen_chat_completions_url: "http://127.0.0.1/zen".to_string(),
             zen_go_chat_completions_url: "http://127.0.0.1/go".to_string(),
+            zen_go_messages_url: "http://127.0.0.1/go/messages".to_string(),
             zen_models_url: "http://127.0.0.1/models".to_string(),
             zen_go_models_url: "http://127.0.0.1/go/models".to_string(),
             upstream_max_attempts: 1,

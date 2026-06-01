@@ -16,6 +16,8 @@ use tracing::warn;
 
 use crate::{config::Config, errors::ApiError};
 
+pub const MINIMAX_M3_MODEL: &str = "minimax-m3";
+
 pub const FREE_MODELS: &[&str] = &[
     "big-pickle",
     "deepseek-v4-flash-free",
@@ -25,6 +27,7 @@ pub const FREE_MODELS: &[&str] = &[
 ];
 
 pub const SPONSORED_FREE_GO_MODELS: &[&str] = &["deepseek-v4-flash", "deepseek-v4-pro"];
+pub const FREE_UNMETERED_MESSAGES_MODELS: &[&str] = &[MINIMAX_M3_MODEL];
 
 pub const FREE_ALLOWED_MODELS: &[&str] = &[
     "big-pickle",
@@ -34,6 +37,7 @@ pub const FREE_ALLOWED_MODELS: &[&str] = &[
     "nemotron-3-super-free",
     "deepseek-v4-flash",
     "deepseek-v4-pro",
+    MINIMAX_M3_MODEL,
 ];
 
 pub const PLUS_MODELS: &[&str] = &[
@@ -65,6 +69,7 @@ pub const PLUS_ALLOWED_MODELS: &[&str] = &[
     "mimo-v2.5-pro",
     "qwen3.6-plus",
     "qwen3.5-plus",
+    MINIMAX_M3_MODEL,
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -179,12 +184,20 @@ pub fn is_supported_chat_model(model: &str) -> bool {
         || PLUS_MODELS.contains(&model)
 }
 
+pub fn is_supported_messages_model(model: &str) -> bool {
+    FREE_UNMETERED_MESSAGES_MODELS.contains(&model)
+}
+
 pub fn is_plus_model(model: &str) -> bool {
     PLUS_MODELS.contains(&model)
 }
 
 pub fn is_sponsored_free_go_model(model: &str) -> bool {
     SPONSORED_FREE_GO_MODELS.contains(&model)
+}
+
+pub fn is_unmetered_model(model: &str) -> bool {
+    FREE_UNMETERED_MESSAGES_MODELS.contains(&model)
 }
 
 pub fn allowed_models_for_plan(plan: &str) -> &'static [&'static str] {
@@ -208,6 +221,10 @@ pub fn request_is_stream(body: &Value) -> bool {
 pub fn route_for_model(plan: &str, model: &str) -> Result<UpstreamRoute, ApiError> {
     if FREE_MODELS.contains(&model) {
         return Ok(UpstreamRoute::Zen);
+    }
+
+    if is_supported_messages_model(model) {
+        return Err(ApiError::ModelRequiresMessages(model.to_string()));
     }
 
     if is_sponsored_free_go_model(model) {
@@ -294,6 +311,24 @@ pub async fn forward_chat_once(
     let started = Instant::now();
     let url = chat_url(config, route);
     let upstream = send_with_single_key(key_ring, "chat_probe", route, url, |api_key| {
+        client.post(url).bearer_auth(api_key).json(&body)
+    })
+    .await?;
+
+    response_from_upstream(upstream, started, is_stream).await
+}
+
+pub async fn forward_messages(
+    client: &Client,
+    config: &Config,
+    key_ring: &UpstreamKeyRing,
+    body: Value,
+    route: UpstreamRoute,
+) -> Result<UpstreamResult, ApiError> {
+    let is_stream = request_is_stream(&body);
+    let started = Instant::now();
+    let url = messages_url(config, route);
+    let upstream = send_with_key_failover(config, key_ring, "messages", route, url, |api_key| {
         client.post(url).bearer_auth(api_key).json(&body)
     })
     .await?;
@@ -449,6 +484,13 @@ fn chat_url(config: &Config, route: UpstreamRoute) -> &str {
     }
 }
 
+fn messages_url(config: &Config, route: UpstreamRoute) -> &str {
+    match route {
+        UpstreamRoute::Zen => &config.zen_chat_completions_url,
+        UpstreamRoute::Go => &config.zen_go_messages_url,
+    }
+}
+
 fn model_url(config: &Config, route: UpstreamRoute) -> &str {
     match route {
         UpstreamRoute::Zen => &config.zen_models_url,
@@ -559,7 +601,14 @@ mod tests {
         assert!(is_supported_chat_model("deepseek-v4-flash"));
         assert!(is_supported_chat_model("deepseek-v4-pro"));
         assert!(is_supported_chat_model("nemotron-3-super-free"));
+        assert!(!is_supported_chat_model(MINIMAX_M3_MODEL));
         assert!(!is_supported_chat_model("unknown-model"));
+    }
+
+    #[test]
+    fn identifies_supported_messages_models() {
+        assert!(is_supported_messages_model(MINIMAX_M3_MODEL));
+        assert!(!is_supported_messages_model("qwen3.6-plus"));
     }
 
     #[test]
@@ -574,7 +623,8 @@ mod tests {
                 "ring-2.6-1t-free",
                 "nemotron-3-super-free",
                 "deepseek-v4-flash",
-                "deepseek-v4-pro"
+                "deepseek-v4-pro",
+                MINIMAX_M3_MODEL
             ]
         );
 
@@ -583,6 +633,7 @@ mod tests {
         assert!(plus_models.contains(&"deepseek-v4-pro"));
         assert!(plus_models.contains(&"big-pickle"));
         assert!(plus_models.contains(&"deepseek-v4-flash-free"));
+        assert!(plus_models.contains(&MINIMAX_M3_MODEL));
     }
 
     #[test]
@@ -615,6 +666,10 @@ mod tests {
             route_for_model("plus", "deepseek-v4-pro").unwrap(),
             UpstreamRoute::Go
         );
+        assert!(matches!(
+            route_for_model("free", MINIMAX_M3_MODEL),
+            Err(ApiError::ModelRequiresMessages(_))
+        ));
         assert_eq!(
             route_for_model("plus", "qwen3.6-plus").unwrap(),
             UpstreamRoute::Go

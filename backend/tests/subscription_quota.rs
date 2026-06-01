@@ -17,7 +17,7 @@ use openachieve_backend::{
     plans::{FREE_MONTHLY_REQUEST_LIMIT, PLUS_MONTHLY_REQUEST_LIMIT},
     routes,
     state::AppState,
-    upstream::UpstreamKeyRing,
+    upstream::{MINIMAX_M3_MODEL, UpstreamKeyRing},
 };
 
 #[sqlx::test(migrations = "./migrations")]
@@ -696,6 +696,12 @@ async fn subscription_summary_reports_plus_1500_and_remaining_quota(pool: PgPool
             .iter()
             .any(|model| model == "deepseek-v4-pro")
     );
+    assert!(
+        summary
+            .allowed_models
+            .iter()
+            .any(|model| model == MINIMAX_M3_MODEL)
+    );
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -714,6 +720,25 @@ async fn free_quota_is_exceeded_after_500_monthly_chat_requests(pool: PgPool) {
         ensure_monthly_quota(&pool, &user).await,
         Err(ApiError::QuotaExceeded)
     ));
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn minimax_m3_usage_does_not_consume_monthly_quota(pool: PgPool) {
+    let user_id = insert_user(&pool, "free", "active", FREE_MONTHLY_REQUEST_LIMIT, None).await;
+    let key = create_customer_key_for_user(&pool, user_id, "m3-key", FREE_MONTHLY_REQUEST_LIMIT)
+        .await
+        .unwrap();
+    insert_usage_events_with_path(&pool, key.id, 600, MINIMAX_M3_MODEL, "/v1/messages").await;
+
+    let user = fetch_user(&pool, user_id).await;
+    ensure_monthly_quota(&pool, &user).await.unwrap();
+
+    let summary = subscription_summary(&pool, &user).await.unwrap();
+    assert_eq!(summary.requests_this_month, 0);
+    assert_eq!(
+        summary.remaining_requests,
+        i64::from(FREE_MONTHLY_REQUEST_LIMIT)
+    );
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -803,6 +828,12 @@ async fn expired_plus_user_falls_back_to_free_quota(pool: PgPool) {
             .iter()
             .any(|model| model == "deepseek-v4-pro")
     );
+    assert!(
+        summary
+            .allowed_models
+            .iter()
+            .any(|model| model == MINIMAX_M3_MODEL)
+    );
     assert!(matches!(
         ensure_monthly_quota(&pool, &user).await,
         Err(ApiError::QuotaExceeded)
@@ -825,6 +856,7 @@ fn app_state_with_email(pool: PgPool, email: SharedEmailSender) -> AppState {
         default_monthly_request_limit: FREE_MONTHLY_REQUEST_LIMIT,
         zen_chat_completions_url: "http://127.0.0.1/zen/chat/completions".to_string(),
         zen_go_chat_completions_url: "http://127.0.0.1/go/chat/completions".to_string(),
+        zen_go_messages_url: "http://127.0.0.1/go/messages".to_string(),
         zen_models_url: "http://127.0.0.1/zen/models".to_string(),
         zen_go_models_url: "http://127.0.0.1/go/models".to_string(),
         upstream_max_attempts: 1,
@@ -937,6 +969,16 @@ async fn fetch_user(pool: &PgPool, user_id: i64) -> User {
 }
 
 async fn insert_usage_events(pool: &PgPool, api_key_id: i64, count: i32, model: &str) {
+    insert_usage_events_with_path(pool, api_key_id, count, model, "/v1/chat/completions").await;
+}
+
+async fn insert_usage_events_with_path(
+    pool: &PgPool,
+    api_key_id: i64,
+    count: i32,
+    model: &str,
+    path: &str,
+) {
     if count <= 0 {
         return;
     }
@@ -951,12 +993,13 @@ async fn insert_usage_events(pool: &PgPool, api_key_id: i64, count: i32, model: 
           is_stream,
           upstream_latency_ms
         )
-        SELECT $1, $2, '/v1/chat/completions', 200, false, 12
-        FROM generate_series(1, $3::int)
+        SELECT $1, $2, $3, 200, false, 12
+        FROM generate_series(1, $4::int)
         "#,
     )
     .bind(api_key_id)
     .bind(model)
+    .bind(path)
     .bind(count)
     .execute(pool)
     .await

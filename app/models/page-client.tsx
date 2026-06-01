@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { loadPublicFreeModels, modelDisplayName } from "@/lib/free-models";
 import { useI18n } from "@/lib/i18n";
 import type { Language } from "@/lib/i18n-core";
+import { isMessagesOnlyModel } from "@/lib/model-access";
 import { useDocumentTitle } from "@/lib/use-document-title";
 import { SiteFooter } from "../components/SiteFooter";
 import { SiteHeader } from "../components/SiteHeader";
@@ -46,13 +47,19 @@ const response = await client.chat.completions.create({
 });
 
 console.log(response.choices[0].message.content);`,
-  curl: `curl https://openachieve.asia/v1/chat/completions \\
+  curl: `curl https://openachieve.asia/v1/messages \\
   -H "Authorization: Bearer YOUR_OPENACHIEVE_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "model": "kimi-k2.6",
+    "model": "minimax-m3",
+    "max_tokens": 512,
     "messages": [
-      { "role": "user", "content": "总结这份文档的重点" }
+      {
+        "role": "user",
+        "content": [
+          { "type": "text", "text": "总结这份文档的重点" }
+        ]
+      }
     ]
   }'`,
   },
@@ -87,13 +94,19 @@ const response = await client.chat.completions.create({
 });
 
 console.log(response.choices[0].message.content);`,
-    curl: `curl https://openachieve.asia/v1/chat/completions \\
+    curl: `curl https://openachieve.asia/v1/messages \\
   -H "Authorization: Bearer YOUR_OPENACHIEVE_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "model": "kimi-k2.6",
+    "model": "minimax-m3",
+    "max_tokens": 512,
     "messages": [
-      { "role": "user", "content": "Summarize the key points of this document" }
+      {
+        "role": "user",
+        "content": [
+          { "type": "text", "text": "Summarize the key points of this document" }
+        ]
+      }
     ]
   }'`,
   },
@@ -187,15 +200,19 @@ export function ModelsPageClient({ style, html, title }: ModelsPageClientProps) 
             .filter(Boolean),
         );
         freeModels
-          .filter((model) => !existingIds.has(model.id))
+            .filter((model) => !existingIds.has(model.id))
           .forEach((model) => {
             const card = document.createElement("article");
             const description =
-              language === "zh"
-                ? "当前实时同步的免费模型，适合接入验证、轻量实验和非敏感内容探索。"
-                : "A live free model for integration checks, light experiments, and non-sensitive exploration.";
+              isMessagesOnlyModel(model.id)
+                ? language === "zh"
+                  ? "额外免费开放模型，需走 /v1/messages，且不计入月度额度。"
+                  : "Additional free model available through /v1/messages and excluded from monthly quota accounting."
+                : language === "zh"
+                  ? "当前实时同步的免费模型，适合接入验证、轻量实验和非敏感内容探索。"
+                  : "A live free model for integration checks, light experiments, and non-sensitive exploration.";
             card.className = "model-card";
-            card.dataset.category = "chat fast";
+            card.dataset.category = isMessagesOnlyModel(model.id) ? "reasoning creative" : "chat fast";
             card.innerHTML = `<p class="model-tier">Free</p><h3>${escapeHtml(
               modelDisplayName(model.id),
             )}</h3><p class="model-desc">${escapeHtml(description)}</p><code class="model-id">${escapeHtml(

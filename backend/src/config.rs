@@ -12,6 +12,7 @@ pub struct Config {
     pub default_monthly_request_limit: i32,
     pub zen_chat_completions_url: String,
     pub zen_go_chat_completions_url: String,
+    pub zen_go_messages_url: String,
     pub zen_models_url: String,
     pub zen_go_models_url: String,
     pub upstream_max_attempts: usize,
@@ -109,6 +110,8 @@ impl Config {
                 .unwrap_or_else(|_| "https://opencode.ai/zen/v1/chat/completions".to_string()),
             zen_go_chat_completions_url: env::var("ZEN_GO_CHAT_COMPLETIONS_URL")
                 .unwrap_or_else(|_| "https://opencode.ai/zen/go/v1/chat/completions".to_string()),
+            zen_go_messages_url: env::var("ZEN_GO_MESSAGES_URL")
+                .unwrap_or_else(|_| "https://opencode.ai/zen/go/v1/messages".to_string()),
             zen_models_url: env::var("ZEN_MODELS_URL")
                 .or_else(|_| env::var("UPSTREAM_MODELS_URL"))
                 .unwrap_or_else(|_| "https://opencode.ai/zen/v1/models".to_string()),

@@ -1,6 +1,6 @@
 # OpenAchieve
 
-面向中国开发者的 OpenAI 兼容 API 中继服务，对接 [OpenCode](https://opencode.ai) Zen / Go 上游，提供免费和付费双套餐。
+面向中国开发者的 AI API 中继服务，对接 [OpenCode](https://opencode.ai) Zen / Go 上游，提供 OpenAI-compatible Chat Completions，以及面向 MiniMax M3 的 Anthropic-compatible Messages。
 
 ## 架构
 
@@ -28,7 +28,7 @@ Next.js 通过 `rewrites()` 将 `/api/backend/:path*` 和 `/v1/:path*` 代理到
 
 ## 功能特性
 
-- **OpenAI 兼容 API** — 完全兼容 `/v1/chat/completions`（支持流式与非流式）和 `/v1/models`
+- **双协议 API** — OpenAI-compatible `/v1/chat/completions` + Anthropic-compatible `/v1/messages`（MiniMax M3 专用）
 - **双套餐体系** — Free（500 次/月，5 个 Zen 免费模型）和 Plus（1500 次/月，额外 10 个 Go 付费模型）
 - **用户系统** — 邮箱注册、密码登录、邮箱验证、30 天会话管理
 - **API Key 管理** — 创建/查看 API Key，SHA-256 哈希存储，明文仅初次创建时返回
@@ -138,6 +138,7 @@ docker compose --env-file .env.docker up --build
 |---|---|---|
 | `ZEN_CHAT_COMPLETIONS_URL` | Zen Chat Completions 地址 | `https://opencode.ai/zen/v1/chat/completions` |
 | `ZEN_GO_CHAT_COMPLETIONS_URL` | Go Chat Completions 地址 | `https://opencode.ai/zen/go/v1/chat/completions` |
+| `ZEN_GO_MESSAGES_URL` | Go Messages 地址 | `https://opencode.ai/zen/go/v1/messages` |
 | `ZEN_MODELS_URL` | Zen Models 地址 | `https://opencode.ai/zen/v1/models` |
 | `ZEN_GO_MODELS_URL` | Go Models 地址 | `https://opencode.ai/zen/go/v1/models` |
 
@@ -183,14 +184,15 @@ docker compose --env-file .env.docker up --build
 | `GET` | `/api/backend/dashboard` | 用量统计 + API Key 列表 + 套餐信息 |
 | `POST` | `/api/backend/dashboard/api-keys` | 创建新的 API Key |
 
-### API Key 认证端点（OpenAI 兼容）
+### API Key 认证端点
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| `GET` | `/v1/models` | 列出当前套餐可用模型 |
-| `POST` | `/v1/chat/completions` | Chat Completions（支持 stream） |
+| `GET` | `/v1/models` | 列出当前可通过 `/v1/chat/completions` 调用的模型 |
+| `POST` | `/v1/chat/completions` | OpenAI-compatible Chat Completions（支持 stream） |
+| `POST` | `/v1/messages` | Anthropic-compatible Messages（当前仅开放 `minimax-m3`） |
 
-> 前端 Next.js 通过 rewrite 将 `/v1/:path*` 和 `/api/backend/:path*` 代理到后端，因此外部可直接访问 `https://你的域名/v1/chat/completions`。
+> 前端 Next.js 通过 rewrite 将 `/v1/:path*` 和 `/api/backend/:path*` 代理到后端，因此外部可直接访问 `https://你的域名/v1/chat/completions` 与 `https://你的域名/v1/messages`。
 
 ### Admin 端点（需 Admin 邮箱登录）
 
@@ -215,9 +217,17 @@ docker compose --env-file .env.docker up --build
 | `ring-2.6-1t-free` | Zen |
 | `nemotron-3-super-free` | Zen |
 
+### 额外免费开放模型
+
+| 模型 ID | 路由 | 配额语义 |
+|---|---|---|
+| `deepseek-v4-flash` | Go `/v1/chat/completions` | 计入月度额度 |
+| `deepseek-v4-pro` | Go `/v1/chat/completions` | 计入月度额度 |
+| `minimax-m3` | Go `/v1/messages` | **不计入月度额度** |
+
 ### Plus 套餐（以上 5 个 + 额外 10 个 Go 付费模型）
 
-Free 模型继续路由至 **Zen**，Plus 专属模型路由至 **Go**：
+Free 模型继续路由至 **Zen**，Plus 专属模型路由至 **Go**。`minimax-m3` 虽然所有用户都可用，但不出现在 `/v1/models`，因为它必须通过 `/v1/messages` 调用。
 
 | 模型 ID | 来源 |
 |---|---|

@@ -290,6 +290,7 @@ fn app_state(pool: PgPool) -> AppState {
         default_monthly_request_limit: FREE_MONTHLY_REQUEST_LIMIT,
         zen_chat_completions_url: "http://127.0.0.1/zen/chat/completions".to_string(),
         zen_go_chat_completions_url: "http://127.0.0.1/go/chat/completions".to_string(),
+        zen_go_messages_url: "http://127.0.0.1/go/messages".to_string(),
         zen_models_url: "http://127.0.0.1/zen/models".to_string(),
         zen_go_models_url: "http://127.0.0.1/go/models".to_string(),
         upstream_max_attempts: 1,

@@ -122,7 +122,13 @@ async fn free_open_models_are_ip_limited_but_plus_only_go_models_skip(pool: PgPo
         post_chat_from_ip(&app, &plus_key, "deepseek-v4-pro", plus_sponsored_pro_ip).await;
     assert_eq!(plus_sponsored_pro.status(), StatusCode::TOO_MANY_REQUESTS);
 
-    let plus_go_ip = "203.0.113.29";
+    let free_messages_ip = "203.0.113.29";
+    insert_free_ai_window(&pool, free_messages_ip, 60).await;
+    let free_messages =
+        post_messages_from_ip(&app, &free_key, "minimax-m3", free_messages_ip).await;
+    assert_eq!(free_messages.status(), StatusCode::TOO_MANY_REQUESTS);
+
+    let plus_go_ip = "203.0.113.30";
     insert_free_ai_window(&pool, plus_go_ip, 60).await;
     let plus_go = post_chat_from_ip(&app, &plus_key, "qwen3.6-plus", plus_go_ip).await;
     assert_eq!(plus_go.status(), StatusCode::OK);
@@ -263,6 +269,7 @@ fn app_state(pool: PgPool, server: &MockServer) -> AppState {
         default_monthly_request_limit: FREE_MONTHLY_REQUEST_LIMIT,
         zen_chat_completions_url: format!("{}/zen/chat/completions", server.uri()),
         zen_go_chat_completions_url: format!("{}/go/chat/completions", server.uri()),
+        zen_go_messages_url: format!("{}/go/messages", server.uri()),
         zen_models_url: format!("{}/zen/models", server.uri()),
         zen_go_models_url: format!("{}/go/models", server.uri()),
         upstream_max_attempts: 1,
@@ -349,6 +356,34 @@ where
             "model": model,
             "messages": [
                 { "role": "user", "content": "hello" }
+            ]
+        }))
+        .to_request();
+    test::call_service(app, req).await
+}
+
+async fn post_messages_from_ip<S>(
+    app: &S,
+    api_key: &str,
+    model: &str,
+    ip: &str,
+) -> actix_web::dev::ServiceResponse
+where
+    S: actix_service::Service<
+            actix_http::Request,
+            Response = actix_web::dev::ServiceResponse,
+            Error = actix_web::Error,
+        >,
+{
+    let req = test::TestRequest::post()
+        .uri("/v1/messages")
+        .insert_header(("x-real-ip", ip))
+        .insert_header(("authorization", format!("Bearer {api_key}")))
+        .set_json(json!({
+            "model": model,
+            "max_tokens": 256,
+            "messages": [
+                { "role": "user", "content": [{ "type": "text", "text": "hello" }] }
             ]
         }))
         .to_request();
