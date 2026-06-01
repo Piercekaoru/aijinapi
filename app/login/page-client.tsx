@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useI18n } from "@/lib/i18n";
 import type { Language } from "@/lib/i18n-core";
+import { shutdownNoticeAfterLoginStorageKey } from "@/lib/shutdown-notice";
 import { useDocumentTitle } from "@/lib/use-document-title";
 import { SiteFooter } from "../components/SiteFooter";
 import { SiteHeader } from "../components/SiteHeader";
@@ -461,6 +462,11 @@ export function LoginPageClient({ style, html, title }: LoginPageClientProps) {
             password: password.value,
           });
           persistSession(payload);
+          try {
+            window.sessionStorage.setItem(shutdownNoticeAfterLoginStorageKey, "1");
+          } catch {
+            // Ignore storage failures and continue with login.
+          }
           showToast(t("auth.loginSuccess"));
           window.setTimeout(() => {
             window.location.href = "/dashboard";

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
 import type { Language } from "@/lib/i18n-core";
+import { ShutdownAnnouncementDialog } from "../components/ShutdownAnnouncementDialog";
 import { SiteFooter } from "../components/SiteFooter";
 import { SiteHeader } from "../components/SiteHeader";
 
@@ -248,6 +249,7 @@ export function DashboardClient() {
     <main className="dashboard-page">
       <section className="dashboard-shell">
         <SiteHeader active="dashboard" variant="workspace" />
+        <ShutdownAnnouncementDialog enabled={Boolean(sessionToken)} />
 
         <section className="hero-band">
           <div>

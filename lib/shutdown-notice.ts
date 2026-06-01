@@ -1,0 +1,1 @@
+export const shutdownNoticeAfterLoginStorageKey = "openachieve_shutdown_notice_after_login";
