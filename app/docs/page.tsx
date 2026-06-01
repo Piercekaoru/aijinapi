@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { loadPublicFreeModels, modelDisplayName } from "@/lib/free-models";
 import { useI18n } from "@/lib/i18n";
 import type { Language } from "@/lib/i18n-core";
+import { isMessagesOnlyModel } from "@/lib/model-access";
 import { plusMonthlyPriceLabel, plusMonthlyPriceLabelEn } from "@/lib/pricing";
 import { SiteFooter } from "../components/SiteFooter";
 import { SiteHeader } from "../components/SiteHeader";
@@ -175,6 +176,14 @@ const models = [
     tone: "dark",
   },
   {
+    id: "minimax-m3",
+    title: "MiniMax M3",
+    description: "Free through /v1/messages and excluded from monthly quota accounting.",
+    tag: "Free",
+    image: "/images/GS8OLQObIAcG_0D.jpg",
+    tone: "dark",
+  },
+  {
     id: "mimo-v2.5",
     title: "MiMo V2.5",
     description: "Balanced model for creation, chat, and lightweight reasoning.",
@@ -236,6 +245,11 @@ const freeModelMetadata: Record<
     image: "/images/GxpsuzYawAQQ2lR.jpg",
     tone: "light",
   },
+  "minimax-m3": {
+    description: "额外免费开放模型，需走 /v1/messages，且不计入月度额度。",
+    image: "/images/GS8OLQObIAcG_0D.jpg",
+    tone: "dark",
+  },
   "minimax-m2.5-free": {
     description: "Free general chat model for content generation, polishing, and lightweight assistants.",
     image: "/images/HAh3SWLacAAA6By.jpg",
@@ -265,6 +279,7 @@ const descriptionEn: Record<string, string> = {
   "kimi-k2.6": "Stronger text processing and app-assistant capability for complex content workflows.",
   "deepseek-v4-pro": "Sponsored through the paid Go route and available to both Free and Plus users.",
   "deepseek-v4-flash": "Sponsored through the paid Go route and available to both Free and Plus users.",
+  "minimax-m3": "Additional free model available through /v1/messages and excluded from monthly quota accounting.",
   "mimo-v2.5": "Balanced model for creation, chat, and lightweight reasoning.",
   "mimo-v2.5-pro": "Stronger generation quality and complex-task handling for production content apps.",
   "qwen3.6-plus": "Developer-friendly model for code, tool use, and general agents.",
@@ -275,15 +290,19 @@ const docsCopy: Record<Language, Record<string, string>> = {
   zh: {
     introLabel: "开发文档",
     introTitle: "开发文档",
-    introBody: "只需接入统一 OpenAI-compatible 接口；Free/Plus 权限由 OpenAchieve 自动处理。",
+    introBody: "大多数模型继续走 OpenAI-compatible 接口；MiniMax M3 通过 Anthropic-compatible /v1/messages 接入，Free/Plus 权限由 OpenAchieve 自动处理。",
     baseLabel: "接口地址",
-    baseBody: "所有请求发送到此接口即可，无需关注后端架构。",
+    baseBody: "聊天补全继续使用这个 base URL；MiniMax M3 仍使用同一域名，但需请求 /v1/messages。",
     authLabel: "认证",
     authTitle: "认证方式",
     authBody: "API Key 在注册或控制台生成，数据库只保存哈希；额度按账号套餐统一计算。",
     chatLabel: "聊天补全示例",
     chatTitle: "聊天补全",
     samplePrompt: "介绍一下 OpenAchieve",
+    messagesLabel: "MiniMax M3 示例",
+    messagesTitle: "Anthropic Messages",
+    messagesPrompt: "用三句话介绍 MiniMax M3 在 OpenAchieve 的调用方式",
+    messagesBody: "MiniMax M3 需调用 /v1/messages，使用 Anthropic Messages 格式；该模型免费开放，且不计入月度额度。",
     kiloTitle: "Kilo Code 接入教程",
     kiloBody: "Kilo Code 支持 OpenAI-compatible 自定义提供商。按下面 5 步配置后，就能在 VS Code 里直接使用 OpenAchieve 模型。",
     configQuick: "Kilo Code 配置速查",
@@ -292,22 +311,26 @@ const docsCopy: Record<Language, Record<string, string>> = {
     freeSyncing: "正在同步免费模型池",
     modelsLabel: "支持模型",
     modelsTitle: "支持模型",
-    modelsBody: `Free 可调用实时同步的免费模型池，以及赞助开放的 DeepSeek V4 Flash 与 DeepSeek V4 Pro；Plus 为 ${plusMonthlyPriceLabel}、1500 次/月，并额外开放完整 Plus 模型池。`,
+    modelsBody: `Free 可调用实时同步的免费模型池，以及赞助开放的 DeepSeek V4 Flash、DeepSeek V4 Pro；MiniMax M3 通过 /v1/messages 免费开放且不计入月度额度。Plus 为 ${plusMonthlyPriceLabel}、1500 次/月，并额外开放完整 Plus 模型池。`,
     privacy: "免费模型可能用于服务改进或试用目的，请避免提交个人、商业机密或其他敏感信息。",
     liveFreeDescription: "当前实时同步的免费模型，适合接入验证和轻量实验。",
   },
   en: {
     introLabel: "Docs",
     introTitle: "Developer Docs",
-    introBody: "Use one OpenAI-compatible API. OpenAchieve handles Free/Plus permissions automatically.",
+    introBody: "Most models use the OpenAI-compatible API, while MiniMax M3 is exposed through Anthropic-compatible /v1/messages. OpenAchieve handles Free/Plus permissions automatically.",
     baseLabel: "Endpoint",
-    baseBody: "Send every API request to this endpoint. You do not need to care about the backend routing.",
+    baseBody: "Use this base URL for chat completions. MiniMax M3 stays on the same domain but requires /v1/messages.",
     authLabel: "Auth",
     authTitle: "Authentication",
     authBody: "API keys are created during sign-up or in the console. Only hashes are stored, and quota is calculated at account-plan level.",
     chatLabel: "Chat completion example",
     chatTitle: "Chat Completions",
     samplePrompt: "Introduce OpenAchieve",
+    messagesLabel: "MiniMax M3 example",
+    messagesTitle: "Anthropic Messages",
+    messagesPrompt: "Explain how to call MiniMax M3 on OpenAchieve in three sentences",
+    messagesBody: "MiniMax M3 must be sent to /v1/messages using the Anthropic Messages shape. It is free to use and does not count against monthly quota.",
     kiloTitle: "Kilo Code Setup",
     kiloBody: "Kilo Code supports OpenAI-compatible custom providers. Configure the five steps below to use OpenAchieve models directly in VS Code.",
     configQuick: "Kilo Code quick config",
@@ -316,7 +339,7 @@ const docsCopy: Record<Language, Record<string, string>> = {
     freeSyncing: "Syncing the free model catalog",
     modelsLabel: "Supported Models",
     modelsTitle: "Supported Models",
-    modelsBody: `Free users can call the live free model catalog plus sponsored DeepSeek V4 Flash and DeepSeek V4 Pro. Plus is ${plusMonthlyPriceLabelEn} with 1,500 requests/month and the full Plus model pool.`,
+    modelsBody: `Free users can call the live free model catalog plus sponsored DeepSeek V4 Flash and DeepSeek V4 Pro. MiniMax M3 is additionally available through /v1/messages for free and does not count against monthly quota. Plus is ${plusMonthlyPriceLabelEn} with 1,500 requests/month and the full Plus model pool.`,
     privacy: "Free models may be used for service improvement or trial purposes. Avoid personal, business-confidential, or sensitive content.",
     liveFreeDescription: "A live free model for integration checks and light experiments.",
   },
@@ -370,6 +393,11 @@ export default function DocsPage() {
     return [...liveFreeModels, ...plusModels];
   }, [freeModelIds, language]);
 
+  const kiloImportModelIds = useMemo(
+    () => freeModelIds.filter((id) => !isMessagesOnlyModel(id)),
+    [freeModelIds],
+  );
+
   const activeKiloSteps = language === "en" ? kiloStepsEn : kiloSteps;
   const t = (key: string) =>
     docsT(language, key).replace(plusMonthlyPriceLabel, language === "en" ? plusMonthlyPriceLabelEn : plusMonthlyPriceLabel);
@@ -415,6 +443,27 @@ export default function DocsPage() {
     ]
   }'`}</pre>
           </section>
+
+          <section className="panel wide" id="messages">
+            <p>{t("messagesLabel")}</p>
+            <h2>{t("messagesTitle")}</h2>
+            <pre>{`curl https://openachieve.asia/v1/messages \\
+  -H "Authorization: Bearer openachieve_xxxxxxxxxxxxxxxx" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "model": "minimax-m3",
+    "max_tokens": 512,
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          { "type": "text", "text": "${t("messagesPrompt")}" }
+        ]
+      }
+    ]
+  }'`}</pre>
+            <span>{t("messagesBody")}</span>
+          </section>
         </div>
 
         <section className="kilo-guide" id="kilo-code">
@@ -441,8 +490,8 @@ export default function DocsPage() {
 
           <div className="free-model-strip">
             <span>{t("freeImport")}</span>
-            {freeModelIds.length > 0 ? (
-              freeModelIds.map((id) => <code key={id}>{id}</code>)
+            {kiloImportModelIds.length > 0 ? (
+              kiloImportModelIds.map((id) => <code key={id}>{id}</code>)
             ) : (
               <code>{freeCatalogLoaded ? t("freeUnavailable") : t("freeSyncing")}</code>
             )}

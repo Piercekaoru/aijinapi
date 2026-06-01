@@ -21,7 +21,7 @@ use openachieve_backend::{
     plans::{FREE_MONTHLY_REQUEST_LIMIT, PLUS_MONTHLY_REQUEST_LIMIT},
     routes,
     state::AppState,
-    upstream::UpstreamKeyRing,
+    upstream::{MINIMAX_M3_MODEL, UpstreamKeyRing},
 };
 
 #[sqlx::test(migrations = "./migrations")]
@@ -105,6 +105,79 @@ async fn free_user_can_call_sponsored_go_models_on_go_upstream(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "./migrations")]
+async fn free_and_plus_users_can_call_minimax_m3_on_messages_upstream(pool: PgPool) {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/go/messages"))
+        .and(wire_header("authorization", "Bearer real-go-key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "id": "msg_123",
+            "type": "message",
+            "model": MINIMAX_M3_MODEL,
+            "role": "assistant",
+            "content": [{ "type": "text", "text": "hello from m3" }],
+            "stop_reason": "end_turn"
+        })))
+        .expect(2)
+        .mount(&server)
+        .await;
+
+    let free_key =
+        create_key_for_user(&pool, "free", "active", FREE_MONTHLY_REQUEST_LIMIT, None).await;
+    let plus_key = create_key_for_user(
+        &pool,
+        "plus",
+        "active",
+        PLUS_MONTHLY_REQUEST_LIMIT,
+        Some(Utc::now() + Duration::days(30)),
+    )
+    .await;
+    let app = test_app(pool.clone(), &server).await;
+
+    for api_key in [&free_key, &plus_key] {
+        let response = post_messages(&app, api_key, MINIMAX_M3_MODEL, false).await;
+        assert_eq!(response.status(), 200);
+        let body: Value = test::read_body_json(response).await;
+        assert_eq!(body["model"], MINIMAX_M3_MODEL);
+        assert_eq!(body["type"], "message");
+    }
+
+    assert_usage_count(&pool, 2, Some(200), Some(false)).await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn streaming_messages_response_is_proxied_and_recorded(pool: PgPool) {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/go/messages"))
+        .and(wire_header("authorization", "Bearer real-go-key"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(
+            "event: message_start\ndata: {\"type\":\"message_start\"}\n\n",
+            "text/event-stream",
+        ))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let api_key =
+        create_key_for_user(&pool, "free", "active", FREE_MONTHLY_REQUEST_LIMIT, None).await;
+    let app = test_app(pool.clone(), &server).await;
+    let response = post_messages(&app, &api_key, MINIMAX_M3_MODEL, true).await;
+
+    assert_eq!(response.status(), 200);
+    assert_eq!(
+        response.headers().get(header::CONTENT_TYPE).unwrap(),
+        "text/event-stream"
+    );
+    let bytes = test::read_body(response).await;
+    assert_eq!(
+        bytes,
+        "event: message_start\ndata: {\"type\":\"message_start\"}\n\n"
+    );
+    assert_usage_count(&pool, 1, Some(200), Some(true)).await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn plus_free_models_use_zen_upstream_and_zen_key(pool: PgPool) {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
@@ -161,6 +234,7 @@ async fn models_endpoint_returns_models_for_effective_plan(pool: PgPool) {
             "deepseek-v4-pro"
         ]
     );
+    assert!(!model_ids(&free_models).contains(&MINIMAX_M3_MODEL));
 
     let plus_models = get_models(&app, &plus_key).await;
     let plus_ids = model_ids(&plus_models);
@@ -168,6 +242,7 @@ async fn models_endpoint_returns_models_for_effective_plan(pool: PgPool) {
     assert!(plus_ids.contains(&"deepseek-v4-pro"));
     assert!(plus_ids.contains(&"big-pickle"));
     assert!(plus_ids.contains(&"nemotron-3-super-free"));
+    assert!(!plus_ids.contains(&MINIMAX_M3_MODEL));
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -192,6 +267,7 @@ async fn models_endpoint_uses_live_free_catalog(pool: PgPool) {
             "deepseek-v4-pro"
         ]
     );
+    assert!(!model_ids(&free_models).contains(&MINIMAX_M3_MODEL));
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -212,7 +288,71 @@ async fn public_free_models_includes_sponsored_go_model(pool: PgPool) {
     assert!(model_ids(&response).contains(&"big-pickle"));
     assert!(model_ids(&response).contains(&"deepseek-v4-flash"));
     assert!(model_ids(&response).contains(&"deepseek-v4-pro"));
+    assert!(model_ids(&response).contains(&MINIMAX_M3_MODEL));
     assert_eq!(response["fail_closed"], false);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn minimax_m3_messages_are_visible_in_dashboard_but_do_not_consume_quota(pool: PgPool) {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/go/messages"))
+        .and(wire_header("authorization", "Bearer real-go-key"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "id": "msg_dashboard",
+            "type": "message",
+            "model": MINIMAX_M3_MODEL,
+            "role": "assistant",
+            "content": [{ "type": "text", "text": "dashboard ok" }],
+            "stop_reason": "end_turn"
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let user_id = insert_user(&pool, "free", "active", FREE_MONTHLY_REQUEST_LIMIT, None).await;
+    let session_token = create_session(&pool, user_id).await.unwrap();
+    let issued_key =
+        create_customer_key_for_user(&pool, user_id, "dashboard-key", FREE_MONTHLY_REQUEST_LIMIT)
+            .await
+            .unwrap();
+    let app = test_app(pool.clone(), &server).await;
+
+    let response = post_messages(&app, &issued_key.key, MINIMAX_M3_MODEL, false).await;
+    assert_eq!(response.status(), 200);
+
+    let dashboard = get_dashboard(&app, &session_token).await;
+    let allowed = model_ids_from_strings(&dashboard["subscription"]["allowed_models"]);
+    assert!(allowed.contains(&MINIMAX_M3_MODEL));
+    assert_eq!(dashboard["subscription"]["requests_this_month"], 0);
+    assert_eq!(
+        dashboard["subscription"]["remaining_requests"],
+        FREE_MONTHLY_REQUEST_LIMIT
+    );
+    assert_eq!(dashboard["api_keys"][0]["requests_this_month"], 0);
+    assert_eq!(dashboard["recent_usage"][0]["model"], MINIMAX_M3_MODEL);
+    assert_eq!(dashboard["recent_usage"][0]["path"], "/v1/messages");
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn minimax_m3_returns_clear_errors_on_wrong_endpoint(pool: PgPool) {
+    let server = MockServer::start().await;
+    let free_key =
+        create_key_for_user(&pool, "free", "active", FREE_MONTHLY_REQUEST_LIMIT, None).await;
+    let app = test_app(pool.clone(), &server).await;
+
+    let wrong_chat = post_chat(&app, &free_key, MINIMAX_M3_MODEL, false).await;
+    assert_eq!(wrong_chat.status(), StatusCode::BAD_REQUEST);
+    let wrong_chat_body: Value = test::read_body_json(wrong_chat).await;
+    assert_eq!(wrong_chat_body["error"]["code"], "model_requires_messages");
+
+    let wrong_messages = post_messages(&app, &free_key, "deepseek-v4-pro", false).await;
+    assert_eq!(wrong_messages.status(), StatusCode::BAD_REQUEST);
+    let wrong_messages_body: Value = test::read_body_json(wrong_messages).await;
+    assert_eq!(
+        wrong_messages_body["error"]["code"],
+        "model_not_available_on_messages"
+    );
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -613,6 +753,7 @@ fn app_state_with_free_models(
         default_monthly_request_limit: FREE_MONTHLY_REQUEST_LIMIT,
         zen_chat_completions_url: format!("{}/zen/chat/completions", server.uri()),
         zen_go_chat_completions_url: format!("{}/go/chat/completions", server.uri()),
+        zen_go_messages_url: format!("{}/go/messages", server.uri()),
         zen_models_url: format!("{}/zen/models", server.uri()),
         zen_go_models_url: format!("{}/go/models", server.uri()),
         upstream_max_attempts: 1,
@@ -755,6 +896,15 @@ fn model_ids(value: &Value) -> Vec<&str> {
         .collect()
 }
 
+fn model_ids_from_strings(value: &Value) -> Vec<&str> {
+    value
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(Value::as_str)
+        .collect()
+}
+
 async fn assert_usage_count(
     pool: &PgPool,
     expected_count: i64,
@@ -784,4 +934,49 @@ async fn assert_usage_count(
                 .unwrap();
         assert_eq!(stored_stream, is_stream);
     }
+}
+
+async fn post_messages<S>(
+    app: &S,
+    api_key: &str,
+    model: &str,
+    stream: bool,
+) -> actix_web::dev::ServiceResponse
+where
+    S: actix_service::Service<
+            actix_http::Request,
+            Response = actix_web::dev::ServiceResponse,
+            Error = actix_web::Error,
+        >,
+{
+    let req = test::TestRequest::post()
+        .uri("/v1/messages")
+        .insert_header(("authorization", format!("Bearer {api_key}")))
+        .set_json(json!({
+            "model": model,
+            "stream": stream,
+            "max_tokens": 256,
+            "messages": [
+                { "role": "user", "content": [{ "type": "text", "text": "do not store this prompt" }] }
+            ]
+        }))
+        .to_request();
+
+    test::call_service(app, req).await
+}
+
+async fn get_dashboard<S>(app: &S, session_token: &str) -> Value
+where
+    S: actix_service::Service<
+            actix_http::Request,
+            Response = actix_web::dev::ServiceResponse,
+            Error = actix_web::Error,
+        >,
+{
+    let req = test::TestRequest::get()
+        .uri("/dashboard")
+        .insert_header(("authorization", format!("Bearer {session_token}")))
+        .to_request();
+
+    test::call_and_read_body_json(app, req).await
 }

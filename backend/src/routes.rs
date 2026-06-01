@@ -52,9 +52,10 @@ use crate::{
     },
     state::AppState,
     upstream::{
-        PLUS_MODELS, SPONSORED_FREE_GO_MODELS, UpstreamRoute, bytes_from_static_json, forward_chat,
-        is_plus_model, is_sponsored_free_go_model, openai_models_payload, request_is_stream,
-        request_model,
+        FREE_UNMETERED_MESSAGES_MODELS, MINIMAX_M3_MODEL, PLUS_MODELS, SPONSORED_FREE_GO_MODELS,
+        UpstreamRoute, bytes_from_static_json, forward_chat, forward_messages, is_plus_model,
+        is_sponsored_free_go_model, is_supported_messages_model, openai_models_payload,
+        request_is_stream, request_model,
     },
 };
 
@@ -115,6 +116,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .route("/admin/quota-resets", web::post().to(admin_reset_all_quota))
         .route("/public/free-models", web::get().to(public_free_models))
         .route("/v1/models", web::get().to(models))
+        .route("/v1/messages", web::post().to(messages))
         .route("/v1/chat/completions", web::post().to(chat_completions));
 }
 
@@ -1205,7 +1207,7 @@ async fn admin_user_rows(pool: &sqlx::PgPool) -> Result<Vec<AdminUserRow>, sqlx:
           COUNT(DISTINCT k.id) AS api_key_count,
           COUNT(e.id) FILTER (
             WHERE e.created_at >= q.usage_start
-              AND e.path = '/v1/chat/completions'
+              AND e.model IS DISTINCT FROM $1
           ) AS requests_this_month,
           MAX(k.last_used_at) AS last_used_at
         FROM users u
@@ -1214,8 +1216,9 @@ async fn admin_user_rows(pool: &sqlx::PgPool) -> Result<Vec<AdminUserRow>, sqlx:
         LEFT JOIN usage_events e ON e.api_key_id = k.id
         GROUP BY u.id, q.usage_start
         ORDER BY u.created_at DESC
-        "#,
+    "#,
     )
+    .bind(MINIMAX_M3_MODEL)
     .fetch_all(pool)
     .await
 }
@@ -1255,7 +1258,7 @@ async fn admin_user_summary_by_id(
           COUNT(DISTINCT k.id) AS api_key_count,
           COUNT(e.id) FILTER (
             WHERE e.created_at >= q.usage_start
-              AND e.path = '/v1/chat/completions'
+              AND e.model IS DISTINCT FROM $2
           ) AS requests_this_month,
           MAX(k.last_used_at) AS last_used_at
         FROM users u
@@ -1264,9 +1267,10 @@ async fn admin_user_summary_by_id(
         LEFT JOIN usage_events e ON e.api_key_id = k.id
         WHERE u.id = $1
         GROUP BY u.id, q.usage_start
-        "#,
+    "#,
     )
     .bind(user_id)
+    .bind(MINIMAX_M3_MODEL)
     .fetch_optional(pool)
     .await?;
 
@@ -1691,7 +1695,7 @@ async fn models(state: web::Data<AppState>, req: HttpRequest) -> Result<HttpResp
     let user = user_for_api_key(&state.db, &api_key).await?;
     touch_user_ip(&state.db, user.id, &ip).await?;
     let plan = user.effective_plan();
-    let allowed_models = allowed_models_for_effective_plan(&state, plan).await;
+    let allowed_models = chat_models_for_effective_plan(&state, plan).await;
 
     touch_key(&state.db, api_key.id).await?;
     Ok(HttpResponse::Ok()
@@ -1706,7 +1710,10 @@ async fn models(state: web::Data<AppState>, req: HttpRequest) -> Result<HttpResp
 
 async fn public_free_models(state: web::Data<AppState>) -> Result<HttpResponse, ApiError> {
     let mut snapshot = state.free_models.public_snapshot().await;
-    for model in SPONSORED_FREE_GO_MODELS {
+    for model in SPONSORED_FREE_GO_MODELS
+        .iter()
+        .chain(FREE_UNMETERED_MESSAGES_MODELS.iter())
+    {
         if !snapshot.data.iter().any(|item| item.id == *model) {
             snapshot.data.push(PublicFreeModel {
                 id: (*model).to_string(),
@@ -1723,6 +1730,16 @@ async fn public_free_models(state: web::Data<AppState>) -> Result<HttpResponse, 
 }
 
 async fn allowed_models_for_effective_plan(state: &AppState, plan: &str) -> Vec<String> {
+    let mut models = chat_models_for_effective_plan(state, plan).await;
+    models.extend(
+        FREE_UNMETERED_MESSAGES_MODELS
+            .iter()
+            .map(|model| (*model).to_string()),
+    );
+    models
+}
+
+async fn chat_models_for_effective_plan(state: &AppState, plan: &str) -> Vec<String> {
     let mut models = state.free_models.available_models().await;
     models.extend(
         SPONSORED_FREE_GO_MODELS
@@ -1745,6 +1762,10 @@ async fn route_for_model(
     plan: &str,
     model: &str,
 ) -> Result<UpstreamRoute, ApiError> {
+    if is_supported_messages_model(model) {
+        return Err(ApiError::ModelRequiresMessages(model.to_string()));
+    }
+
     if state.free_models.is_available(model).await {
         return Ok(UpstreamRoute::Zen);
     }
@@ -1768,6 +1789,116 @@ async fn route_for_model(
     Err(ApiError::UnsupportedModel(model.to_string()))
 }
 
+async fn route_for_messages_model(
+    state: &AppState,
+    model: &str,
+) -> Result<UpstreamRoute, ApiError> {
+    if model == MINIMAX_M3_MODEL {
+        return Ok(UpstreamRoute::Go);
+    }
+
+    if state.free_models.is_available(model).await
+        || is_sponsored_free_go_model(model)
+        || is_plus_model(model)
+        || is_free_model_candidate(model)
+    {
+        return Err(ApiError::ModelNotAvailableOnMessages(model.to_string()));
+    }
+
+    Err(ApiError::UnsupportedModel(model.to_string()))
+}
+
+async fn messages(
+    state: web::Data<AppState>,
+    req: HttpRequest,
+    body: web::Json<Value>,
+) -> Result<HttpResponse, ApiError> {
+    let ip = client_ip_for_security(&req, &state.config)?;
+    ensure_ip_not_banned(&state.db, &ip).await?;
+    let api_key = authenticate(&state.db, extract_bearer(&req)?).await?;
+    let user = user_for_api_key(&state.db, &api_key).await?;
+
+    let body = body.into_inner();
+    let model = request_model(&body)?.to_string();
+    let is_stream = request_is_stream(&body);
+    let plan = user.effective_plan();
+    let route = route_for_messages_model(&state, &model).await?;
+
+    enforce_ip_rate_limits(
+        &state.db,
+        &ip,
+        &[
+            RateLimitRule {
+                scope: FREE_AI_SCOPE,
+                limit: FREE_AI_SHORT_LIMIT,
+                window_seconds: FREE_AI_SHORT_WINDOW_SECONDS,
+                auto_ban_on_repeat: true,
+            },
+            RateLimitRule {
+                scope: FREE_AI_SCOPE,
+                limit: FREE_AI_HOURLY_LIMIT,
+                window_seconds: FREE_AI_HOURLY_WINDOW_SECONDS,
+                auto_ban_on_repeat: true,
+            },
+        ],
+        "/v1/messages",
+        Some(user.id),
+        Some(api_key.id),
+    )
+    .await?;
+    record_security_event(
+        &state.db,
+        "free_ai_request",
+        Some(&ip),
+        Some(user.id),
+        Some(api_key.id),
+        Some("/v1/messages"),
+        json!({
+            "plan": plan,
+            "model": model,
+            "route": "go",
+            "metered": false,
+        }),
+    )
+    .await?;
+
+    info!(
+        api_key_id = api_key.id,
+        user_id = user.id,
+        plan = plan,
+        model = %model,
+        stream = is_stream,
+        "proxying messages request"
+    );
+
+    let result = forward_messages(
+        &state.http,
+        &state.config,
+        &state.upstream_keys,
+        body,
+        route,
+    )
+    .await?;
+    touch_key(&state.db, api_key.id).await?;
+    touch_user_ip(&state.db, user.id, &ip).await?;
+    record_usage(
+        &state.db,
+        UsageEvent {
+            api_key_id: Some(api_key.id),
+            model: Some(&model),
+            path: "/v1/messages",
+            status_code: result.status_code,
+            is_stream,
+            upstream_latency_ms: Some(result.latency_ms),
+            error_type: None,
+            client_ip: Some(&ip.ip),
+        },
+    )
+    .await?;
+
+    Ok(result.response)
+}
+
 async fn chat_completions(
     state: web::Data<AppState>,
     req: HttpRequest,
@@ -1777,10 +1908,14 @@ async fn chat_completions(
     ensure_ip_not_banned(&state.db, &ip).await?;
     let api_key = authenticate(&state.db, extract_bearer(&req)?).await?;
     let user = user_for_api_key(&state.db, &api_key).await?;
-    ensure_monthly_quota(&state.db, &user).await?;
 
     let body = body.into_inner();
     let model = request_model(&body)?.to_string();
+    if is_supported_messages_model(&model) {
+        return Err(ApiError::ModelRequiresMessages(model));
+    }
+
+    ensure_monthly_quota(&state.db, &user).await?;
     let is_stream = request_is_stream(&body);
     let plan = user.effective_plan();
     let route = route_for_model(&state, plan, &model).await?;

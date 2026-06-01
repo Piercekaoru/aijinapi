@@ -10,7 +10,7 @@ use crate::{
         ApiKeySummary, BillingOrder, IssuedApiKey, SubscriptionSummary, UsageEvent,
         UsageEventSummary, User,
     },
-    upstream::allowed_models_for_plan,
+    upstream::{MINIMAX_M3_MODEL, allowed_models_for_plan},
 };
 
 pub async fn record_admin_audit(
@@ -440,7 +440,10 @@ pub async fn api_key_summaries(
           k.monthly_request_limit,
           k.created_at,
           k.last_used_at,
-          COUNT(e.id) FILTER (WHERE e.created_at >= q.usage_start) AS requests_this_month
+          COUNT(e.id) FILTER (
+            WHERE e.created_at >= q.usage_start
+              AND e.model IS DISTINCT FROM $2
+          ) AS requests_this_month
         FROM api_keys k
         CROSS JOIN quota_window q
         LEFT JOIN usage_events e ON e.api_key_id = k.id
@@ -450,6 +453,7 @@ pub async fn api_key_summaries(
         "#,
     )
     .bind(user_id)
+    .bind(MINIMAX_M3_MODEL)
     .fetch_all(pool)
     .await
 }
@@ -471,11 +475,12 @@ pub async fn monthly_chat_usage_for_user(pool: &PgPool, user_id: i64) -> Result<
         JOIN api_keys k ON k.id = e.api_key_id
         CROSS JOIN quota_window q
         WHERE k.user_id = $1
-          AND e.path = '/v1/chat/completions'
           AND e.created_at >= q.usage_start
+          AND e.model IS DISTINCT FROM $2
         "#,
     )
     .bind(user_id)
+    .bind(MINIMAX_M3_MODEL)
     .fetch_one(pool)
     .await
 }

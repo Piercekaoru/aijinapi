@@ -23,6 +23,10 @@ pub enum ApiError {
     AccountBanned,
     #[error("unsupported model: {0}")]
     UnsupportedModel(String),
+    #[error("model requires /v1/messages: {0}")]
+    ModelRequiresMessages(String),
+    #[error("model is not available on /v1/messages: {0}")]
+    ModelNotAvailableOnMessages(String),
     #[error("model is not available on your current plan: {0}")]
     ModelNotAllowed(String),
     #[error("model is temporarily unavailable: {0}")]
@@ -65,6 +69,8 @@ impl ApiError {
             Self::IpBanned => "ip_banned",
             Self::AccountBanned => "account_banned",
             Self::UnsupportedModel(_) => "unsupported_model",
+            Self::ModelRequiresMessages(_) => "model_requires_messages",
+            Self::ModelNotAvailableOnMessages(_) => "model_not_available_on_messages",
             Self::ModelNotAllowed(_) => "model_not_allowed",
             Self::ModelTemporarilyUnavailable(_) => "model_temporarily_unavailable",
             Self::InvalidRequest(_) => "invalid_request",
@@ -100,9 +106,11 @@ impl ResponseError for ApiError {
             Self::QuotaExceeded
             | Self::VerificationEmailRecentlySent
             | Self::RateLimited { .. } => StatusCode::TOO_MANY_REQUESTS,
-            Self::UnsupportedModel(_) | Self::InvalidRequest(_) | Self::InvalidClientIp => {
-                StatusCode::BAD_REQUEST
-            }
+            Self::UnsupportedModel(_)
+            | Self::ModelRequiresMessages(_)
+            | Self::ModelNotAvailableOnMessages(_)
+            | Self::InvalidRequest(_)
+            | Self::InvalidClientIp => StatusCode::BAD_REQUEST,
             Self::EmailAlreadyRegistered => StatusCode::CONFLICT,
             Self::NotFound => StatusCode::NOT_FOUND,
             Self::UpstreamRequest(_) | Self::UpstreamStatus { .. } | Self::EmailDeliveryFailed => {

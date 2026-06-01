@@ -614,15 +614,15 @@
           <div class="hero-copy">
             <p class="eyebrow">Model Plaza / Developer Docs</p>
             <h1 data-od-id="headline">在一个广场里挑模型，在一套 API 里调用。</h1>
-            <p class="lead">OpenAchieve 将实时同步的免费模型池与 Kimi、GLM、MiMo、Qwen、DeepSeek 等 Plus 模型收束到 OpenAI-compatible 接口。Free 可用免费模型池，以及赞助开放的 DeepSeek V4 Flash 与 DeepSeek V4 Pro；Plus 模型统一自动分配通道。</p>
+            <p class="lead">OpenAchieve 将实时同步的免费模型池与 Kimi、GLM、MiMo、Qwen、DeepSeek 等 Plus 模型收束到统一域名下。Free 可用免费模型池，以及赞助开放的 DeepSeek V4 Flash、DeepSeek V4 Pro；MiniMax M3 通过 /v1/messages 免费开放且不计入月度额度；Plus 模型统一自动分配通道。</p>
             <div class="hero-actions">
               <a class="btn primary" href="#models">浏览模型</a>
               <a class="btn ghost" href="#docs">查看 base_url</a>
             </div>
             <div class="hero-meta" aria-label="模型广场摘要">
               <div class="meta-card"><strong>6</strong><span>模型家族覆盖</span></div>
-              <div class="meta-card"><strong>15</strong><span>当前可用模型</span></div>
-              <div class="meta-card"><strong>/v1</strong><span>兼容 OpenAI 调用格式</span></div>
+              <div class="meta-card"><strong>16</strong><span>当前可用模型</span></div>
+              <div class="meta-card"><strong>/v1</strong><span>Chat + Messages</span></div>
             </div>
           </div>
 
@@ -670,7 +670,7 @@
               <p class="eyebrow">Catalog</p>
               <h2>模型卡片带上调用名、套餐权限和套餐范围。</h2>
             </div>
-            <p>Free 每月 {{FREE_MONTHLY_REQUESTS}} 次，可调用 <span data-live-free-count>实时免费模型池</span>，包含赞助开放的 DeepSeek V4 Flash 与 DeepSeek V4 Pro；Plus {{PLUS_MONTHLY_PRICE_TEXT}}、{{PLUS_MONTHLY_REQUESTS}} 次，并额外开放完整 Plus 模型池。免费模型可能用于改进或试用目的，请避免提交敏感信息。</p>
+            <p>Free 每月 {{FREE_MONTHLY_REQUESTS}} 次，可调用 <span data-live-free-count>实时免费模型池</span>，包含赞助开放的 DeepSeek V4 Flash 与 DeepSeek V4 Pro；MiniMax M3 通过 /v1/messages 免费开放且不计入月度额度；Plus {{PLUS_MONTHLY_PRICE_TEXT}}、{{PLUS_MONTHLY_REQUESTS}} 次，并额外开放完整 Plus 模型池。免费模型可能用于改进或试用目的，请避免提交敏感信息。</p>
           </div>
 
           <div class="filters" aria-label="模型分类筛选">
@@ -692,6 +692,7 @@
             <article class="model-card" data-category="creative chat"><p class="model-tier">Free</p><h3>MiniMax M2.5 Free</h3><p class="model-desc">免费通用对话模型，适合内容生成、润色和轻量业务助手。</p><code class="model-id">minimax-m2.5-free</code></article>
             <article class="model-card" data-category="long chat"><p class="model-tier">Free</p><h3>Ring 2.6 1T Free</h3><p class="model-desc">免费长上下文入口，适合文档理解、摘要和知识库实验。</p><code class="model-id">ring-2.6-1t-free</code></article>
             <article class="model-card" data-category="reasoning chat"><p class="model-tier">Free</p><h3>Nemotron 3 Super Free</h3><p class="model-desc">免费试用型模型，适合非敏感内容验证和能力探索。</p><code class="model-id">nemotron-3-super-free</code></article>
+            <article class="model-card featured" data-category="reasoning creative"><p class="model-tier">Free</p><h3>MiniMax M3</h3><p class="model-desc">额外免费开放模型，需走 /v1/messages，且不计入月度额度，适合更长上下文和高质量输出场景。</p><code class="model-id">minimax-m3</code></article>
             <article class="model-card" data-category="reasoning creative"><p class="model-tier">Plus</p><h3>MiMo V2.5 Pro</h3><p class="model-desc">适合更复杂的创作、推理和多步骤任务，偏高质量输出。</p><code class="model-id">mimo-v2.5-pro</code></article>
             <article class="model-card" data-category="creative chat"><p class="model-tier">Plus</p><h3>MiMo V2.5</h3><p class="model-desc">轻量助手、文本润色和不需要最高推理强度的创作流程。</p><code class="model-id">mimo-v2.5</code></article>
             <article class="model-card" data-category="reasoning chat"><p class="model-tier">Plus</p><h3>Qwen3.6 Plus</h3><p class="model-desc">默认通用模型，覆盖问答、代码、工具调用和业务流程原型。</p><code class="model-id">qwen3.6-plus</code></article>
@@ -709,7 +710,7 @@
               <p class="eyebrow">Base URL & Auth</p>
               <h2>换掉 base_url，继续用熟悉的 SDK。</h2>
             </div>
-            <p>鉴权方式保持 Bearer API Key。客户只调用统一 Base URL；Free/Plus 权限由后端自动处理。</p>
+            <p>鉴权方式保持 Bearer API Key。Chat Completions 继续走 OpenAI-compatible；MiniMax M3 走 Anthropic-compatible /v1/messages。</p>
           </div>
 
           <div class="doc-grid">
@@ -721,6 +722,7 @@
                   <div class="endpoint-row"><span>base_url</span><code>https://openachieve.asia/v1</code></div>
                   <div class="endpoint-row"><span>Authorization</span><code>Bearer &lt;OPENACHIEVE_KEY&gt;</code></div>
                   <div class="endpoint-row"><span>Chat endpoint</span><code>POST /chat/completions</code></div>
+                  <div class="endpoint-row"><span>Messages endpoint</span><code>POST /messages</code></div>
                 </div>
               </div>
               <div class="doc-art">
@@ -752,9 +754,9 @@
 
           <div class="faq-grid">
             <article class="faq"><h3>是否需要外卡或海外支付？</h3><p>不需要。OpenAchieve 面向国内开发者，支持支付宝/微信以人民币充值，到账后即可调用。</p></article>
-            <article class="faq"><h3>是否兼容 OpenAI SDK？</h3><p>兼容 OpenAI 风格的请求格式。通常只需要替换 base_url、API Key 和模型名。</p></article>
-            <article class="faq"><h3>Plus 价格和额度是什么？</h3><p>Plus 为 {{PLUS_MONTHLY_PRICE_TEXT}}，包含 {{PLUS_MONTHLY_REQUESTS}} 次/月请求额度；Free 是 {{FREE_MONTHLY_REQUESTS}} 次/月，可调用实时同步的免费模型池，以及赞助开放的 DeepSeek V4 Flash 与 DeepSeek V4 Pro。</p></article>
-            <article class="faq"><h3>可以在同一个项目里切换模型吗？</h3><p>可以。把模型名作为请求参数传入，就能在同一套接口下切换 Kimi、GLM、Qwen、DeepSeek 等模型。</p></article>
+            <article class="faq"><h3>是否兼容 OpenAI SDK？</h3><p>大多数模型兼容 OpenAI 风格的请求格式；MiniMax M3 例外，需要请求 /v1/messages 并使用 Anthropic Messages 格式。</p></article>
+            <article class="faq"><h3>Plus 价格和额度是什么？</h3><p>Plus 为 {{PLUS_MONTHLY_PRICE_TEXT}}，包含 {{PLUS_MONTHLY_REQUESTS}} 次/月请求额度；Free 是 {{FREE_MONTHLY_REQUESTS}} 次/月，可调用实时同步的免费模型池、赞助开放的 DeepSeek V4 Flash / DeepSeek V4 Pro；MiniMax M3 额外免费开放且不计入月度额度。</p></article>
+            <article class="faq"><h3>可以在同一个项目里切换模型吗？</h3><p>可以。多数模型继续通过 /v1/chat/completions 切换；MiniMax M3 例外，需要单独走 /v1/messages。</p></article>
           </div>
         </div>
       </section>
@@ -801,13 +803,19 @@ const response = await client.chat.completions.create({
 });
 
 console.log(response.choices[0].message.content);`,
-      curl: `curl https://openachieve.asia/v1/chat/completions \\
+      curl: `curl https://openachieve.asia/v1/messages \\
   -H "Authorization: Bearer YOUR_OPENACHIEVE_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "model": "kimi-k2.6",
+    "model": "minimax-m3",
+    "max_tokens": 512,
     "messages": [
-      { "role": "user", "content": "总结这份文档的重点" }
+      {
+        "role": "user",
+        "content": [
+          { "type": "text", "text": "总结这份文档的重点" }
+        ]
+      }
     ]
   }'`
     };

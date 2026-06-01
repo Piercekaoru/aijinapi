@@ -19,6 +19,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { modelDisplayName } from "@/lib/free-models";
 import { useI18n } from "@/lib/i18n";
 import type { Language } from "@/lib/i18n-core";
+import { modelAccessNote, usageQuotaNote, usageTransportLabel } from "@/lib/model-access";
 import { plusMonthlyPriceLabel, plusMonthlyPriceLabelEn } from "@/lib/pricing";
 import { cn } from "@/lib/utils";
 import { SiteFooter } from "../components/SiteFooter";
@@ -39,6 +40,7 @@ const modelDisplayNames: Record<string, string> = {
   "kimi-k2.6": "Kimi K2.6",
   "deepseek-v4-pro": "DeepSeek V4 Pro",
   "deepseek-v4-flash": "DeepSeek V4 Flash",
+  "minimax-m3": "MiniMax M3",
   "mimo-v2.5": "MiMo V2.5",
   "mimo-v2.5-pro": "MiMo V2.5 Pro",
   "qwen3.6-plus": "Qwen3.6 Plus",
@@ -59,7 +61,7 @@ const copyZh: Record<string, string> = {
   monthlyDesc: "账号套餐额度",
   modelRange: "模型范围",
   modelRangeDesc: "免费 + Plus 模型池",
-  modelRangeFree: "实时免费模型池 + DeepSeek V4 Flash / V4 Pro",
+  modelRangeFree: "实时免费模型池 + DeepSeek V4 Flash / V4 Pro + MiniMax M3",
   viewModels: "查看可用模型",
   availableModels: "可用模型",
   close: "关闭",
@@ -68,7 +70,7 @@ const copyZh: Record<string, string> = {
   thisMonth: "本月额度",
   used: "已用",
   remainingLabel: "剩余",
-  freeNote: "Free 用户每月 500 次，可调用实时同步的免费模型池，以及赞助开放的 DeepSeek V4 Flash 与 DeepSeek V4 Pro。",
+  freeNote: "Free 用户每月 500 次，可调用实时同步的免费模型池，以及赞助开放的 DeepSeek V4 Flash、DeepSeek V4 Pro。MiniMax M3 额外免费开放，需走 /v1/messages，且不计入月度额度。",
   plusExpires: "Plus 到期",
   notSet: "未设置",
   apiKeys: "API Keys",
@@ -124,7 +126,7 @@ const copyEn: Record<string, string> = {
   monthlyDesc: "plan quota",
   modelRange: "Model access",
   modelRangeDesc: "Free + Plus model pools",
-  modelRangeFree: "Live free catalog + DeepSeek V4 Flash / V4 Pro",
+  modelRangeFree: "Live free catalog + DeepSeek V4 Flash / V4 Pro + MiniMax M3",
   viewModels: "View models",
   availableModels: "Available models",
   close: "Close",
@@ -133,7 +135,7 @@ const copyEn: Record<string, string> = {
   thisMonth: "This month",
   used: "Used",
   remainingLabel: "Remaining",
-  freeNote: "Free users get 500 requests per month and can call the live free model catalog plus sponsored DeepSeek V4 Flash and DeepSeek V4 Pro.",
+  freeNote: "Free users get 500 requests per month and can call the live free model catalog plus sponsored DeepSeek V4 Flash and DeepSeek V4 Pro. MiniMax M3 is additionally open for free through /v1/messages and does not count against monthly quota.",
   plusExpires: "Plus expires",
   notSet: "Not set",
   apiKeys: "API Keys",
@@ -356,8 +358,9 @@ export function AccountClient() {
     () => summary.allowedModels.map((id) => ({
       id,
       name: modelDisplayNames[id] ?? modelDisplayName(id),
+      note: modelAccessNote(id, language),
     })),
-    [summary.allowedModels],
+    [language, summary.allowedModels],
   );
 
   const paymentOptions = useMemo(() => {
@@ -605,6 +608,7 @@ export function AccountClient() {
                       <article className="model-row" key={model.id}>
                         <strong>{model.name}</strong>
                         <code>{model.id}</code>
+                        {model.note && <small>{model.note}</small>}
                       </article>
                     ))}
                   </div>
@@ -787,7 +791,10 @@ export function AccountClient() {
                       </div>
                       <div>
                         <code>{event.status_code}</code>
-                        <small>{event.is_stream ? "stream" : "json"}</small>
+                        <small>
+                          {usageTransportLabel(event.path, event.is_stream, event.model)}
+                          {usageQuotaNote(event.model, language) ? ` · ${usageQuotaNote(event.model, language)}` : ""}
+                        </small>
                       </div>
                     </article>
                   ))}
@@ -1040,6 +1047,12 @@ export function AccountClient() {
         .model-row code {
           color: #6a6861;
           font-size: 12px;
+        }
+
+        .model-row small {
+          color: #6a6861;
+          font-size: 12px;
+          line-height: 1.5;
         }
 
         .model-dialog-note {

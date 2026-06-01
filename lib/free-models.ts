@@ -20,6 +20,7 @@ const knownModelNames: Record<string, string> = {
   "deepseek-v4-flash-free": "DeepSeek V4 Flash Free",
   "deepseek-v4-flash": "DeepSeek V4 Flash",
   "deepseek-v4-pro": "DeepSeek V4 Pro",
+  "minimax-m3": "MiniMax M3",
   "minimax-m2.5-free": "MiniMax M2.5 Free",
   "ring-2.6-1t-free": "Ring 2.6 1T Free",
   "nemotron-3-super-free": "Nemotron 3 Super Free",
