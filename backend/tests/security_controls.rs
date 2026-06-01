@@ -110,7 +110,19 @@ async fn free_open_models_are_ip_limited_but_plus_only_go_models_skip(pool: PgPo
         post_chat_from_ip(&app, &plus_key, "deepseek-v4-flash", plus_sponsored_ip).await;
     assert_eq!(plus_sponsored_go.status(), StatusCode::TOO_MANY_REQUESTS);
 
-    let plus_go_ip = "203.0.113.27";
+    let free_sponsored_pro_ip = "203.0.113.27";
+    insert_free_ai_window(&pool, free_sponsored_pro_ip, 60).await;
+    let free_sponsored_pro =
+        post_chat_from_ip(&app, &free_key, "deepseek-v4-pro", free_sponsored_pro_ip).await;
+    assert_eq!(free_sponsored_pro.status(), StatusCode::TOO_MANY_REQUESTS);
+
+    let plus_sponsored_pro_ip = "203.0.113.28";
+    insert_free_ai_window(&pool, plus_sponsored_pro_ip, 60).await;
+    let plus_sponsored_pro =
+        post_chat_from_ip(&app, &plus_key, "deepseek-v4-pro", plus_sponsored_pro_ip).await;
+    assert_eq!(plus_sponsored_pro.status(), StatusCode::TOO_MANY_REQUESTS);
+
+    let plus_go_ip = "203.0.113.29";
     insert_free_ai_window(&pool, plus_go_ip, 60).await;
     let plus_go = post_chat_from_ip(&app, &plus_key, "qwen3.6-plus", plus_go_ip).await;
     assert_eq!(plus_go.status(), StatusCode::OK);

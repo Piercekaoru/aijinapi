@@ -80,26 +80,28 @@ async fn plus_models_use_go_upstream_and_go_key(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "./migrations")]
-async fn free_user_can_call_sponsored_deepseek_flash_on_go_upstream(pool: PgPool) {
+async fn free_user_can_call_sponsored_go_models_on_go_upstream(pool: PgPool) {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/go/chat/completions"))
         .and(wire_header("authorization", "Bearer real-go-key"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-            "id": "sponsored_flash",
+            "id": "sponsored_go",
             "object": "chat.completion"
         })))
-        .expect(1)
+        .expect(2)
         .mount(&server)
         .await;
 
     let api_key =
         create_key_for_user(&pool, "free", "active", FREE_MONTHLY_REQUEST_LIMIT, None).await;
     let app = test_app(pool.clone(), &server).await;
-    let response = post_chat(&app, &api_key, "deepseek-v4-flash", false).await;
+    for model in ["deepseek-v4-flash", "deepseek-v4-pro"] {
+        let response = post_chat(&app, &api_key, model, false).await;
+        assert_eq!(response.status(), 200);
+    }
 
-    assert_eq!(response.status(), 200);
-    assert_usage_count(&pool, 1, Some(200), Some(false)).await;
+    assert_usage_count(&pool, 2, Some(200), Some(false)).await;
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -155,7 +157,8 @@ async fn models_endpoint_returns_models_for_effective_plan(pool: PgPool) {
             "minimax-m2.5-free",
             "nemotron-3-super-free",
             "ring-2.6-1t-free",
-            "deepseek-v4-flash"
+            "deepseek-v4-flash",
+            "deepseek-v4-pro"
         ]
     );
 
@@ -182,7 +185,12 @@ async fn models_endpoint_uses_live_free_catalog(pool: PgPool) {
     let free_models = get_models(&app, &free_key).await;
     assert_eq!(
         model_ids(&free_models),
-        vec!["big-pickle", "new-model-free", "deepseek-v4-flash"]
+        vec![
+            "big-pickle",
+            "new-model-free",
+            "deepseek-v4-flash",
+            "deepseek-v4-pro"
+        ]
     );
 }
 
@@ -203,6 +211,7 @@ async fn public_free_models_includes_sponsored_go_model(pool: PgPool) {
 
     assert!(model_ids(&response).contains(&"big-pickle"));
     assert!(model_ids(&response).contains(&"deepseek-v4-flash"));
+    assert!(model_ids(&response).contains(&"deepseek-v4-pro"));
     assert_eq!(response["fail_closed"], false);
 }
 

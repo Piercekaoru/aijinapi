@@ -690,6 +690,12 @@ async fn subscription_summary_reports_plus_1500_and_remaining_quota(pool: PgPool
             .iter()
             .any(|model| model == "deepseek-v4-flash")
     );
+    assert!(
+        summary
+            .allowed_models
+            .iter()
+            .any(|model| model == "deepseek-v4-pro")
+    );
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -790,6 +796,12 @@ async fn expired_plus_user_falls_back_to_free_quota(pool: PgPool) {
             .allowed_models
             .iter()
             .any(|model| model == "deepseek-v4-flash")
+    );
+    assert!(
+        summary
+            .allowed_models
+            .iter()
+            .any(|model| model == "deepseek-v4-pro")
     );
     assert!(matches!(
         ensure_monthly_quota(&pool, &user).await,

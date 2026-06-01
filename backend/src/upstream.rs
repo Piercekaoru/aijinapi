@@ -24,7 +24,7 @@ pub const FREE_MODELS: &[&str] = &[
     "nemotron-3-super-free",
 ];
 
-pub const SPONSORED_FREE_GO_MODELS: &[&str] = &["deepseek-v4-flash"];
+pub const SPONSORED_FREE_GO_MODELS: &[&str] = &["deepseek-v4-flash", "deepseek-v4-pro"];
 
 pub const FREE_ALLOWED_MODELS: &[&str] = &[
     "big-pickle",
@@ -33,6 +33,7 @@ pub const FREE_ALLOWED_MODELS: &[&str] = &[
     "ring-2.6-1t-free",
     "nemotron-3-super-free",
     "deepseek-v4-flash",
+    "deepseek-v4-pro",
 ];
 
 pub const PLUS_MODELS: &[&str] = &[
@@ -556,6 +557,7 @@ mod tests {
         assert!(is_supported_chat_model("big-pickle"));
         assert!(is_supported_chat_model("deepseek-v4-flash-free"));
         assert!(is_supported_chat_model("deepseek-v4-flash"));
+        assert!(is_supported_chat_model("deepseek-v4-pro"));
         assert!(is_supported_chat_model("nemotron-3-super-free"));
         assert!(!is_supported_chat_model("unknown-model"));
     }
@@ -571,7 +573,8 @@ mod tests {
                 "minimax-m2.5-free",
                 "ring-2.6-1t-free",
                 "nemotron-3-super-free",
-                "deepseek-v4-flash"
+                "deepseek-v4-flash",
+                "deepseek-v4-pro"
             ]
         );
 
@@ -602,6 +605,14 @@ mod tests {
         );
         assert_eq!(
             route_for_model("plus", "deepseek-v4-flash").unwrap(),
+            UpstreamRoute::Go
+        );
+        assert_eq!(
+            route_for_model("free", "deepseek-v4-pro").unwrap(),
+            UpstreamRoute::Go
+        );
+        assert_eq!(
+            route_for_model("plus", "deepseek-v4-pro").unwrap(),
             UpstreamRoute::Go
         );
         assert_eq!(
